@@ -15,6 +15,8 @@ from .user_service import (
     UserChangePasswordService,
     UserRegisterService
 )
+from .project_service import ProjectService
+from .member_service import MemberService
 
 __all__ = [
     'BaseService',
@@ -30,4 +32,6 @@ __all__ = [
     'UserLogoutService',
     'UserChangePasswordService',
     'UserRegisterService',
+    'ProjectService',
+    'MemberService',
 ]

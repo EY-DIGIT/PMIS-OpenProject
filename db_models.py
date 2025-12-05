@@ -5,7 +5,11 @@ SQLAlchemy database models for User Service.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
-from .database import Base
+
+try:
+    from .database import Base
+except ImportError:
+    from database import Base
 
 
 class DBUser(Base):

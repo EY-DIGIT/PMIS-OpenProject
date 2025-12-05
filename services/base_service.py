@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
-from ..utils import ServiceResult
-from ..models import User
+
+try:
+    from ..utils import ServiceResult
+    from ..models import User
+except ImportError:
+    from utils import ServiceResult
+    from models import User
 
 
 class BaseService(ABC):

@@ -14,6 +14,7 @@ import logging
 
 from .database import init_db
 from .api import users, auth
+from .routers import projects_router, members_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -122,6 +123,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(projects_router)
+app.include_router(members_router)
 
 
 # Root endpoint
@@ -130,11 +133,13 @@ async def root():
     """Root endpoint"""
     return {
         "_type": "Root",
-        "instanceName": "OpenProject User Service",
+        "instanceName": "OpenProject User & Project Service",
         "_links": {
             "self": {"href": "/"},
             "users": {"href": "/api/v3/users"},
             "user": {"href": "/api/v3/users/{id}"},
+            "projects": {"href": "/api/v3/projects"},
+            "project": {"href": "/api/v3/projects/{id}"},
             "docs": {"href": "/api/docs"}
         }
     }
@@ -160,6 +165,8 @@ async def api_v3_root():
         "_links": {
             "self": {"href": "/api/v3"},
             "users": {"href": "/api/v3/users"},
+            "projects": {"href": "/api/v3/projects"},
+            "memberships": {"href": "/api/v3/memberships"},
             "configuration": {"href": "/api/v3/configuration"}
         }
     }

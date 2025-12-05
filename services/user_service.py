@@ -2,14 +2,24 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import re
 
-from .base_service import (
-    BaseCreateService,
-    BaseUpdateService,
-    BaseDeleteService,
-    BaseSetAttributesService
-)
-from ..models import User, UserStatus, UserPreference
-from ..utils import ServiceResult
+try:
+    from .base_service import (
+        BaseCreateService,
+        BaseUpdateService,
+        BaseDeleteService,
+        BaseSetAttributesService
+    )
+    from ..models import User, UserStatus, UserPreference
+    from ..utils import ServiceResult
+except ImportError:
+    from base_service import (
+        BaseCreateService,
+        BaseUpdateService,
+        BaseDeleteService,
+        BaseSetAttributesService
+    )
+    from models import User, UserStatus, UserPreference
+    from utils import ServiceResult
 
 
 class UserSetAttributesService(BaseSetAttributesService):
