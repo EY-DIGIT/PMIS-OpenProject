@@ -329,7 +329,7 @@ async def get_user(
 @router.patch("/{user_id}", response_model=UserResponse)
 async def update_user(
     request: Request,
-    user_id: int = Path(..., description="User ID to update", example=123456),
+    user_id: int = Path(..., description="User ID to update", examples=[123456]),
     user_data: UserUpdate = ...,
     db: Session = Depends(get_db)
 ):
@@ -388,6 +388,10 @@ async def update_user(
             'notification_settings': user_data.preferences.notification_settings
         }
 
+    # If no parameters to update, return current user
+    if not params:
+        return user_to_response(user)
+
     # Update using service
     service = UserUpdateService(user=current_user, model=user)
     result = service.call(params)
@@ -402,16 +406,21 @@ async def update_user(
             }
         )
 
-    # Persist changes
-    updated_user = repo.update(result.result)
-
-    return user_to_response(updated_user)
+    # Persist changes to database
+    try:
+        updated_user = repo.update(result.result)
+        return user_to_response(updated_user)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user: {str(e)}"
+        )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_202_ACCEPTED)
 async def delete_user(
     request: Request,
-    user_id: int = Path(..., description="User ID to delete", example=123456),
+    user_id: int = Path(..., description="User ID to delete", examples=[123456]),
     db: Session = Depends(get_db)
 ):
     """
@@ -435,7 +444,7 @@ async def delete_user(
             detail=f"User {user_id} not found"
         )
 
-    # Delete using service
+    # Delete using service (validates deletion rules)
     service = UserDeleteService(user=current_user, model=user)
     result = service.call()
 
@@ -445,16 +454,28 @@ async def delete_user(
             detail={"message": result.message}
         )
 
-    # Persist deletion
-    repo.delete(user_id)
-
-    return {}  # Empty response with 202 Accepted
+    # Persist deletion to database (soft delete)
+    try:
+        success = repo.delete(user_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User {user_id} not found"
+            )
+        return {}  # Empty response with 202 Accepted
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
 
 
 @router.post("/{user_id}/lock", response_model=LockResponse)
 async def lock_user(
     request: Request,
-    user_id: int = Path(..., description="User ID to lock", example=123456),
+    user_id: int = Path(..., description="User ID to lock", examples=[123456]),
     db: Session = Depends(get_db)
 ):
     """
@@ -484,16 +505,23 @@ async def lock_user(
             detail="User is already locked"
         )
 
+    # Lock the user
     user.lock()
-    repo.update(user)
 
-    return LockResponse()
+    try:
+        repo.update(user)
+        return LockResponse()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to lock user: {str(e)}"
+        )
 
 
 @router.post("/{user_id}/unlock", response_model=UnlockResponse)
 async def unlock_user(
     request: Request,
-    user_id: int = Path(..., description="User ID to unlock", example=123456),
+    user_id: int = Path(..., description="User ID to unlock", examples=[123456]),
     db: Session = Depends(get_db)
 ):
     """
@@ -523,7 +551,14 @@ async def unlock_user(
             detail="User is not locked"
         )
 
+    # Unlock the user
     user.unlock()
-    repo.update(user)
 
-    return UnlockResponse()
+    try:
+        repo.update(user)
+        return UnlockResponse()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to unlock user: {str(e)}"
+        )
