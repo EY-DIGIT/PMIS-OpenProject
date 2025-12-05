@@ -115,8 +115,8 @@ async def list_users(
         count=len(user_responses),
         pageSize=pageSize,
         offset=offset,
-        _embedded={"elements": user_responses},
-        _links=HALLinks(
+        embedded={"elements": user_responses},
+        links=HALLinks(
             self=HALLink(href=f"/api/v3/users?offset={offset}&pageSize={pageSize}")
         )
     )

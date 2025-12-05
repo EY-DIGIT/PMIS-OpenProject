@@ -16,9 +16,23 @@ class UserRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def find_by_id(self, user_id: int) -> Optional[User]:
-        """Find user by ID"""
-        db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
+    def find_by_id(self, user_id: int, exclude_deleted: bool = False) -> Optional[User]:
+        """
+        Find user by ID.
+
+        Args:
+            user_id: The user ID to find
+            exclude_deleted: If True, return None for deleted users (default: False)
+
+        Returns:
+            User object or None if not found
+        """
+        query = self.db.query(DBUser).filter(DBUser.id == user_id)
+
+        if exclude_deleted:
+            query = query.filter(DBUser.status != UserStatus.DELETED.value)
+
+        db_user = query.first()
         return self._to_domain_model(db_user) if db_user else None
 
     def find_by_login(self, login: str) -> Optional[User]:
@@ -56,15 +70,27 @@ class UserRepository:
         offset: int = 0,
         limit: int = 20,
         status: Optional[int] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        exclude_deleted: bool = True
     ) -> tuple[List[User], int]:
         """
         List users with pagination and filtering.
+
+        Args:
+            offset: Starting index for pagination
+            limit: Number of users to return
+            status: Filter by specific status (optional)
+            search: Search term for login, name, or email (optional)
+            exclude_deleted: Exclude users with DELETED status (default: True)
 
         Returns:
             Tuple of (users list, total count)
         """
         query = self.db.query(DBUser)
+
+        # By default, exclude deleted users (matches OpenProject behavior)
+        if exclude_deleted:
+            query = query.filter(DBUser.status != UserStatus.DELETED.value)
 
         # Apply filters
         if status is not None:

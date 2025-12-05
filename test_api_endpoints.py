@@ -180,10 +180,71 @@ class TestUserAPIs:
         response = client.get("/api/v3/users?offset=0&pageSize=10")
         assert response.status_code == 200
         data = response.json()
+
+        # Verify HAL+JSON structure
+        assert "_type" in data
+        assert data["_type"] == "Collection"
+        assert "total" in data
+        assert "count" in data
+        assert "pageSize" in data
+        assert "offset" in data
+        assert "_embedded" in data
+        assert "_links" in data
+
+        # Verify counts
         assert data["count"] >= 5
         assert data["total"] >= 5
-        if "_embedded" in data:
-            assert "elements" in data["_embedded"]
+
+        # Verify elements array exists and contains user data
+        assert "elements" in data["_embedded"]
+        assert isinstance(data["_embedded"]["elements"], list)
+        assert len(data["_embedded"]["elements"]) >= 5
+
+        # Verify user structure in elements
+        if data["_embedded"]["elements"]:
+            first_user = data["_embedded"]["elements"][0]
+            assert "id" in first_user
+            assert "login" in first_user
+            assert "name" in first_user
+            assert "email" in first_user
+
+    def test_list_users_excludes_deleted(self):
+        """Test that deleted users are excluded from list by default"""
+        # Create users
+        created_users = []
+        for i in range(3):
+            response = client.post(
+                "/api/v3/users",
+                json={
+                    "login": f"deluser{i}",
+                    "firstName": f"DelUser",
+                    "lastName": f"{i}",
+                    "email": f"deluser{i}@example.com",
+                    "password": "TestPass123",
+                    "admin": False,
+                    "status": "active",
+                    "language": "en"
+                }
+            )
+            created_users.append(response.json()["id"])
+
+        # Delete one user
+        client.delete(f"/api/v3/users/{created_users[1]}")
+
+        # List users - should only show 2 active users (excluding deleted)
+        response = client.get("/api/v3/users?offset=0&pageSize=10")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Get all returned user IDs
+        returned_ids = [user["id"] for user in data["_embedded"]["elements"]]
+
+        # Deleted user should NOT be in the list
+        assert created_users[1] not in returned_ids
+
+        # Active users should be in the list
+        assert created_users[0] in returned_ids
+        assert created_users[2] in returned_ids
 
     def test_lock_unlock_user(self):
         """Test locking and unlocking a user"""

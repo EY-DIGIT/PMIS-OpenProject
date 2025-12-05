@@ -63,10 +63,15 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    """User update schema (all fields optional)"""
+    """
+    User update schema (all fields optional).
+
+    Note: The 'name' field is read-only and automatically computed from
+    'firstName' and 'lastName'. Update those fields to change the name.
+    """
     login: Optional[str] = Field(None, min_length=1, max_length=256)
-    firstName: Optional[str] = Field(None, max_length=256)
-    lastName: Optional[str] = Field(None, max_length=256)
+    firstName: Optional[str] = Field(None, max_length=256, description="First name (updates the 'name' field)")
+    lastName: Optional[str] = Field(None, max_length=256, description="Last name (updates the 'name' field)")
     email: Optional[EmailStr] = None
     language: Optional[str] = None
     admin: Optional[bool] = None
@@ -96,15 +101,20 @@ class UserResponse(BaseModel):
 
 class UserCollectionResponse(BaseModel):
     """User collection response (HAL+JSON format)"""
-    _type: str = "Collection"
+    type_: str = Field(default="Collection", serialization_alias="_type")
     total: int
     count: int
     pageSize: int = Field(alias="pageSize")
     offset: int
-    _embedded: Dict[str, List[UserResponse]]
-    _links: HALLinks
+    embedded: Dict[str, List[UserResponse]] = Field(serialization_alias="_embedded")
+    links: HALLinks = Field(serialization_alias="_links")
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        # Allow serialization with aliases
+        by_alias=True
+    )
 
 
 # Authentication schemas
