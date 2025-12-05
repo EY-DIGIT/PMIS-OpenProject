@@ -1,0 +1,84 @@
+# User Service - File Structure
+
+## 📁 Directory Structure
+
+user_service/
+├── api/                         # REST API Layer
+│   ├── __init__.py
+│   ├── dependencies.py         # Authentication & dependency injection
+│   ├── schemas.py              # Pydantic models (HAL+JSON format)
+│   ├── users.py                # User endpoints
+│   └── auth.py                 # Authentication endpoints
+│
+├── models/                      # Domain Models
+│   ├── __init__.py
+│   ├── user.py                 # User, AnonymousUser, SystemUser, etc.
+│   ├── user_preference.py      # User preferences
+│   └── user_password.py        # Password history
+│
+├── services/                    # Business Logic
+│   ├── __init__.py
+│   ├── base_service.py         # Base service classes
+│   └── user_service.py         # User services (8 services)
+│
+├── utils/                       # Utilities
+│   ├── __init__.py
+│   └── service_result.py       # ServiceResult class
+│
+## 📄 Core Files
+│
+├── __init__.py                  # Package initialization
+├── app.py                       # Entry point (USE THIS to run server)
+├── main.py                      # FastAPI application
+├── database.py                  # Database configuration
+├── db_models.py                 # SQLAlchemy ORM models
+├── repositories.py              # Data access layer
+│
+## 🚀 Startup Scripts
+│
+├── START_SERVER.bat             # Windows startup script
+├── START_SERVER.sh              # Linux/Mac startup script
+│
+## 📚 Documentation
+│
+├── README.md                    # Main documentation (start here)
+├── API_README.md                # Complete API documentation
+├── FRONTEND_INTEGRATION_GUIDE.md # Frontend integration guide
+├── TROUBLESHOOTING.md           # Troubleshooting guide
+│
+## 🧪 Examples & Tests
+│
+├── example.py                   # Service layer examples
+├── example_api_usage.py         # API usage examples
+├── test_user_service.py         # Service layer tests
+├── test_api.py                  # API integration tests
+│
+## 📦 Dependencies
+│
+└── requirements_api.txt         # API dependencies
+
+## 🎯 Key Files to Know
+
+### To Run the Server:
+- **app.py** - Entry point (run: uvicorn app:app --reload)
+- **START_SERVER.bat** - Windows: double-click to start
+- **START_SERVER.sh** - Linux/Mac: bash START_SERVER.sh
+
+### To Understand the API:
+- **README.md** - Start here
+- **API_README.md** - Complete API docs
+- Visit http://localhost:8000/api/docs after starting
+
+### To Integrate with Frontend:
+- **FRONTEND_INTEGRATION_GUIDE.md** - Complete integration guide
+
+### Having Issues?
+- **TROUBLESHOOTING.md** - Fix common problems
+
+## 📊 Statistics
+
+- Total Python files: ~16 files
+- Documentation files: 4 markdown files
+- API endpoints: 15 endpoints
+- Services: 8 service classes
+- Lines of code: ~4,000 lines
