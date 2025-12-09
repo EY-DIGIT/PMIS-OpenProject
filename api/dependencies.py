@@ -6,9 +6,14 @@ from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from ..database import get_db
-from ..models import User, UserStatus
-from ..repositories import UserRepository
+try:
+    from ..database import get_db
+    from ..models import User, UserStatus
+    from ..repositories import UserRepository
+except ImportError:
+    from database import get_db
+    from models import User, UserStatus
+    from repositories import UserRepository
 
 
 security_basic = HTTPBasic(auto_error=False)

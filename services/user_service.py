@@ -12,7 +12,7 @@ try:
     from ..models import User, UserStatus, UserPreference
     from ..utils import ServiceResult
 except ImportError:
-    from base_service import (
+    from services.base_service import (
         BaseCreateService,
         BaseUpdateService,
         BaseDeleteService,

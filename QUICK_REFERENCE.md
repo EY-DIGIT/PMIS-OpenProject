@@ -10,9 +10,10 @@ python init_db_simple.py
 
 ### 2. Start Server
 ```bash
-cd c:\Programming
-uvicorn user_service.main:app --reload --port 8000
+cd c:\Programming\user_service
+python start_server.py
 ```
+**Or simply double-click** `run.bat` in Windows!
 
 ### 3. Access API
 - Swagger UI: http://localhost:8000/api/docs
@@ -42,8 +43,8 @@ python test_project_direct.py
 ### Test API (Server Required)
 ```bash
 # Start server first
-cd c:\Programming
-uvicorn user_service.main:app --port 8000
+cd c:\Programming\user_service
+python start_server.py
 
 # Then open Swagger UI
 http://localhost:8000/api/docs
@@ -187,17 +188,16 @@ user_service/
 ## 📞 Quick Commands
 
 ```bash
-# Initialize database
+# Initialize database (first time only)
 cd c:\Programming\user_service && python init_db_simple.py
 
-# Test models directly
+# Test models directly (no server needed)
 cd c:\Programming\user_service && python test_project_direct.py
 
-# Start server (method 1)
-cd c:\Programming && uvicorn user_service.main:app --reload --port 8000
+# Start server (recommended - works from inside folder)
+cd c:\Programming\user_service && python start_server.py
 
-# Start server (method 2)
-cd c:\Programming && python start_server.py
+# Or just double-click run.bat in Windows
 ```
 
 ---

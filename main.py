@@ -12,9 +12,14 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import logging
 
-from .database import init_db
-from .api import users, auth
-from .routers import projects_router, members_router
+try:
+    from .database import init_db
+    from .api import users, auth
+    from .routers import projects_router, members_router
+except ImportError:
+    from database import init_db
+    from api import users, auth
+    from routers import projects_router, members_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

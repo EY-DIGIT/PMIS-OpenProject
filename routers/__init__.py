@@ -1,6 +1,10 @@
 """FastAPI routers for Project module"""
-from .projects import router as projects_router
-from .members import router as members_router
+try:
+    from .projects import router as projects_router
+    from .members import router as members_router
+except ImportError:
+    from routers.projects import router as projects_router
+    from routers.members import router as members_router
 
 __all__ = [
     'projects_router',

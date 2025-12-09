@@ -1,22 +1,43 @@
-from .base_service import (
-    BaseService,
-    BaseCreateService,
-    BaseUpdateService,
-    BaseDeleteService,
-    BaseSetAttributesService
-)
-from .user_service import (
-    UserCreateService,
-    UserUpdateService,
-    UserDeleteService,
-    UserSetAttributesService,
-    UserLoginService,
-    UserLogoutService,
-    UserChangePasswordService,
-    UserRegisterService
-)
-from .project_service import ProjectService
-from .member_service import MemberService
+try:
+    from .base_service import (
+        BaseService,
+        BaseCreateService,
+        BaseUpdateService,
+        BaseDeleteService,
+        BaseSetAttributesService
+    )
+    from .user_service import (
+        UserCreateService,
+        UserUpdateService,
+        UserDeleteService,
+        UserSetAttributesService,
+        UserLoginService,
+        UserLogoutService,
+        UserChangePasswordService,
+        UserRegisterService
+    )
+    from .project_service import ProjectService
+    from .member_service import MemberService
+except ImportError:
+    from services.base_service import (
+        BaseService,
+        BaseCreateService,
+        BaseUpdateService,
+        BaseDeleteService,
+        BaseSetAttributesService
+    )
+    from services.user_service import (
+        UserCreateService,
+        UserUpdateService,
+        UserDeleteService,
+        UserSetAttributesService,
+        UserLoginService,
+        UserLogoutService,
+        UserChangePasswordService,
+        UserRegisterService
+    )
+    from services.project_service import ProjectService
+    from services.member_service import MemberService
 
 __all__ = [
     'BaseService',
