@@ -9,10 +9,12 @@ from datetime import datetime
 
 try:
     from ..models import Member, MemberRole, Project, User
+    from .. import db_models
     from ..schemas.member import MemberCreate, MemberUpdate
     from ..utils import ServiceResult
 except ImportError:
     from models import Member, MemberRole, Project, User
+    import db_models
     from schemas.member import MemberCreate, MemberUpdate
     from utils import ServiceResult
 
@@ -56,8 +58,14 @@ class MemberService:
                 message="Not authorized to manage members"
             )
 
-        # Validate user exists
-        user_to_add = self.db.query(User).get(data.user_id)
+        # Validate user exists (use SQLAlchemy-mapped DBUser)
+        DBUser = getattr(db_models, 'DBUser', None)
+        if DBUser is None:
+            # Fallback: original in-memory User class
+            user_to_add = self.db.query(User).get(data.user_id)
+        else:
+            user_to_add = self.db.query(DBUser).get(data.user_id)
+
         if not user_to_add:
             return ServiceResult.failure_result(
                 errors={'user': ['User not found']},
@@ -65,7 +73,15 @@ class MemberService:
             )
 
         # Check if user is active
-        if user_to_add.status.value != 1:  # UserStatus.ACTIVE = 1
+        # DBUser.status is an integer in DB models; models.User.status is an Enum
+        status_val = getattr(user_to_add, 'status', None)
+        if isinstance(status_val, int):
+            is_active = (status_val == 1)
+        else:
+            # assume Enum-like
+            is_active = (getattr(status_val, 'value', None) == 1)
+
+        if not is_active:
             return ServiceResult.failure_result(
                 errors={'user': ['User is not active']},
                 message="User is not active"
