@@ -15,11 +15,11 @@ import logging
 try:
     from .database import init_db
     from .api import users, auth
-    from .routers import projects_router, members_router
+    from .routers import projects_router, members_router, meetings
 except ImportError:
     from database import init_db
     from api import users, auth
-    from routers import projects_router, members_router
+    from routers import projects_router, members_router, meetings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -130,6 +130,7 @@ app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(projects_router)
 app.include_router(members_router)
+app.include_router(meetings.router)
 
 
 # Root endpoint
@@ -145,6 +146,8 @@ async def root():
             "user": {"href": "/api/v3/users/{id}"},
             "projects": {"href": "/api/v3/projects"},
             "project": {"href": "/api/v3/projects/{id}"},
+            "meetings": {"href": "/api/v3/meetings"},
+            "meeting": {"href": "/api/v3/meetings/{id}"},
             "docs": {"href": "/api/docs"}
         }
     }

@@ -272,3 +272,260 @@ class UserRepository:
             created_at=user.created_at,
             updated_at=user.updated_at
         )
+
+
+# Meeting Repositories
+
+
+class MeetingRepository:
+    """Repository for Meeting database operations"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def find_by_id(self, meeting_id: int) -> Optional['Meeting']:
+        """Find meeting by ID"""
+        from db_models import DBMeeting
+        from models.meeting import Meeting, MeetingState
+
+        db_meeting = self.db.query(DBMeeting).filter(DBMeeting.id == meeting_id).first()
+        return self._to_domain_model(db_meeting) if db_meeting else None
+
+    def find_all(
+        self,
+        project_id: Optional[int] = None,
+        state: Optional[str] = None,
+        upcoming: bool = False,
+        limit: int = 20,
+        offset: int = 0
+    ) -> List['Meeting']:
+        """Find meetings with filters"""
+        from db_models import DBMeeting
+        from datetime import datetime
+
+        query = self.db.query(DBMeeting)
+
+        if project_id:
+            query = query.filter(DBMeeting.project_id == project_id)
+
+        if state:
+            from models.meeting import MeetingState
+            state_value = MeetingState[state.upper()].value
+            query = query.filter(DBMeeting.state == state_value)
+
+        if upcoming:
+            query = query.filter(DBMeeting.start_time >= datetime.utcnow())
+
+        query = query.order_by(DBMeeting.start_time.desc())
+        query = query.offset(offset).limit(limit)
+
+        return [self._to_domain_model(db_meeting) for db_meeting in query.all()]
+
+    def count(self, project_id: Optional[int] = None) -> int:
+        """Count meetings"""
+        from db_models import DBMeeting
+
+        query = self.db.query(DBMeeting)
+        if project_id:
+            query = query.filter(DBMeeting.project_id == project_id)
+
+        return query.count()
+
+    def create(self, meeting: 'Meeting') -> 'Meeting':
+        """Create a new meeting"""
+        from db_models import DBMeeting
+
+        db_meeting = self._to_db_model(meeting)
+        self.db.add(db_meeting)
+        self.db.flush()
+        self.db.refresh(db_meeting)
+
+        return self._to_domain_model(db_meeting)
+
+    def update(self, meeting: 'Meeting') -> 'Meeting':
+        """Update an existing meeting"""
+        from db_models import DBMeeting
+        from datetime import datetime, timezone
+
+        db_meeting = self.db.query(DBMeeting).filter(DBMeeting.id == meeting.id).first()
+        if not db_meeting:
+            return None
+
+        # Update fields
+        db_meeting.title = meeting.title
+        db_meeting.location = meeting.location
+        db_meeting.start_time = meeting.start_time
+        db_meeting.duration = meeting.duration
+        db_meeting.state = meeting.state.value
+        db_meeting.lock_version = meeting.lock_version
+        db_meeting.notify = meeting.notify
+        db_meeting.updated_at = datetime.now(timezone.utc)
+
+        self.db.flush()
+        self.db.refresh(db_meeting)
+
+        return self._to_domain_model(db_meeting)
+
+    def delete(self, meeting_id: int) -> bool:
+        """Delete a meeting"""
+        from db_models import DBMeeting
+
+        db_meeting = self.db.query(DBMeeting).filter(DBMeeting.id == meeting_id).first()
+        if not db_meeting:
+            return False
+
+        self.db.delete(db_meeting)
+        self.db.flush()
+        return True
+
+    def _to_domain_model(self, db_meeting: 'DBMeeting') -> 'Meeting':
+        """Convert DB model to domain model"""
+        if not db_meeting:
+            return None
+
+        from models.meeting import Meeting, MeetingState
+
+        return Meeting(
+            id=db_meeting.id,
+            title=db_meeting.title,
+            author_id=db_meeting.author_id,
+            project_id=db_meeting.project_id,
+            location=db_meeting.location,
+            start_time=db_meeting.start_time,
+            duration=db_meeting.duration,
+            state=MeetingState(db_meeting.state),
+            lock_version=db_meeting.lock_version,
+            recurring_meeting_id=db_meeting.recurring_meeting_id,
+            template=db_meeting.template,
+            notify=db_meeting.notify,
+            uid=db_meeting.uid,
+            created_at=db_meeting.created_at,
+            updated_at=db_meeting.updated_at,
+        )
+
+    def _to_db_model(self, meeting: 'Meeting') -> 'DBMeeting':
+        """Convert domain model to DB model"""
+        from db_models import DBMeeting
+        from datetime import datetime, timezone
+        import uuid
+
+        return DBMeeting(
+            id=meeting.id,
+            title=meeting.title,
+            author_id=meeting.author_id,
+            project_id=meeting.project_id,
+            location=meeting.location,
+            start_time=meeting.start_time,
+            duration=meeting.duration,
+            state=meeting.state.value,
+            lock_version=meeting.lock_version,
+            recurring_meeting_id=meeting.recurring_meeting_id,
+            template=meeting.template,
+            notify=meeting.notify,
+            uid=meeting.uid or str(uuid.uuid4()),
+            created_at=meeting.created_at or datetime.now(timezone.utc),
+            updated_at=meeting.updated_at or datetime.now(timezone.utc),
+        )
+
+
+class MeetingParticipantRepository:
+    """Repository for MeetingParticipant database operations"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def find_by_meeting(self, meeting_id: int) -> List['MeetingParticipant']:
+        """Find all participants for a meeting"""
+        from db_models import DBMeetingParticipant
+
+        db_participants = self.db.query(DBMeetingParticipant).filter(
+            DBMeetingParticipant.meeting_id == meeting_id
+        ).all()
+
+        return [self._to_domain_model(p) for p in db_participants]
+
+    def create(self, participant: 'MeetingParticipant') -> 'MeetingParticipant':
+        """Create a new participant"""
+        from db_models import DBMeetingParticipant
+
+        db_participant = self._to_db_model(participant)
+        self.db.add(db_participant)
+        self.db.flush()
+        self.db.refresh(db_participant)
+
+        return self._to_domain_model(db_participant)
+
+    def update(self, participant: 'MeetingParticipant') -> 'MeetingParticipant':
+        """Update an existing participant"""
+        from db_models import DBMeetingParticipant
+        from datetime import datetime, timezone
+
+        db_participant = self.db.query(DBMeetingParticipant).filter(
+            DBMeetingParticipant.id == participant.id
+        ).first()
+
+        if not db_participant:
+            return None
+
+        db_participant.invited = participant.invited
+        db_participant.attended = participant.attended
+        db_participant.participation_status = participant.participation_status.value
+        db_participant.updated_at = datetime.now(timezone.utc)
+
+        self.db.flush()
+        self.db.refresh(db_participant)
+
+        return self._to_domain_model(db_participant)
+
+    def delete(self, participant_id: int) -> bool:
+        """Delete a participant"""
+        from db_models import DBMeetingParticipant
+
+        db_participant = self.db.query(DBMeetingParticipant).filter(
+            DBMeetingParticipant.id == participant_id
+        ).first()
+
+        if not db_participant:
+            return False
+
+        self.db.delete(db_participant)
+        self.db.flush()
+        return True
+
+    def _to_domain_model(self, db_participant: 'DBMeetingParticipant') -> 'MeetingParticipant':
+        """Convert DB model to domain model"""
+        if not db_participant:
+            return None
+
+        from models.meeting_participant import MeetingParticipant, ParticipationStatus
+
+        return MeetingParticipant(
+            id=db_participant.id,
+            user_id=db_participant.user_id,
+            meeting_id=db_participant.meeting_id,
+            email=db_participant.email,
+            name=db_participant.name,
+            invited=db_participant.invited,
+            attended=db_participant.attended,
+            participation_status=ParticipationStatus(db_participant.participation_status),
+            created_at=db_participant.created_at,
+            updated_at=db_participant.updated_at,
+        )
+
+    def _to_db_model(self, participant: 'MeetingParticipant') -> 'DBMeetingParticipant':
+        """Convert domain model to DB model"""
+        from db_models import DBMeetingParticipant
+        from datetime import datetime, timezone
+
+        return DBMeetingParticipant(
+            id=participant.id,
+            user_id=participant.user_id,
+            meeting_id=participant.meeting_id,
+            email=participant.email,
+            name=participant.name,
+            invited=participant.invited,
+            attended=participant.attended,
+            participation_status=participant.participation_status.value,
+            created_at=participant.created_at or datetime.now(timezone.utc),
+            updated_at=participant.updated_at or datetime.now(timezone.utc),
+        )
