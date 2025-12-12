@@ -125,10 +125,14 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Login response"""
+    """Login response with JWT tokens"""
     user: UserResponse
-    token: Optional[str] = None
+    token: Optional[str] = None  # Deprecated, use accessToken
     sessionId: Optional[str] = None
+    accessToken: Optional[str] = None  # JWT access token
+    refreshToken: Optional[str] = None  # JWT refresh token
+    tokenType: Optional[str] = "bearer"  # Token type
+    expiresIn: Optional[int] = None  # Token expiration in seconds
 
 
 class PasswordChangeRequest(BaseModel):

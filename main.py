@@ -14,12 +14,24 @@ import logging
 
 try:
     from .database import init_db
-    from .api import users, auth
-    from .routers import projects_router, members_router, meetings
+    # New modular route structure
+    from .routes import (
+        meetings_router,
+        projects_router,
+        users_router,
+        members_router,
+        auth_router,
+    )
 except ImportError:
     from database import init_db
-    from api import users, auth
-    from routers import projects_router, members_router, meetings
+    # New modular route structure
+    from routes import (
+        meetings_router,
+        projects_router,
+        users_router,
+        members_router,
+        auth_router,
+    )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -125,12 +137,12 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
-app.include_router(users.router)
-app.include_router(auth.router)
+# Include routers from new modular structure
+app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(projects_router)
 app.include_router(members_router)
-app.include_router(meetings.router)
+app.include_router(meetings_router)
 
 
 # Root endpoint

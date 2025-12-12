@@ -10,10 +10,12 @@ try:
     from ..database import get_db
     from ..models import User, UserStatus
     from ..repositories import UserRepository
+    from ..utils.jwt_auth import verify_token
 except ImportError:
     from database import get_db
     from models import User, UserStatus
     from repositories import UserRepository
+    from utils.jwt_auth import verify_token
 
 
 security_basic = HTTPBasic(auto_error=False)
@@ -55,7 +57,14 @@ async def get_current_user_optional(
 
     # Method 2: Bearer token (OAuth2/JWT)
     if bearer:
-        # For now, treat bearer token as API token
+        # Try JWT token first
+        user_id = verify_token(bearer.credentials)
+        if user_id:
+            user = repo.find_by_id(user_id)
+            if user and user.is_active():
+                return user
+
+        # Fallback: try API token
         user = repo.find_by_api_token(bearer.credentials)
         if user and user.is_active():
             return user

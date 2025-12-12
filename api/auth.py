@@ -20,6 +20,7 @@ try:
     from .dependencies import CurrentUser, get_user_repository
     from .users import user_to_response
     from ..services import UserChangePasswordService
+    from ..utils.jwt_auth import create_user_tokens
 except ImportError:
     from database import get_db
     from repositories import UserRepository
@@ -35,6 +36,7 @@ except ImportError:
     from api.dependencies import CurrentUser, get_user_repository
     from api.users import user_to_response
     from services import UserChangePasswordService
+    from utils.jwt_auth import create_user_tokens
 
 router = APIRouter(prefix="/api/v3/auth", tags=["authentication"])
 
@@ -81,6 +83,15 @@ async def login(
     # Get session data
     session_data = login_service.get_session_data()
 
+    # Create JWT tokens for bearer token authentication
+    tokens = create_user_tokens(
+        user_id=user.id,
+        additional_claims={
+            "login": user.login,
+            "admin": user.admin
+        }
+    )
+
     # Set session cookie (simplified - in production use secure session management)
     if 'user_id' in session_data:
         response.set_cookie(
@@ -96,7 +107,11 @@ async def login(
 
     return LoginResponse(
         user=user_to_response(user),
-        sessionId=str(session_data.get('user_id'))
+        sessionId=str(session_data.get('user_id')),
+        accessToken=tokens.get('access_token'),
+        refreshToken=tokens.get('refresh_token'),
+        tokenType=tokens.get('token_type'),
+        expiresIn=tokens.get('expires_in')
     )
 
 

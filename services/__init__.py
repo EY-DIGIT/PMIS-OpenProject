@@ -1,3 +1,9 @@
+"""
+Services package - Business logic layer.
+
+Organized by module for better structure and maintainability.
+"""
+
 try:
     from .base_service import (
         BaseService,
@@ -6,19 +12,26 @@ try:
         BaseDeleteService,
         BaseSetAttributesService
     )
-    from .user_service import (
+    # Import from new module-based structure
+    from .users import (
         UserCreateService,
         UserUpdateService,
         UserDeleteService,
-        UserSetAttributesService,
         UserLoginService,
         UserLogoutService,
         UserChangePasswordService,
-        UserRegisterService
+        UserRegisterService,
     )
-    from .project_service import ProjectService
-    from .member_service import MemberService
+    from .projects import ProjectService
+    from .members import MemberService
+    from .meetings import (
+        MeetingCreateService,
+        MeetingUpdateService,
+        MeetingDeleteService,
+        MeetingListService,
+    )
 except ImportError:
+    # Fallback for absolute imports
     from services.base_service import (
         BaseService,
         BaseCreateService,
@@ -26,33 +39,46 @@ except ImportError:
         BaseDeleteService,
         BaseSetAttributesService
     )
-    from services.user_service import (
+    from services.users import (
         UserCreateService,
         UserUpdateService,
         UserDeleteService,
-        UserSetAttributesService,
         UserLoginService,
         UserLogoutService,
         UserChangePasswordService,
-        UserRegisterService
+        UserRegisterService,
     )
-    from services.project_service import ProjectService
-    from services.member_service import MemberService
+    from services.projects import ProjectService
+    from services.members import MemberService
+    from services.meetings import (
+        MeetingCreateService,
+        MeetingUpdateService,
+        MeetingDeleteService,
+        MeetingListService,
+    )
 
 __all__ = [
+    # Base services
     'BaseService',
     'BaseCreateService',
     'BaseUpdateService',
     'BaseDeleteService',
     'BaseSetAttributesService',
+    # User services
     'UserCreateService',
     'UserUpdateService',
     'UserDeleteService',
-    'UserSetAttributesService',
     'UserLoginService',
     'UserLogoutService',
     'UserChangePasswordService',
     'UserRegisterService',
+    # Project services
     'ProjectService',
+    # Member services
     'MemberService',
+    # Meeting services
+    'MeetingCreateService',
+    'MeetingUpdateService',
+    'MeetingDeleteService',
+    'MeetingListService',
 ]
