@@ -2,3 +2,5 @@
 projenv/
 __pycache__/
 nul 
+openproject.db
+*.db
