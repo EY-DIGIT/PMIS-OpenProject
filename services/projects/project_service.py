@@ -9,10 +9,10 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 try:
-    from ..models import Project, Member, MemberRole, Role, EnabledModule
-    from ..models.enabled_module import DEFAULT_MODULES
-    from ..schemas.project import ProjectCreate, ProjectUpdate
-    from ..utils import ServiceResult
+    from models import Project, Member, MemberRole, Role, EnabledModule
+    from models.enabled_module import DEFAULT_MODULES
+    from schemas.project import ProjectCreate, ProjectUpdate
+    from utils import ServiceResult
 except ImportError:
     from models import Project, Member, MemberRole, Role, EnabledModule
     from models.enabled_module import DEFAULT_MODULES

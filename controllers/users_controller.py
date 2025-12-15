@@ -6,22 +6,13 @@ from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-try:
-    from ..models.user import User
-    from ..services.users import (
-        UserCreateService,
-        UserUpdateService,
-        UserDeleteService,
-    )
-    from ..repositories import UserRepository
-except ImportError:
-    from models.user import User
-    from services.users import (
-        UserCreateService,
-        UserUpdateService,
-        UserDeleteService,
-    )
-    from repositories import UserRepository
+from models.user import User
+from services.users import (
+    UserCreateService,
+    UserUpdateService,
+    UserDeleteService,
+)
+from repositories import UserRepository
 
 
 class UsersController:

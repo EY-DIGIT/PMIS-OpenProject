@@ -9,14 +9,14 @@ try:
         BaseDeleteService,
         BaseSetAttributesService
     )
-    from ..models import User, UserStatus, UserPreference
-    from ..utils import ServiceResult
+    from models import User, UserStatus, UserPreference
+    from utils import ServiceResult
 except ImportError:
-    from services.base_service import (
+    from .base_service import (
         BaseCreateService,
         BaseUpdateService,
         BaseDeleteService,
-        BaseSetAttributesService
+        BaseSetAttributesService,
     )
     from models import User, UserStatus, UserPreference
     from utils import ServiceResult

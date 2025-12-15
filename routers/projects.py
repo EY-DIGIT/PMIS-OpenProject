@@ -7,18 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-try:
-    from ..database import get_db
-    from ..models import Project, User
-    from ..db_models import DBUser  # SQLAlchemy User model for queries
-    from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
-    from ..services.project_service import ProjectService
-except ImportError:
-    from database import get_db
-    from models import Project, User
-    from db_models import DBUser  # SQLAlchemy User model for queries
-    from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
-    from services.project_service import ProjectService
+from database import get_db
+from models import Project, User
+from db_models import DBUser  # SQLAlchemy User model for queries
+from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from services.project_service import ProjectService
 
 
 router = APIRouter(prefix="/api/v3/projects", tags=["projects"])
@@ -36,10 +29,7 @@ def get_current_user(db: Session = Depends(get_db)) -> User:
     user = db.query(DBUser).filter_by(admin=True).first()
     if not user:
         # Create a test admin user if none exists
-        try:
-            from ..models import UserStatus
-        except ImportError:
-            from models import UserStatus
+        from models import UserStatus
         user = DBUser(
             login="admin",
             firstname="Admin",

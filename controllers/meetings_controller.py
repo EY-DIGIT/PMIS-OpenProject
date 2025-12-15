@@ -9,42 +9,23 @@ from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-try:
-    from ..models.user import User
-    from ..models.meeting import Meeting
-    from ..services.meetings import (
-        MeetingCreateService,
-        MeetingUpdateService,
-        MeetingDeleteService,
-        MeetingListService,
-    )
-    from ..repositories import MeetingRepository
-    from ..schemas.meeting import (
-        MeetingCreate,
-        MeetingUpdate,
-        MeetingResponse,
-        HALLink,
-        HALLinks,
-        MeetingStateEnum,
-    )
-except ImportError:
-    from models.user import User
-    from models.meeting import Meeting
-    from services.meetings import (
-        MeetingCreateService,
-        MeetingUpdateService,
-        MeetingDeleteService,
-        MeetingListService,
-    )
-    from repositories import MeetingRepository
-    from schemas.meeting import (
-        MeetingCreate,
-        MeetingUpdate,
-        MeetingResponse,
-        HALLink,
-        HALLinks,
-        MeetingStateEnum,
-    )
+from models.user import User
+from models.meeting import Meeting
+from services.meetings import (
+    MeetingCreateService,
+    MeetingUpdateService,
+    MeetingDeleteService,
+    MeetingListService,
+)
+from repositories import MeetingRepository
+from schemas.meeting import (
+    MeetingCreate,
+    MeetingUpdate,
+    MeetingResponse,
+    HALLink,
+    HALLinks,
+    MeetingStateEnum,
+)
 
 
 class MeetingsController:

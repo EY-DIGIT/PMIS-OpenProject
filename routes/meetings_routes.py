@@ -9,20 +9,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-try:
-    from ..database import get_db
-    from ..models.user import User
-    from ..api.dependencies import get_current_user, get_current_user_optional
-    from ..middleware.rbac import Permission, require_manage_meetings
-    from ..controllers.meetings_controller import MeetingsController
-    from ..schemas.meeting import MeetingCreate, MeetingUpdate, MeetingResponse
-except ImportError:
-    from database import get_db
-    from models.user import User
-    from api.dependencies import get_current_user, get_current_user_optional
-    from middleware.rbac import Permission, require_manage_meetings
-    from controllers.meetings_controller import MeetingsController
-    from schemas.meeting import MeetingCreate, MeetingUpdate, MeetingResponse
+from database import get_db
+from models.user import User
+from api.dependencies import get_current_user, get_current_user_optional
+from middleware.rbac import Permission, require_manage_meetings
+from controllers.meetings_controller import MeetingsController
+from schemas.meeting import MeetingCreate, MeetingUpdate, MeetingResponse
 
 
 router = APIRouter(prefix="/api/v3/meetings", tags=["meetings"])

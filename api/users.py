@@ -9,52 +9,28 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Requ
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-try:
-    from ..database import get_db
-    from ..repositories import UserRepository
-    from ..services import (
-        UserCreateService,
-        UserUpdateService,
-        UserDeleteService,
-        UserChangePasswordService
-    )
-    from ..models import User, UserStatus
-    from .schemas import (
-        UserResponse,
-        UserCollectionResponse,
-        UserCreate,
-        UserUpdate,
-        UserSchemaResponse,
-        ErrorResponse,
-        HALLink,
-        HALLinks,
-        LockResponse,
-        UnlockResponse,
-        UserStatusEnum
-    )
-except ImportError:
-    from database import get_db
-    from repositories import UserRepository
-    from services import (
-        UserCreateService,
-        UserUpdateService,
-        UserDeleteService,
-        UserChangePasswordService
-    )
-    from models import User, UserStatus
-    from api.schemas import (
-        UserResponse,
-        UserCollectionResponse,
-        UserCreate,
-        UserUpdate,
-        UserSchemaResponse,
-        ErrorResponse,
-        HALLink,
-        HALLinks,
-        LockResponse,
-        UnlockResponse,
-        UserStatusEnum
-    )
+from database import get_db
+from repositories import UserRepository
+from services import (
+    UserCreateService,
+    UserUpdateService,
+    UserDeleteService,
+    UserChangePasswordService
+)
+from models import User, UserStatus
+from api.schemas import (
+    UserResponse,
+    UserCollectionResponse,
+    UserCreate,
+    UserUpdate,
+    UserSchemaResponse,
+    ErrorResponse,
+    HALLink,
+    HALLinks,
+    LockResponse,
+    UnlockResponse,
+    UserStatusEnum
+)
 
 router = APIRouter(prefix="/api/v3/users", tags=["users"])
 

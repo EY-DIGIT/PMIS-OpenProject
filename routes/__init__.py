@@ -8,11 +8,11 @@ Routes are thin wrappers that:
 4. Return responses
 """
 
-from .meetings_routes import router as meetings_router
-from .projects_routes import router as projects_router
-from .users_routes import router as users_router
-from .members_routes import router as members_router
-from .auth_routes import router as auth_router
+from routes.meetings_routes import router as meetings_router
+from routes.projects_routes import router as projects_router
+from routes.users_routes import router as users_router
+from routes.members_routes import router as members_router
+from routes.auth_routes import router as auth_router
 
 __all__ = [
     'meetings_router',

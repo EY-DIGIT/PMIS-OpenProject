@@ -6,14 +6,9 @@ from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-try:
-    from ..models.user import User
-    from ..services.projects import ProjectService
-    from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
-except ImportError:
-    from models.user import User
-    from services.projects import ProjectService
-    from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from models.user import User
+from services.projects import ProjectService
+from schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 
 
 class ProjectsController:

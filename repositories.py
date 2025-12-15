@@ -5,12 +5,8 @@ Repository pattern for database operations.
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-try:
-    from .db_models import DBUser, DBUserPreference, DBUserPassword, DBAPIToken
-    from .models import User, UserStatus, UserPreference, UserPassword
-except ImportError:
-    from db_models import DBUser, DBUserPreference, DBUserPassword, DBAPIToken
-    from models import User, UserStatus, UserPreference, UserPassword
+from db_models import DBUser, DBUserPreference, DBUserPassword, DBAPIToken
+from models import User, UserStatus, UserPreference, UserPassword
 import bcrypt
 
 

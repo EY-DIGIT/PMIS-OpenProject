@@ -12,26 +12,15 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import logging
 
-try:
-    from .database import init_db
-    # New modular route structure
-    from .routes import (
-        meetings_router,
-        projects_router,
-        users_router,
-        members_router,
-        auth_router,
-    )
-except ImportError:
-    from database import init_db
-    # New modular route structure
-    from routes import (
-        meetings_router,
-        projects_router,
-        users_router,
-        members_router,
-        auth_router,
-    )
+from database import init_db
+# New modular route structure
+from routes import (
+    meetings_router,
+    projects_router,
+    users_router,
+    members_router,
+    auth_router,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

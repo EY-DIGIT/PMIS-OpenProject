@@ -6,44 +6,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-try:
-    from ..database import get_db
-    from ..api.dependencies import get_current_user, get_current_user_optional
-    from ..schemas.meeting import (
-        MeetingCreate,
-        MeetingUpdate,
-        MeetingResponse,
-        HALLink,
-        HALLinks,
-        MeetingStateEnum,
-    )
-    from ..services.meeting_service import (
-        MeetingCreateService,
-        MeetingUpdateService,
-        MeetingDeleteService,
-        MeetingListService,
-    )
-    from ..repositories import MeetingRepository, UserRepository
-    from ..models.user import User
-except ImportError:
-    from database import get_db
-    from api.dependencies import get_current_user, get_current_user_optional
-    from schemas.meeting import (
-        MeetingCreate,
-        MeetingUpdate,
-        MeetingResponse,
-        HALLink,
-        HALLinks,
-        MeetingStateEnum,
-    )
-    from services.meeting_service import (
-        MeetingCreateService,
-        MeetingUpdateService,
-        MeetingDeleteService,
-        MeetingListService,
-    )
-    from repositories import MeetingRepository, UserRepository
-    from models.user import User
+from database import get_db
+from api.dependencies import get_current_user, get_current_user_optional
+from schemas.meeting import (
+    MeetingCreate,
+    MeetingUpdate,
+    MeetingResponse,
+    HALLink,
+    HALLinks,
+    MeetingStateEnum,
+)
+from services.meeting_service import (
+    MeetingCreateService,
+    MeetingUpdateService,
+    MeetingDeleteService,
+    MeetingListService,
+)
+from repositories import MeetingRepository, UserRepository
+from models.user import User
 
 
 router = APIRouter(prefix="/api/v3/meetings", tags=["meetings"])

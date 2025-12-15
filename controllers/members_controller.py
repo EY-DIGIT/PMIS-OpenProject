@@ -6,12 +6,8 @@ from typing import List
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-try:
-    from ..models.user import User
-    from ..services.members import MemberService
-except ImportError:
-    from models.user import User
-    from services.members import MemberService
+from models.user import User
+from services.members import MemberService
 
 
 class MembersController:

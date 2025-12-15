@@ -6,10 +6,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, T
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
-try:
-    from .database import Base
-except ImportError:
-    from database import Base
+from database import Base
 
 
 class DBUser(Base):

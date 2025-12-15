@@ -42,8 +42,5 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db():
     """Initialize database tables"""
-    try:
-        from . import db_models  # Import all models
-    except ImportError:
-        import db_models  # Fallback for direct execution
+    import db_models  # Import all models
     Base.metadata.create_all(bind=engine)

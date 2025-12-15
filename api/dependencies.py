@@ -6,16 +6,10 @@ from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-try:
-    from ..database import get_db
-    from ..models import User, UserStatus
-    from ..repositories import UserRepository
-    from ..utils.jwt_auth import verify_token
-except ImportError:
-    from database import get_db
-    from models import User, UserStatus
-    from repositories import UserRepository
-    from utils.jwt_auth import verify_token
+from database import get_db
+from models import User, UserStatus
+from repositories import UserRepository
+from utils.jwt_auth import verify_token
 
 
 security_basic = HTTPBasic(auto_error=False)

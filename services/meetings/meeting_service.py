@@ -6,17 +6,17 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 try:
-    from ..utils.service_result import ServiceResult
-    from ..repositories import MeetingRepository, MeetingParticipantRepository
-    from ..models.meeting import Meeting, MeetingState
-    from ..models.meeting_participant import MeetingParticipant, ParticipationStatus
-    from .base_service import BaseService, BaseCreateService, BaseUpdateService
+    from utils.service_result import ServiceResult
+    from repositories import MeetingRepository, MeetingParticipantRepository
+    from models.meeting import Meeting, MeetingState
+    from models.meeting_participant import MeetingParticipant, ParticipationStatus
+    from ..base_service import BaseService, BaseCreateService, BaseUpdateService
 except ImportError:
     from utils.service_result import ServiceResult
     from repositories import MeetingRepository, MeetingParticipantRepository
     from models.meeting import Meeting, MeetingState
     from models.meeting_participant import MeetingParticipant, ParticipationStatus
-    from services.base_service import BaseService, BaseCreateService, BaseUpdateService
+    from ..base_service import BaseService, BaseCreateService, BaseUpdateService
 
 
 class MeetingCreateService(BaseCreateService):

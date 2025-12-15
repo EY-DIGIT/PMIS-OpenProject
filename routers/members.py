@@ -7,18 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-try:
-    from ..database import get_db
-    from ..models import Member, Project, User
-    from ..db_models import DBUser  # SQLAlchemy User model for queries
-    from ..schemas.member import MemberCreate, MemberUpdate, MemberResponse
-    from ..services.member_service import MemberService
-except ImportError:
-    from database import get_db
-    from models import Member, Project, User
-    from db_models import DBUser  # SQLAlchemy User model for queries
-    from schemas.member import MemberCreate, MemberUpdate, MemberResponse
-    from services.member_service import MemberService
+from database import get_db
+from models import Member, Project, User
+from db_models import DBUser  # SQLAlchemy User model for queries
+from schemas.member import MemberCreate, MemberUpdate, MemberResponse
+from services.member_service import MemberService
 
 
 router = APIRouter(prefix="/api/v3", tags=["memberships"])
@@ -36,10 +29,7 @@ def get_current_user(db: Session = Depends(get_db)) -> User:
     user = db.query(DBUser).filter_by(admin=True).first()
     if not user:
         # Create a test admin user if none exists
-        try:
-            from ..models import UserStatus
-        except ImportError:
-            from models import UserStatus
+        from models import UserStatus
         user = DBUser(
             login="admin",
             firstname="Admin",

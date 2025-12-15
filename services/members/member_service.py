@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 try:
-    from ..models import Member, MemberRole, Project, User
-    from .. import db_models
-    from ..schemas.member import MemberCreate, MemberUpdate
-    from ..utils import ServiceResult
+    from models import Member, MemberRole, Project, User
+    import db_models
+    from schemas.member import MemberCreate, MemberUpdate
+    from utils import ServiceResult
 except ImportError:
     from models import Member, MemberRole, Project, User
     import db_models

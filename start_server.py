@@ -42,11 +42,13 @@ if __name__ == "__main__":
     # Change to this directory to ensure proper module loading
     os.chdir(current_dir)
 
-    # Start the server - use user_service.main:app to maintain package structure
+    # Start the server. When running this script from inside the project
+    # directory we can reference the app as `main:app` which avoids
+    # issues with invalid package names (e.g. hyphens in folder names).
     uvicorn.run(
-        "user_service.main:app",
+        "main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
     )

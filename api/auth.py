@@ -5,38 +5,21 @@ Authentication API endpoints.
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
-try:
-    from ..database import get_db
-    from ..repositories import UserRepository
-    from ..services import UserLoginService, UserLogoutService, UserRegisterService
-    from ..models import User
-    from .schemas import (
-        LoginRequest,
-        LoginResponse,
-        RegistrationRequest,
-        UserResponse,
-        PasswordChangeRequest
-    )
-    from .dependencies import CurrentUser, get_user_repository
-    from .users import user_to_response
-    from ..services import UserChangePasswordService
-    from ..utils.jwt_auth import create_user_tokens
-except ImportError:
-    from database import get_db
-    from repositories import UserRepository
-    from services import UserLoginService, UserLogoutService, UserRegisterService
-    from models import User
-    from api.schemas import (
-        LoginRequest,
-        LoginResponse,
-        RegistrationRequest,
-        UserResponse,
-        PasswordChangeRequest
-    )
-    from api.dependencies import CurrentUser, get_user_repository
-    from api.users import user_to_response
-    from services import UserChangePasswordService
-    from utils.jwt_auth import create_user_tokens
+from database import get_db
+from repositories import UserRepository
+from services import UserLoginService, UserLogoutService, UserRegisterService
+from models import User
+from api.schemas import (
+    LoginRequest,
+    LoginResponse,
+    RegistrationRequest,
+    UserResponse,
+    PasswordChangeRequest
+)
+from api.dependencies import CurrentUser, get_user_repository
+from api.users import user_to_response
+from services import UserChangePasswordService
+from utils.jwt_auth import create_user_tokens
 
 router = APIRouter(prefix="/api/v3/auth", tags=["authentication"])
 
