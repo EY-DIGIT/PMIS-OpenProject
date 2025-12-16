@@ -3,7 +3,7 @@ HAL+JSON response formatter for OpenProject API v3 compliance.
 """
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel
-
+from fastapi.responses import JSONResponse
 
 class Link(BaseModel):
     """HAL link representation."""
@@ -156,3 +156,28 @@ def format_success_response(message: str) -> Dict[str, Any]:
         "_type": "Success",
         "message": message
     }
+
+def api_response(
+    *,
+    data: Optional[Any] = None,
+    message: Optional[Any] = None,
+    error: Optional[Any] = None,
+    status: int = 200,
+) -> JSONResponse:
+    """
+    Generic API response envelope.
+    Safe to use across all services.
+    Does NOT affect HAL+JSON formatting.
+    """
+
+    payload = {
+        "data": data,
+        "message": message,
+        "error": error,
+        "status": status,
+    }
+
+    return JSONResponse(
+        status_code=status,
+        content=payload
+    )

@@ -1,8 +1,8 @@
 """
 User controller - orchestrates requests and responses.
 """
-from typing import Dict, Any
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from .schemas import (
     UserCreateRequest,
@@ -26,8 +26,8 @@ from ....core.response import (
     format_error_response,
     format_success_response
 )
+from ....core.base_controller import BaseController
 from ....core.dependencies import get_current_user_id
-from ....core.errors import get_http_status
 
 
 class UserController:
@@ -38,7 +38,7 @@ class UserController:
         request: Request,
         data: UserCreateRequest,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Create a new user.
 
@@ -48,7 +48,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         result = create_user(
             db=db,
@@ -61,23 +61,25 @@ class UserController:
         )
 
         if result.is_success():
-            response = format_user_response(result.data.to_dict())
-            return response, 201
+            payload = format_user_response(result.data.to_dict())
+            resp = BaseController.created(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
             status_code = 422 if result.error_type == "validation_error" else 409
-            return response, status_code
+            resp = BaseController.error(error_payload, status=status_code)
+            return resp
 
     @staticmethod
     def get(
         request: Request,
         user_id: int,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Get user by ID.
 
@@ -87,7 +89,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
@@ -100,21 +102,22 @@ class UserController:
         )
 
         if result.is_success():
-            response = format_user_response(result.data.to_dict())
-            return response, 200
+            payload = format_user_response(result.data.to_dict())
+            return BaseController.ok(payload)
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
-            return response, 404
+            resp = BaseController.error(error_payload, status=404)
+            return resp
 
     @staticmethod
     def get_me(
         request: Request,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Get current user.
 
@@ -123,16 +126,17 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         user_id = get_current_user_id(request)
 
         if not user_id:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type="authentication_error",
                 message="Not authenticated"
             )
-            return response, 401
+            resp = BaseController.error(error_payload, status=401)
+            return resp
 
         result = get_user_by_id(
             db=db,
@@ -142,22 +146,24 @@ class UserController:
         )
 
         if result.is_success():
-            response = format_user_response(result.data.to_dict())
-            return response, 200
+            payload = format_user_response(result.data.to_dict())
+            resp = BaseController.ok(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
-            return response, 404
+            resp = BaseController.error(error_payload, status=404)
+            return resp
 
     @staticmethod
     def list(
         request: Request,
         query: UserListQuery,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         List users.
 
@@ -167,7 +173,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         is_admin = getattr(request.state, "is_admin", False)
 
@@ -183,22 +189,24 @@ class UserController:
             paginated = result.data
             user_dicts = [user.to_dict() for user in paginated.items]
 
-            response = format_collection_response(
+            payload = format_collection_response(
                 items=user_dicts,
                 total=paginated.total,
                 page=paginated.page,
                 page_size=paginated.page_size,
                 collection_type="users"
             )
-            return response, 200
+            resp = BaseController.ok(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
             status_code = 422 if result.error_type == "validation_error" else 500
-            return response, status_code
+            resp = BaseController.error(error_payload, status=status_code)
+            return resp
 
     @staticmethod
     def update(
@@ -206,7 +214,7 @@ class UserController:
         user_id: int,
         data: UserUpdateRequest,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Update user.
 
@@ -217,7 +225,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
@@ -235,10 +243,11 @@ class UserController:
         )
 
         if result.is_success():
-            response = format_user_response(result.data.to_dict())
-            return response, 200
+            payload = format_user_response(result.data.to_dict())
+            resp = BaseController.ok(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
@@ -253,7 +262,8 @@ class UserController:
             else:
                 status_code = 500
 
-            return response, status_code
+            resp = BaseController.error(error_payload, status=status_code)
+            return resp
 
     @staticmethod
     def update_password(
@@ -261,7 +271,7 @@ class UserController:
         user_id: int,
         data: UserPasswordUpdateRequest,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Update user password.
 
@@ -272,7 +282,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
@@ -286,10 +296,11 @@ class UserController:
         )
 
         if result.is_success():
-            response = format_success_response("Password updated successfully")
-            return response, 200
+            payload = format_success_response("Password updated successfully")
+            resp = BaseController.ok(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
@@ -304,14 +315,15 @@ class UserController:
             else:
                 status_code = 500
 
-            return response, status_code
+            resp = BaseController.error(error_payload, status=status_code)
+            return resp
 
     @staticmethod
     def delete(
         request: Request,
         user_id: int,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Delete user.
 
@@ -321,27 +333,29 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         result = delete_user(db=db, user_id=user_id)
 
         if result.is_success():
-            response = format_success_response(f"User {user_id} deleted successfully")
-            return response, 200
+            payload = format_success_response(f"User {user_id} deleted successfully")
+            resp = BaseController.ok(payload)
+            return resp
         else:
-            response = format_error_response(
+            error_payload = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
             status_code = 404 if result.error_type == "not_found" else 500
-            return response, status_code
+            resp = BaseController.error(error_payload, status=status_code)
+            return resp
 
     @staticmethod
     def login(
         data: LoginRequest,
         db: Session
-    ) -> tuple[Dict[str, Any], int]:
+    ) -> JSONResponse:
         """
         Authenticate user and return token.
 
@@ -350,7 +364,7 @@ class UserController:
             db: Database session
 
         Returns:
-            Tuple of (response dict, status code)
+            JSONResponse
         """
         result = authenticate_user(
             db=db,
@@ -360,17 +374,21 @@ class UserController:
 
         if result.is_success():
             token_data = result.data
-            response = {
+            # Keep HAL+JSON for the user inside the `data` payload.
+            response_payload = {
                 "_type": "Login",
                 "access_token": token_data["access_token"],
                 "token_type": token_data["token_type"],
                 "user": format_user_response(token_data["user"].to_dict())
             }
-            return response, 200
+            # Opt-in envelope using BaseController helper which calls `api_response()` internally.
+            resp = BaseController.ok(response_payload)
+            return resp
         else:
-            response = format_error_response(
+            error_response = format_error_response(
                 error_type=result.error_type,
                 message=result.error,
                 details=result.details
             )
-            return response, 401
+            resp = BaseController.error(error_response, status=401)
+            return resp

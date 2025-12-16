@@ -39,8 +39,7 @@ def login(
 
     No authentication required for this endpoint.
     """
-    response, status_code = UserController.login(data, db)
-    return response
+    return UserController.login(data, db)
 
 
 @router.get(
@@ -58,8 +57,7 @@ def get_current_user(
 
     Requires: Authentication
     """
-    response, status_code = UserController.get_me(request, db)
-    return response
+    return UserController.get_me(request, db)
 
 
 @router.post(
@@ -79,8 +77,7 @@ def create_user(
 
     Requires: USERS_CREATE permission (admin only)
     """
-    response, status_code = UserController.create(request, data, db)
-    return response
+    return UserController.create(request, data, db)
 
 
 @router.get(
@@ -102,8 +99,7 @@ def list_users(
     Requires: USERS_READ_ALL permission (admin only)
     """
     query = UserListQuery(offset=offset, pageSize=pageSize, status=status)
-    response, status_code = UserController.list(request, query, db)
-    return response
+    return UserController.list(request, query, db)
 
 
 @router.get(
@@ -124,8 +120,7 @@ def get_user(
     - Members can view themselves and active users
     - Admins can view all users
     """
-    response, status_code = UserController.get(request, user_id, db)
-    return response
+    return UserController.get(request, user_id, db)
 
 
 @router.patch(
@@ -147,8 +142,7 @@ def update_user(
     - Members can update themselves (excluding admin flag and status)
     - Admins can update all users
     """
-    response, status_code = UserController.update(request, user_id, data, db)
-    return response
+    return UserController.update(request, user_id, data, db)
 
 
 @router.patch(
@@ -170,8 +164,7 @@ def update_user_password(
     - Members can update their own password
     - Admins can update any user's password
     """
-    response, status_code = UserController.update_password(request, user_id, data, db)
-    return response
+    return UserController.update_password(request, user_id, data, db)
 
 
 @router.delete(
@@ -190,5 +183,4 @@ def delete_user(
 
     Requires: USERS_DELETE_ALL permission (admin only)
     """
-    response, status_code = UserController.delete(request, user_id, db)
-    return response
+    return UserController.delete(request, user_id, db)
