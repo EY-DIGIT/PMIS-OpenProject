@@ -1,0 +1,43 @@
+"""
+Core configuration module.
+"""
+from typing import Optional
+from pydantic_settings import BaseSettings
+from pydantic import Field
+
+
+class Settings(BaseSettings):
+    """Application settings."""
+
+    # Application
+    APP_NAME: str = "PMIS API"
+    APP_VERSION: str = "3.0.0"
+    DEBUG: bool = False
+
+    # Security
+    SECRET_KEY: str = Field(
+        default="your-secret-key-change-in-production-minimum-32-characters-long",
+        description="Secret key for JWT encoding"
+    )
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
+    # Database
+    DATABASE_URL: str = Field(
+        default="sqlite:///./pmis.db",
+        description="Database connection URL"
+    )
+
+    # CORS
+    CORS_ORIGINS: list[str] = ["*"]
+
+    # Pagination
+    DEFAULT_PAGE_SIZE: int = 20
+    MAX_PAGE_SIZE: int = 100
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+settings = Settings()
