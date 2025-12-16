@@ -23,6 +23,15 @@ class Permission(str, Enum):
     USERS_UPDATE_ALL = "users:update_all"
     USERS_DELETE = "users:delete"
     USERS_DELETE_ALL = "users:delete_all"
+    
+    # Project permissions
+    PROJECTS_CREATE = "projects:create"
+    PROJECTS_READ = "projects:read"
+    PROJECTS_READ_ALL = "projects:read_all"
+    PROJECTS_UPDATE = "projects:update"
+    PROJECTS_UPDATE_ALL = "projects:update_all"
+    PROJECTS_DELETE = "projects:delete"
+    PROJECTS_DELETE_ALL = "projects:delete_all"
 
 
 # Role -> Permissions mapping
@@ -35,13 +44,24 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.USERS_UPDATE_ALL,
         Permission.USERS_DELETE,
         Permission.USERS_DELETE_ALL,
+        Permission.PROJECTS_CREATE,
+        Permission.PROJECTS_READ,
+        Permission.PROJECTS_READ_ALL,
+        Permission.PROJECTS_UPDATE,
+        Permission.PROJECTS_UPDATE_ALL,
+        Permission.PROJECTS_DELETE,
+        Permission.PROJECTS_DELETE_ALL,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
         Permission.USERS_UPDATE,
+        Permission.PROJECTS_READ,
+        Permission.PROJECTS_CREATE,
+        Permission.PROJECTS_UPDATE,
     },
     Role.VIEWER: {
         Permission.USERS_READ,
+        Permission.PROJECTS_READ,
     },
     Role.ANONYMOUS: set(),
 }

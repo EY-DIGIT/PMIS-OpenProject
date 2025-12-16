@@ -41,5 +41,11 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """
     Initialize database (create tables).
+    
+    Imports models to register them with Base before creating tables.
     """
+    # Import models here to avoid circular imports
+    # This ensures models are registered with Base before table creation
+    from .models import UserModel, ProjectModel  # noqa: F401
+    
     Base.metadata.create_all(bind=engine)

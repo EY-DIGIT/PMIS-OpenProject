@@ -75,3 +75,16 @@ def normalize_login(login: str) -> str:
         Normalized login (lowercase)
     """
     return login.lower().strip()
+
+
+def normalize_string(value: str) -> str:
+    """
+    Normalize a general string.
+
+    Args:
+        value: String to normalize
+
+    Returns:
+        Normalized string (stripped whitespace)
+    """
+    return value.strip() if value else ""

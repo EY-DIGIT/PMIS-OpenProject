@@ -73,7 +73,7 @@ def format_collection_response(
         page: Current page number (1-indexed)
         page_size: Number of items per page
         base_url: Base API URL
-        collection_type: Type of collection (e.g., 'users')
+        collection_type: Type of collection (e.g., 'users', 'projects')
 
     Returns:
         HAL+JSON formatted collection response
@@ -96,6 +96,8 @@ def format_collection_response(
     # Format embedded items based on collection type
     if collection_type == "users":
         formatted_items = [format_user_response(item, base_url) for item in items]
+    elif collection_type == "projects":
+        formatted_items = [format_project_response(item, base_url) for item in items]
     else:
         formatted_items = items
 
@@ -110,6 +112,51 @@ def format_collection_response(
             "elements": formatted_items
         }
     }
+
+    return response
+
+
+def format_project_response(
+    project_data: Dict[str, Any],
+    base_url: str = "/api/v3"
+) -> Dict[str, Any]:
+    """
+    Format a single project response in HAL+JSON format.
+
+    Args:
+        project_data: Project data dictionary
+        base_url: Base API URL
+
+    Returns:
+        HAL+JSON formatted response
+    """
+    project_id = project_data.get("id")
+    identifier = project_data.get("identifier")
+
+    response = {
+        "_type": "Project",
+        "_links": {
+            "self": {
+                "href": f"{base_url}/projects/{project_id}",
+                "title": project_data.get("name")
+            }
+        },
+        "id": project_id,
+        "identifier": identifier,
+        "name": project_data.get("name"),
+        "description": project_data.get("description"),
+        "active": project_data.get("active", True),
+        "public": project_data.get("public", False),
+        "statusExplanation": project_data.get("status_explanation"),
+        "createdAt": project_data.get("created_at"),
+        "updatedAt": project_data.get("updated_at"),
+    }
+
+    # Add parent link if parent_id is present
+    if project_data.get("parent_id"):
+        response["_links"]["parent"] = {
+            "href": f"{base_url}/projects/{project_data.get('parent_id')}"
+        }
 
     return response
 
