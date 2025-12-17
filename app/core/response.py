@@ -98,6 +98,8 @@ def format_collection_response(
         formatted_items = [format_user_response(item, base_url) for item in items]
     elif collection_type == "projects":
         formatted_items = [format_project_response(item, base_url) for item in items]
+    elif collection_type == "roles":
+        formatted_items = [format_role_response(item, base_url) for item in items]
     else:
         formatted_items = items
 
@@ -157,6 +159,41 @@ def format_project_response(
         response["_links"]["parent"] = {
             "href": f"{base_url}/projects/{project_data.get('parent_id')}"
         }
+
+    return response
+
+
+def format_role_response(
+    role_data: Dict[str, Any],
+    base_url: str = "/api/v3"
+) -> Dict[str, Any]:
+    """
+    Format a single role response in HAL+JSON format.
+
+    Args:
+        role_data: Role data dictionary
+        base_url: Base API URL
+
+    Returns:
+        HAL+JSON formatted response
+    """
+    role_id = role_data.get("id")
+
+    response = {
+        "_type": "Role",
+        "_links": {
+            "self": {
+                "href": f"{base_url}/roles/{role_id}",
+                "title": role_data.get("name")
+            }
+        },
+        "id": role_id,
+        "name": role_data.get("name"),
+        "permissions": role_data.get("permissions", []),
+        "builtin": role_data.get("builtin", False),
+        "createdAt": role_data.get("created_at"),
+        "updatedAt": role_data.get("updated_at"),
+    }
 
     return response
 

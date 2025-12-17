@@ -38,6 +38,12 @@ class Permission(str, Enum):
     PROJECT_MEMBERS_ADD = "project_members:add"
     PROJECT_MEMBERS_UPDATE = "project_members:update"
     PROJECT_MEMBERS_DELETE = "project_members:delete"
+    
+    # Roles permissions
+    ROLES_READ = "roles:read"
+    ROLES_CREATE = "roles:create"
+    ROLES_UPDATE = "roles:update"
+    ROLES_DELETE = "roles:delete"
 
 
 # Role -> Permissions mapping
@@ -61,6 +67,10 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,
         Permission.PROJECT_MEMBERS_DELETE,
+        Permission.ROLES_READ,
+        Permission.ROLES_CREATE,
+        Permission.ROLES_UPDATE,
+        Permission.ROLES_DELETE,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
