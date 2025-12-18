@@ -100,6 +100,27 @@ class ProjectMemberRepository:
         ).first()
         return self._to_domain(model) if model else None
 
+    def exists_by_project_and_user(self, project_id: int, user_id: int) -> bool:
+        """
+        Check if a project member exists for given project and user.
+
+        Args:
+            project_id: Project ID
+            user_id: User ID
+
+        Returns:
+            True if a ProjectMemberModel exists matching project_id and user_id
+        """
+        return (
+            self.db.query(ProjectMemberModel)
+            .filter(
+                ProjectMemberModel.project_id == project_id,
+                ProjectMemberModel.user_id == user_id,
+            )
+            .first()
+            is not None
+        )
+
     def list_by_project(
         self,
         project_id: int,

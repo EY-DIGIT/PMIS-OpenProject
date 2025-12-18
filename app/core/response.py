@@ -78,7 +78,18 @@ def format_collection_response(
     Returns:
         HAL+JSON formatted collection response
     """
-    total_pages = (total + page_size - 1) // page_size
+    # Sanitize pagination inputs to avoid division by zero and invalid pages
+    if page_size is None or page_size <= 0:
+        page_size = 20
+
+    if page is None or page < 1:
+        page = 1
+
+    # Compute total pages safely (if total == 0, treat as single empty page)
+    if total > 0:
+        total_pages = (total + page_size - 1) // page_size
+    else:
+        total_pages = 1
 
     # Build pagination links
     links = {
@@ -194,6 +205,132 @@ def format_role_response(
         "createdAt": role_data.get("created_at"),
         "updatedAt": role_data.get("updated_at"),
     }
+
+    return response
+
+
+def format_meeting_response(
+    meeting_data: Dict[str, Any],
+    base_url: str = "/api/v3"
+) -> Dict[str, Any]:
+    """
+    Format a single meeting response in HAL+JSON format.
+
+    Args:
+        meeting_data: Meeting data dictionary
+        base_url: Base API URL
+
+    Returns:
+        HAL+JSON formatted response
+    """
+    meeting_id = meeting_data.get("id")
+    project_id = meeting_data.get("project_id")
+
+    response = {
+        "_type": "Meeting",
+        "_links": {
+            "self": {
+                "href": f"{base_url}/meetings/{meeting_id}",
+                "title": meeting_data.get("title")
+            },
+            "project": {
+                "href": f"{base_url}/projects/{project_id}"
+            }
+        },
+        "id": meeting_id,
+        "title": meeting_data.get("title"),
+        "description": meeting_data.get("description"),
+        "scheduledAt": meeting_data.get("scheduled_at"),
+        "durationMinutes": meeting_data.get("duration_minutes"),
+        "location": meeting_data.get("location"),
+        "createdBy": meeting_data.get("created_by_id"),
+        "createdAt": meeting_data.get("created_at"),
+        "updatedAt": meeting_data.get("updated_at"),
+    }
+
+    return response
+
+
+def format_meeting_participant_response(
+    participant_data: Dict[str, Any],
+    base_url: str = "/api/v3"
+) -> Dict[str, Any]:
+    """
+    Format a meeting participant response in HAL+JSON format.
+
+    Args:
+        participant_data: Participant data dictionary
+        base_url: Base API URL
+
+    Returns:
+        HAL+JSON formatted response
+    """
+    participant_id = participant_data.get("id")
+    user_id = participant_data.get("user_id")
+
+    response = {
+        "_type": "MeetingParticipant",
+        "_links": {
+            "self": {
+                "href": f"{base_url}/participants/{participant_id}"
+            },
+            "user": {
+                "href": f"{base_url}/users/{user_id}"
+            }
+        },
+        "id": participant_id,
+        "userId": user_id,
+        "createdAt": participant_data.get("created_at"),
+    }
+
+    return response
+
+
+def format_agenda_item_response(
+    agenda_item_data: Dict[str, Any],
+    base_url: str = "/api/v3"
+) -> Dict[str, Any]:
+    """
+    Format an agenda item response in HAL+JSON format.
+
+    Args:
+        agenda_item_data: Agenda item data dictionary
+        base_url: Base API URL
+
+    Returns:
+        HAL+JSON formatted response
+    """
+    agenda_item_id = agenda_item_data.get("id")
+    meeting_id = agenda_item_data.get("meeting_id")
+    project_id = agenda_item_data.get("project_id")
+
+    response = {
+        "_type": "AgendaItem",
+        "_links": {
+            "self": {
+                "href": f"{base_url}/agenda_items/{agenda_item_id}"
+            },
+            "meeting": {
+                "href": f"{base_url}/meetings/{meeting_id}"
+            },
+            "project": {
+                "href": f"{base_url}/projects/{project_id}"
+            }
+        },
+        "id": agenda_item_id,
+        "title": agenda_item_data.get("title"),
+        "description": agenda_item_data.get("description"),
+        "position": agenda_item_data.get("position"),
+        "createdAt": agenda_item_data.get("created_at"),
+        "updatedAt": agenda_item_data.get("updated_at"),
+    }
+
+    # Add work package link if present
+    if agenda_item_data.get("work_package_id"):
+        response["_links"]["workPackage"] = {
+            "href": f"{base_url}/work_packages/{agenda_item_data.get('work_package_id')}"
+        }
+        response["workPackageId"] = agenda_item_data.get("work_package_id")
 
     return response
 

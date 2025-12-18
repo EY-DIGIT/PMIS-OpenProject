@@ -53,6 +53,12 @@ class Permission(str, Enum):
     # Work Package Types permissions
     WORK_PACKAGE_TYPES_VIEW = "work_package_types:view"
     WORK_PACKAGE_TYPES_MANAGE = "work_package_types:manage"
+    
+    # Meetings permissions
+    MEETINGS_VIEW = "meetings:view"
+    MEETINGS_CREATE = "meetings:create"
+    MEETINGS_UPDATE = "meetings:update"
+    MEETINGS_DELETE = "meetings:delete"
 
 
 # Role -> Permissions mapping
@@ -86,6 +92,10 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.WORK_PACKAGES_DELETE,
         Permission.WORK_PACKAGE_TYPES_VIEW,
         Permission.WORK_PACKAGE_TYPES_MANAGE,
+        Permission.MEETINGS_VIEW,
+        Permission.MEETINGS_CREATE,
+        Permission.MEETINGS_UPDATE,
+        Permission.MEETINGS_DELETE,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
@@ -101,12 +111,17 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.WORK_PACKAGES_UPDATE,
         Permission.WORK_PACKAGES_DELETE,
         Permission.WORK_PACKAGE_TYPES_VIEW,
+        Permission.MEETINGS_VIEW,
+        Permission.MEETINGS_CREATE,
+        Permission.MEETINGS_UPDATE,
+        Permission.MEETINGS_DELETE,
     },
     Role.VIEWER: {
         Permission.USERS_READ,
         Permission.PROJECTS_READ,
         Permission.PROJECT_MEMBERS_READ,
         Permission.WORK_PACKAGES_VIEW,
+        Permission.MEETINGS_VIEW,
     },
     Role.ANONYMOUS: set(),
 }
