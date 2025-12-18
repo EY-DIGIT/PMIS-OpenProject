@@ -198,6 +198,10 @@ def format_role_response(
     return response
 
 
+    # Work-package-specific formatting removed to keep this module generic.
+    # Controllers are responsible for assembling module-specific HAL responses.
+
+
 def format_error_response(
     error_type: str,
     message: str,

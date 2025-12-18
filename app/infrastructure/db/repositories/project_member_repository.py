@@ -251,3 +251,15 @@ class ProjectMemberRepository:
                 ProjectMemberModel.user_id == user_id,
             ).exists()
         ).scalar()
+    def is_member(self, project_id: int, user_id: int) -> bool:
+        """
+        Check if a user is a member of a project.
+
+        Args:
+            project_id: Project ID
+            user_id: User ID
+
+        Returns:
+            True if user is a member of the project
+        """
+        return self.exists(project_id, user_id)

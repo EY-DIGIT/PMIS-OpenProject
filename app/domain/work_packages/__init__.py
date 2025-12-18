@@ -1,0 +1,3 @@
+"""
+Work Packages domain module.
+"""

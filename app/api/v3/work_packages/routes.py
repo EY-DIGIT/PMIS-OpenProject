@@ -1,0 +1,130 @@
+"""
+Work Package routes - URL definitions with permission bindings.
+"""
+from typing import Dict, Any
+from fastapi import APIRouter, Depends, Request, Query
+from sqlalchemy.orm import Session
+from .controller import WorkPackageController
+from .schemas import (
+    WorkPackageCreateRequest,
+    WorkPackageUpdateRequest,
+    WorkPackageListQuery
+)
+from .permissions import (
+    WORK_PACKAGES_VIEW,
+    WORK_PACKAGES_CREATE,
+    WORK_PACKAGES_UPDATE,
+    WORK_PACKAGES_DELETE,
+)
+from ....core.middleware.rbac import require_permission
+from ....infrastructure.db.session import get_db
+
+# Router for project-scoped work packages
+projects_router = APIRouter(prefix="/projects/{project_id}/work_packages", tags=["work_packages"])
+
+# Router for global work package endpoints
+work_packages_router = APIRouter(prefix="/work_packages", tags=["work_packages"])
+
+
+# Project-scoped endpoints
+@projects_router.post(
+    "",
+    dependencies=[require_permission(WORK_PACKAGES_CREATE)],
+    summary="Create work package",
+    description="Create a new work package in a project",
+    status_code=201
+)
+def create_work_package_in_project(
+    request: Request,
+    project_id: int,
+    data: WorkPackageCreateRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Create a new work package in a project.
+
+    Requires: WORK_PACKAGES_CREATE permission
+    """
+    return WorkPackageController.create_in_project(request, project_id, data, db)
+
+
+@projects_router.get(
+    "",
+    dependencies=[require_permission(WORK_PACKAGES_VIEW)],
+    summary="List work packages",
+    description="List work packages in a project with pagination"
+)
+def list_work_packages_in_project(
+    request: Request,
+    project_id: int,
+    offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
+    parentId: int = Query(None, description="Filter by parent work package ID"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    List work packages in a project with pagination.
+
+    Requires: WORK_PACKAGES_VIEW permission
+    """
+    query = WorkPackageListQuery(offset=offset, pageSize=pageSize, parentId=parentId)
+    return WorkPackageController.list(request, project_id, query, db)
+
+
+# Global work package endpoints
+@work_packages_router.get(
+    "/{work_package_id}",
+    dependencies=[require_permission(WORK_PACKAGES_VIEW)],
+    summary="Get work package",
+    description="Get work package by ID"
+)
+def get_work_package(
+    request: Request,
+    work_package_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get a work package by ID.
+
+    Requires: WORK_PACKAGES_VIEW permission
+    """
+    return WorkPackageController.get(request, work_package_id, db)
+
+
+@work_packages_router.patch(
+    "/{work_package_id}",
+    dependencies=[require_permission(WORK_PACKAGES_UPDATE)],
+    summary="Update work package",
+    description="Update a work package"
+)
+def update_work_package(
+    request: Request,
+    work_package_id: int,
+    data: WorkPackageUpdateRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Update a work package.
+
+    Requires: WORK_PACKAGES_UPDATE permission
+    """
+    return WorkPackageController.update(request, work_package_id, data, db)
+
+
+@work_packages_router.delete(
+    "/{work_package_id}",
+    dependencies=[require_permission(WORK_PACKAGES_DELETE)],
+    summary="Delete work package",
+    description="Delete a work package"
+)
+def delete_work_package(
+    request: Request,
+    work_package_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Delete a work package.
+
+    Requires: WORK_PACKAGES_DELETE permission
+    """
+    return WorkPackageController.delete(request, work_package_id, db)
