@@ -23,6 +23,7 @@ class WorkPackageCreateRequest(BaseModel):
     subject: str = Field(..., min_length=1, max_length=255, description="Work package title")
     description: Optional[str] = Field(None, max_length=5000, description="Work package description")
     parentId: Optional[int] = Field(None, description="Parent work package ID (for subtasks)")
+    typeId: int = Field(..., description="Work package type ID")
     assigneeId: Optional[int] = Field(None, description="Assigned user ID")
     status: str = Field(default="new", description="Status: new, in_progress, resolved, closed, on_hold")
     priority: str = Field(default="normal", description="Priority: low, normal, high, urgent")
@@ -47,6 +48,7 @@ class WorkPackageUpdateRequest(BaseModel):
     status: Optional[str] = Field(None, description="Status: new, in_progress, resolved, closed, on_hold")
     priority: Optional[str] = Field(None, description="Priority: low, normal, high, urgent")
     doneRatio: Optional[int] = Field(None, ge=0, le=100, description="Completion percentage")
+    typeId: Optional[int] = Field(None, description="Work package type ID")
 
 
 class WorkPackageListQuery(BaseModel):

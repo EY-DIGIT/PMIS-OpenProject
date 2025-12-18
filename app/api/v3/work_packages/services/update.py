@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from .....infrastructure.db.repositories.work_package_repository import WorkPackageRepository
 from .....infrastructure.db.repositories.project_member_repository import ProjectMemberRepository
+from .....infrastructure.db.repositories.work_package_type_repository import WorkPackageTypeRepository
 from .....domain.work_packages.work_package import WorkPackage
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
@@ -19,6 +20,7 @@ def update_work_package(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     done_ratio: Optional[int] = None,
+    type_id: Optional[int] = None,
 ) -> ServiceResult[WorkPackage]:
     """
     Update a work package.
@@ -98,6 +100,21 @@ def update_work_package(
                 error_type="validation_error"
             )
 
+    # Validate type if provided
+    if type_id is not None:
+        type_repo = WorkPackageTypeRepository(db)
+        type_model = type_repo.get_by_id(type_id)
+        if not type_model:
+            return ServiceResult.fail(
+                error=f"Work package type with ID {type_id} does not exist",
+                error_type="not_found"
+            )
+        if not getattr(type_model, "is_active", False):
+            return ServiceResult.fail(
+                error=f"Work package type with ID {type_id} is not active",
+                error_type="validation_error"
+            )
+
     # Update work package
     try:
         updated_wp = repository.update(
@@ -108,6 +125,7 @@ def update_work_package(
             status=status,
             priority=priority,
             done_ratio=done_ratio,
+            type_id=type_id,
         )
         return ServiceResult.ok(updated_wp)
     except Exception as e:

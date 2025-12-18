@@ -36,6 +36,7 @@ class WorkPackageRepository:
             description=model.description,
             project_id=model.project_id,
             parent_id=model.parent_id,
+            type_id=model.type_id,
             assignee_id=model.assignee_id,
             status=model.status,
             priority=model.priority,
@@ -54,6 +55,7 @@ class WorkPackageRepository:
         status: str = "new",
         priority: str = "normal",
         done_ratio: int = 0,
+        type_id: Optional[int] = None,
     ) -> WorkPackage:
         """
         Create a new work package.
@@ -76,6 +78,7 @@ class WorkPackageRepository:
             description=description,
             project_id=project_id,
             parent_id=parent_id,
+            type_id=type_id,
             assignee_id=assignee_id,
             status=status,
             priority=priority,
@@ -191,6 +194,18 @@ class WorkPackageRepository:
             ).exists()
         ).scalar()
 
+    def exists_by_type_id(self, type_id: int) -> bool:
+        """
+        Check if any work package exists with the given type_id.
+        """
+        return self.db.query(
+            self.db.query(WorkPackageModel).filter(
+                WorkPackageModel.type_id == type_id
+            ).exists()
+        ).scalar()
+
+        
+
     def exists_by_project_and_id(
         self,
         project_id: int,
@@ -224,6 +239,7 @@ class WorkPackageRepository:
         status: Optional[str] = None,
         priority: Optional[str] = None,
         done_ratio: Optional[int] = None,
+        type_id: Optional[int] = None,
     ) -> Optional[WorkPackage]:
         """
         Update a work package.
@@ -259,6 +275,8 @@ class WorkPackageRepository:
             model.priority = priority
         if done_ratio is not None:
             model.done_ratio = done_ratio
+        if type_id is not None:
+            model.type_id = type_id
 
         self.db.commit()
         self.db.refresh(model)

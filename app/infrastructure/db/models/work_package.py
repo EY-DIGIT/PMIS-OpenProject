@@ -17,6 +17,7 @@ class WorkPackageModel(Base):
     description = Column(Text, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("work_packages.id"), nullable=True, index=True)
+    type_id = Column(Integer, ForeignKey("work_package_types.id"), nullable=True, index=True)
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     status = Column(String(100), default="new", nullable=False, index=True)
     priority = Column(String(100), default="normal", nullable=False, index=True)
@@ -33,6 +34,7 @@ class WorkPackageModel(Base):
     __table_args__ = (
         Index("idx_work_packages_project_id", "project_id"),
         Index("idx_work_packages_parent_id", "parent_id"),
+        Index("idx_work_packages_type_id", "type_id"),
         Index("idx_work_packages_assignee_id", "assignee_id"),
         Index("idx_work_packages_status", "status"),
         Index("idx_work_packages_priority", "priority"),

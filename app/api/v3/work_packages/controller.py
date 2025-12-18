@@ -44,6 +44,7 @@ class WorkPackageController:
             "projectId": project_id,
             "parentId": wp.get("parent_id"),
             "assigneeId": wp.get("assignee_id"),
+            "typeId": wp.get("type_id"),
             "status": wp.get("status"),
             "priority": wp.get("priority"),
             "doneRatio": wp.get("done_ratio"),
@@ -56,6 +57,9 @@ class WorkPackageController:
 
         if wp.get("assignee_id"):
             response["_links"]["assignee"] = {"href": f"{base_url}/users/{wp.get('assignee_id')}"}
+
+        if wp.get("type_id"):
+            response["_links"]["type"] = {"href": f"{base_url}/work_package_types/{wp.get('type_id')}"}
 
         return response
 
@@ -85,6 +89,7 @@ class WorkPackageController:
             description=data.description,
             parent_id=data.parentId,
             assignee_id=data.assigneeId,
+            type_id=data.typeId,
             status=data.status,
             priority=data.priority,
             done_ratio=data.doneRatio,
@@ -256,6 +261,7 @@ class WorkPackageController:
             subject=data.subject,
             description=data.description,
             assignee_id=data.assigneeId,
+            type_id=data.typeId,
             status=data.status,
             priority=data.priority,
             done_ratio=data.doneRatio,

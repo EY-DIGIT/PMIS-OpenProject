@@ -23,6 +23,7 @@ class WorkPackage:
     status: str
     priority: str
     done_ratio: int
+    type_id: Optional[int]
     created_at: datetime
     updated_at: datetime
     parent_id: Optional[int] = None
@@ -40,6 +41,7 @@ class WorkPackage:
             "description": self.description,
             "project_id": self.project_id,
             "parent_id": self.parent_id,
+            "type_id": self.type_id,
             "assignee_id": self.assignee_id,
             "status": self.status,
             "priority": self.priority,

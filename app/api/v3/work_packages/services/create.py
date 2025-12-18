@@ -7,6 +7,7 @@ from .....core.errors import ValidationError
 from .....infrastructure.db.repositories.work_package_repository import WorkPackageRepository
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.project_member_repository import ProjectMemberRepository
+from .....infrastructure.db.repositories.work_package_type_repository import WorkPackageTypeRepository
 from .....domain.work_packages.work_package import WorkPackage
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
@@ -22,6 +23,7 @@ def create_work_package(
     status: str = "new",
     priority: str = "normal",
     done_ratio: int = 0,
+    type_id: Optional[int] = None,
 ) -> ServiceResult[WorkPackage]:
     """
     Create a new work package.
@@ -114,6 +116,27 @@ def create_work_package(
                 error_type="validation_error"
             )
 
+    # Validate type_id (required and must be active)
+    type_repo = WorkPackageTypeRepository(db)
+    if type_id is None:
+        return ServiceResult.fail(
+            error="type_id is required",
+            error_type="validation_error"
+        )
+
+    type_model = type_repo.get_by_id(type_id)
+    if not type_model:
+        return ServiceResult.fail(
+            error=f"Work package type with ID {type_id} does not exist",
+            error_type="not_found"
+        )
+
+    if not getattr(type_model, "is_active", False):
+        return ServiceResult.fail(
+            error=f"Work package type with ID {type_id} is not active",
+            error_type="validation_error"
+        )
+
     # Create work package
     try:
         wp = repository.create(
@@ -125,6 +148,7 @@ def create_work_package(
             status=status,
             priority=priority,
             done_ratio=done_ratio,
+            type_id=type_id,
         )
         return ServiceResult.ok(wp)
     except Exception as e:

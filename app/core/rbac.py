@@ -50,6 +50,9 @@ class Permission(str, Enum):
     WORK_PACKAGES_CREATE = "work_packages:create"
     WORK_PACKAGES_UPDATE = "work_packages:update"
     WORK_PACKAGES_DELETE = "work_packages:delete"
+    # Work Package Types permissions
+    WORK_PACKAGE_TYPES_VIEW = "work_package_types:view"
+    WORK_PACKAGE_TYPES_MANAGE = "work_package_types:manage"
 
 
 # Role -> Permissions mapping
@@ -81,6 +84,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.WORK_PACKAGES_CREATE,
         Permission.WORK_PACKAGES_UPDATE,
         Permission.WORK_PACKAGES_DELETE,
+        Permission.WORK_PACKAGE_TYPES_VIEW,
+        Permission.WORK_PACKAGE_TYPES_MANAGE,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
@@ -95,6 +100,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.WORK_PACKAGES_CREATE,
         Permission.WORK_PACKAGES_UPDATE,
         Permission.WORK_PACKAGES_DELETE,
+        Permission.WORK_PACKAGE_TYPES_VIEW,
     },
     Role.VIEWER: {
         Permission.USERS_READ,

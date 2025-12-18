@@ -7,6 +7,7 @@ from .v3.projects import router as projects_router
 from .v3.project_members import projects_router as pm_projects_router, memberships_router
 from .v3.roles import router as roles_router
 from .v3.work_packages import projects_router as wp_projects_router, work_packages_router
+from .v3.work_package_types import router as work_package_types_router
 
 # Create API v3 router
 api_v3_router = APIRouter(prefix="/api/v3")
@@ -19,3 +20,4 @@ api_v3_router.include_router(memberships_router)
 api_v3_router.include_router(roles_router)
 api_v3_router.include_router(wp_projects_router)
 api_v3_router.include_router(work_packages_router)
+api_v3_router.include_router(work_package_types_router)
