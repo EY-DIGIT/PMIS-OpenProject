@@ -262,6 +262,44 @@ class UserRepository:
 
         return True
 
+    def update_refresh_token_metadata(self, user_id: int, jti: str, expires_at, expected_old_jti: Optional[str] = None) -> bool:
+        """
+        Atomically update stored refresh token JTI and expiry for a user.
+
+        If `expected_old_jti` is provided, the update will only succeed when the
+        current stored JTI equals `expected_old_jti`. This prevents race
+        conditions and prevents silent overwrite of a rotated token.
+
+        Returns True when the row was updated, False otherwise.
+        """
+        query = self.db.query(UserModel).filter(UserModel.id == user_id)
+        if expected_old_jti is not None:
+            query = query.filter(UserModel.refresh_token_jti == expected_old_jti)
+
+        # Use bulk update to ensure atomic SQL WHERE check and update
+        rows_updated = query.update({
+            UserModel.refresh_token_jti: jti,
+            UserModel.refresh_token_expires_at: expires_at
+        }, synchronize_session=False)
+
+        if rows_updated:
+            self.db.commit()
+            return True
+
+        # No rows updated: either user not found or expected_old_jti mismatch
+        return False
+
+    def get_refresh_metadata(self, user_id: int):
+        """
+        Retrieve stored refresh token metadata for a user.
+
+        Returns tuple (jti, expires_at) or (None, None)
+        """
+        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if not user_model:
+            return None, None
+        return user_model.refresh_token_jti, user_model.refresh_token_expires_at
+
     def delete(self, user_id: int) -> bool:
         """
         Delete user.

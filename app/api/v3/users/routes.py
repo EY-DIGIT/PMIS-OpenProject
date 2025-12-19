@@ -12,6 +12,7 @@ from .schemas import (
     LoginRequest,
     UserListQuery
 )
+from .schemas import IntrospectRequest
 from .permissions import (
     USERS_CREATE,
     USERS_READ,
@@ -23,6 +24,21 @@ from ....core.middleware.rbac import require_permission, require_authenticated
 from ....infrastructure.db.session import get_db
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.post(
+    "/introspect",
+    summary="Introspect tokens",
+    description="Public token introspection endpoint"
+)
+def introspect(
+    data: IntrospectRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Public introspection endpoint. Accepts tokens in request body.
+    """
+    return UserController.introspect(data, db)
 
 
 @router.post(

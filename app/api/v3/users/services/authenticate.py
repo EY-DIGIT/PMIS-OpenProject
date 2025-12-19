@@ -3,7 +3,7 @@ User authentication service.
 """
 from typing import Optional
 from sqlalchemy.orm import Session
-from .....core.security import verify_password, create_access_token
+from .....core.security import verify_password, create_access_token, create_refresh_token
 from .....core.rbac import Role
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....shared.service_result import ServiceResult
@@ -66,9 +66,21 @@ def authenticate_user(
     }
 
     access_token = create_access_token(token_data)
+    # Create refresh token and persist its jti and expiry for rotation
+    refresh_token, refresh_jti, refresh_expires = create_refresh_token({
+        "sub": user.login,
+        "user_id": user.id,
+        "email": user.email,
+        "role": role.value,
+        "is_admin": user.admin
+    })
+
+    # Persist refresh metadata
+    repository.update_refresh_token_metadata(user.id, refresh_jti, refresh_expires)
 
     return ServiceResult.ok({
         "access_token": access_token,
         "token_type": "bearer",
+        "refresh_token": refresh_token,
         "user": user
     })

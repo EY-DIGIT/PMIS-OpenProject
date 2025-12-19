@@ -44,6 +44,8 @@ class LoginResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+    # Backwards-compatible addition: include refresh token when present
+    refresh_token: Optional[str] = None
 
 
 class UserListQuery(BaseModel):
@@ -52,3 +54,10 @@ class UserListQuery(BaseModel):
     offset: int = Field(1, ge=1, description="Page number (1-indexed)")
     pageSize: int = Field(20, ge=1, le=100, description="Number of items per page")
     status: Optional[str] = Field(None, description="Filter by status")
+
+
+class IntrospectRequest(BaseModel):
+    """Request schema for token introspection."""
+
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None

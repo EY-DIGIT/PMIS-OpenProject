@@ -378,6 +378,7 @@ class UserController:
             response_payload = {
                 "_type": "Login",
                 "access_token": token_data["access_token"],
+                "refresh_token": token_data.get("refresh_token"),
                 "token_type": token_data["token_type"],
                 "user": format_user_response(token_data["user"].to_dict())
             }
@@ -392,3 +393,38 @@ class UserController:
             )
             resp = BaseController.error(error_response, status=401)
             return resp
+
+    @staticmethod
+    def introspect(
+        data,
+        db: Session
+    ) -> JSONResponse:
+        """
+        Public introspection endpoint. No auth middleware.
+        """
+        from .services.introspect import introspect_tokens
+
+        result = introspect_tokens(db=db, access_token=data.access_token, refresh_token=data.refresh_token)
+
+        if result.is_success():
+            payload = result.data
+            # When active-only response
+            if payload.get("active"):
+                resp_payload = {"_type": "Introspect", "active": True, "user": format_user_response(payload["user"].to_dict())}
+                return BaseController.ok(resp_payload)
+
+            # When rotation issued new tokens
+            resp_payload = {
+                "_type": "Introspect",
+                "access_token": payload.get("access_token"),
+                "refresh_token": payload.get("refresh_token"),
+                "token_type": payload.get("token_type"),
+                "user": format_user_response(payload["user"].to_dict())
+            }
+            return BaseController.ok(resp_payload)
+        else:
+            error_payload = format_error_response(
+                error_type=result.error_type,
+                message=result.error
+            )
+            return BaseController.error(error_payload, status=401)

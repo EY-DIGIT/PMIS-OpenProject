@@ -21,6 +21,9 @@ class UserModel(Base):
     status = Column(String(50), default="active", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # Refresh token tracking for stateless rotation
+    refresh_token_jti = Column(String(64), nullable=True, index=False)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
 
     # Indexes
     __table_args__ = (

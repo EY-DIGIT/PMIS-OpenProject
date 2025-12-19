@@ -53,6 +53,40 @@ def init_db() -> None:
     from datetime import datetime
     
     Base.metadata.create_all(bind=engine)
+
+    # SQLite schema drift handler: add missing nullable columns via ALTER TABLE
+    # This runs only for SQLite and is idempotent. It MUST run before any
+    # ORM queries that expect the new columns.
+    try:
+        from sqlalchemy import text
+        import logging
+
+        if engine.dialect.name == "sqlite":
+            with engine.connect() as conn:
+                try:
+                    res = conn.execute(text("PRAGMA table_info('users')"))
+                    rows = res.fetchall()
+                    existing_cols = {r[1] for r in rows}  # PRAGMA cols: (cid,name,type,notnull,dflt_value,pk)
+
+                    # Add refresh_token_jti if missing
+                    if "refresh_token_jti" not in existing_cols:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN refresh_token_jti VARCHAR(64)"))
+                        except Exception as e:
+                            logging.warning("Failed to add column refresh_token_jti: %s", e)
+
+                    # Add refresh_token_expires_at if missing
+                    if "refresh_token_expires_at" not in existing_cols:
+                        try:
+                            conn.execute(text("ALTER TABLE users ADD COLUMN refresh_token_expires_at DATETIME"))
+                        except Exception as e:
+                            logging.warning("Failed to add column refresh_token_expires_at: %s", e)
+                except Exception:
+                    # If PRAGMA fails for any reason, do not prevent app startup
+                    pass
+    except Exception:
+        # Non-fatal: do not prevent application start on unexpected errors
+        pass
     # Development-only: detect SQLite schema drift for work_packages.type_id
     try:
         # Only run the drift-fix for SQLite to avoid impacting other DBs
