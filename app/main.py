@@ -12,6 +12,7 @@ from .core.response import format_error_response
 from .core.middleware import AuthenticationMiddleware, LoggingMiddleware
 from .infrastructure.db.session import init_db
 from .api import api_v3_router
+# from fastapi.security import HTTPBearer
 
 # Configure logging
 logging.basicConfig(
@@ -19,9 +20,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) # Logging for main
 
-
+# Replacement for @app.on_event("startup") and @app.on_event("shutdown")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -44,11 +45,14 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
+    title=settings.APP_NAME, # from .core.config
+    version=settings.APP_VERSION, # from .core.config
     description="OpenProject-compatible User Management API",
-    lifespan=lifespan
+    lifespan=lifespan,
+    swagger_ui_parameters={"persistAuthorization": True}
 )
+
+# security = HTTPBearer()
 
 # Add CORS middleware
 app.add_middleware(
@@ -65,7 +69,8 @@ app.add_middleware(AuthenticationMiddleware)
 
 
 # Exception handlers
-@app.exception_handler(DomainError)
+@app.exception_handler(DomainError) 
+# Handles all DomainError or subclass exceptions as defined in .core.errors
 async def domain_error_handler(request: Request, exc: DomainError):
     """
     Handle domain errors.
@@ -92,6 +97,7 @@ async def domain_error_handler(request: Request, exc: DomainError):
 
 
 @app.exception_handler(Exception)
+# Handles all errors besides DomainError or subclass exceptions as defined in .core.errors
 async def general_exception_handler(request: Request, exc: Exception):
     """
     Handle general exceptions.
@@ -120,6 +126,31 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(api_v3_router)
 
+# OpenAPI security scheme
+# Only for docs, not for code
+from fastapi.openapi.utils import get_openapi
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        description="OpenProject-compatible User Management API",
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    openapi_schema["security"] = [{"bearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Health check endpoint
 @app.get("/health", tags=["health"])

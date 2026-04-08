@@ -4,7 +4,7 @@ Centralized error definitions and HTTP error mapping.
 from typing import Optional, Dict, Any
 
 
-class DomainError(Exception):
+class DomainError(Exception): # Exception built in class
     """Base class for domain errors."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):

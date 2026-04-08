@@ -1,17 +1,25 @@
 """
 Security utilities for JWT and password handling.
 """
-from datetime import datetime, timedelta
+import hashlib
+import base64
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 from uuid import uuid4
 from passlib.context import CryptContext
 from jose import JWTError, jwt, ExpiredSignatureError
 from .config import settings
 
-
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
+# def _prehash_password(password: str) -> str:
+#     """
+#     Pre-hash password with SHA256 to safely handle passwords > 72 bytes
+#     (bcrypt's hard limit). Result is always 44 chars, well within limit.
+#     """
+#     digest = hashlib.sha256(password.encode("utf-8")).digest()
+#     return base64.b64encode(digest).decode("utf-8")
 
 def hash_password(password: str) -> str:
     """
@@ -57,15 +65,15 @@ def create_access_token(
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
     to_encode.update({
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": datetime.now(timezone.utc)
     })
 
     encoded_jwt = jwt.encode(
@@ -140,13 +148,13 @@ def create_refresh_token(
     jti = uuid4().hex
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
     to_encode.update({
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "jti": jti
     })
 
