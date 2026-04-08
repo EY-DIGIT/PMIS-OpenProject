@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.errors import DomainError, get_http_status
-from .core.response import format_error_response
+from .core.response import format_error_response, api_response
 from .core.middleware import AuthenticationMiddleware, LoggingMiddleware
 from .infrastructure.db.session import init_db
 from .api import api_v3_router
@@ -84,15 +84,17 @@ async def domain_error_handler(request: Request, exc: DomainError):
     """
     status_code = get_http_status(exc)
 
-    response = format_error_response(
+    error_payload = format_error_response(
         error_type=exc.__class__.__name__,
         message=exc.message,
         details=exc.details
     )
 
-    return JSONResponse(
-        status_code=status_code,
-        content=response
+    return api_response(
+        data=None,
+        error=error_payload,
+        message=None,
+        status=status_code
     )
 
 
@@ -111,15 +113,17 @@ async def general_exception_handler(request: Request, exc: Exception):
     """
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
-    response = format_error_response(
+    error_payload = format_error_response(
         error_type="InternalError",
         message="An internal error occurred. Please try again later.",
         details={"error": str(exc)} if settings.DEBUG else None
     )
 
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=response
+    return api_response(
+        data=None,
+        error=error_payload,
+        message=None,
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
 
 
@@ -128,29 +132,29 @@ app.include_router(api_v3_router)
 
 # OpenAPI security scheme
 # Only for docs, not for code
-from fastapi.openapi.utils import get_openapi
+# from fastapi.openapi.utils import get_openapi
 
-def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-    openapi_schema = get_openapi(
-        title=settings.APP_NAME,
-        version=settings.APP_VERSION,
-        description="OpenProject-compatible User Management API",
-        routes=app.routes,
-    )
-    openapi_schema["components"]["securitySchemes"] = {
-        "bearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT",
-        }
-    }
-    openapi_schema["security"] = [{"bearerAuth": []}]
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+# def custom_openapi():
+#     if app.openapi_schema:
+#         return app.openapi_schema
+#     openapi_schema = get_openapi(
+#         title=settings.APP_NAME,
+#         version=settings.APP_VERSION,
+#         description="OpenProject-compatible User Management API",
+#         routes=app.routes,
+#     )
+#     openapi_schema["components"]["securitySchemes"] = {
+#         "bearerAuth": {
+#             "type": "http",
+#             "scheme": "bearer",
+#             "bearerFormat": "JWT",
+#         }
+#     }
+#     openapi_schema["security"] = [{"bearerAuth": []}]
+#     app.openapi_schema = openapi_schema
+#     return app.openapi_schema
 
-app.openapi = custom_openapi
+# app.openapi = custom_openapi
 
 # Health check endpoint
 @app.get("/health", tags=["health"])
