@@ -7,6 +7,7 @@
 ---
 
 ## Table of Contents
+
 1. [Server Startup Verification](#server-startup-verification)
 2. [Public Endpoints](#public-endpoints)
 3. [Authentication Tests](#authentication-tests)
@@ -28,14 +29,17 @@
 **Purpose:** Verify server starts successfully and responds to requests
 
 **Input:**
+
 ```
 None (No parameters or authentication required)
 ```
 
 **Expected Output:**
+
 - **Status Code:** 200 OK
 - **Response Format:** JSON
 - **Response Body:**
+
 ```json
 {
   "_type": "Health",
@@ -45,6 +49,7 @@ None (No parameters or authentication required)
 ```
 
 **Actual Output:** ✅ PASS
+
 - Status Code: 200
 - Response matches expected format
 - Server version: 3.0.0
@@ -64,6 +69,7 @@ None (No parameters or authentication required)
 **Authentication Required:** No
 
 **Input:**
+
 ```
 GET /health
 Headers: None
@@ -71,6 +77,7 @@ Body: None
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_type": "Health",
@@ -80,6 +87,7 @@ Body: None
 ```
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Health",
@@ -89,6 +97,7 @@ Body: None
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Response type: "Health"
 - ✅ Status: "healthy"
@@ -105,6 +114,7 @@ Body: None
 **Authentication Required:** No
 
 **Input:**
+
 ```
 GET /
 Headers: None
@@ -112,6 +122,7 @@ Body: None
 ```
 
 **Expected Output:**
+
 ```json
 {
   "_type": "Root",
@@ -129,6 +140,7 @@ Body: None
 ```
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Root",
@@ -146,8 +158,9 @@ Body: None
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
-- ✅ HAL+JSON format with _type and _links
+- ✅ HAL+JSON format with \_type and \_links
 - ✅ Contains links to users endpoint
 - ✅ Instance name and version present
 
@@ -164,24 +177,28 @@ Body: None
 **Authentication Required:** No
 
 **Input:**
+
 ```json
 {
   "login": "admin",
-  "password": "admin12345"
+  "password": "admin123"
 }
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Contains: access_token, token_type, user object
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
-  "_type": "Login",
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "user": {
+  "data": {
+    "_type": "Login",
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "user": {
     "_type": "User",
     "_links": {
       "self": {
@@ -203,6 +220,7 @@ Body: None
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ JWT token present and valid format
 - ✅ Token type: "bearer"
@@ -210,6 +228,7 @@ Body: None
 - ✅ User data matches admin credentials
 
 **JWT Token Decoded:**
+
 ```json
 {
   "sub": "admin",
@@ -231,6 +250,7 @@ Body: None
 **Purpose:** Verify authentication rejection for invalid credentials
 
 **Input:**
+
 ```json
 {
   "login": "admin",
@@ -239,10 +259,12 @@ Body: None
 ```
 
 **Expected Output:**
+
 - Status Code: 401 Unauthorized
 - Error message about invalid credentials
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -252,6 +274,7 @@ Body: None
 ```
 
 **Verification:**
+
 - ✅ Status code: 401
 - ✅ Appropriate error type
 - ✅ No token returned
@@ -268,6 +291,7 @@ Body: None
 **Authentication Required:** Yes
 
 **Input:**
+
 ```
 GET /api/v3/users/me
 Headers:
@@ -275,10 +299,12 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - User object in HAL+JSON format
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "User",
@@ -301,6 +327,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Returns authenticated user's data
 - ✅ HAL+JSON format with self link
@@ -315,15 +342,18 @@ Headers:
 **Purpose:** Verify authentication middleware blocks unauthenticated requests
 
 **Input:**
+
 ```
 GET /api/v3/users/me
 Headers: None (No Authorization header)
 ```
 
 **Expected Output:**
+
 - Status Code: 401 Unauthorized
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -333,6 +363,7 @@ Headers: None (No Authorization header)
 ```
 
 **Verification:**
+
 - ✅ Status code: 401
 - ✅ Access denied without token
 - ✅ Appropriate error message
@@ -353,6 +384,7 @@ Headers: None (No Authorization header)
 **Permission Required:** `users:create`
 
 **Input:**
+
 ```json
 {
   "login": "testuser",
@@ -365,10 +397,12 @@ Headers: None (No Authorization header)
 ```
 
 **Expected Output:**
+
 - Status Code: 201 Created
 - User object with generated ID
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "User",
@@ -391,6 +425,7 @@ Headers: None (No Authorization header)
 ```
 
 **Verification:**
+
 - ✅ Status code: 201
 - ✅ User created with auto-generated ID
 - ✅ Password hashed (not returned)
@@ -411,6 +446,7 @@ Headers: None (No Authorization header)
 **Permission Required:** `users:read`
 
 **Input:**
+
 ```
 GET /api/v3/users/2
 Headers:
@@ -418,10 +454,12 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - User object matching the requested ID
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "User",
@@ -444,6 +482,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Correct user data returned
 - ✅ ID matches request parameter
@@ -462,6 +501,7 @@ Headers:
 **Permission Required:** `users:read_all`
 
 **Input:**
+
 ```
 GET /api/v3/users?offset=1&pageSize=10
 Headers:
@@ -469,10 +509,12 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Collection with pagination metadata
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Collection",
@@ -517,8 +559,9 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
-- ✅ Collection format with _embedded
+- ✅ Collection format with \_embedded
 - ✅ Pagination metadata (total, count, pageSize, offset)
 - ✅ Users array in elements
 - ✅ Each user in HAL+JSON format
@@ -536,6 +579,7 @@ Headers:
 **Permission Required:** `users:update` or `users:update_all`
 
 **Input:**
+
 ```json
 PATCH /api/v3/users/2
 Headers:
@@ -548,10 +592,12 @@ Body:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Updated user object
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "User",
@@ -574,6 +620,7 @@ Body:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Fields updated correctly
 - ✅ Unchanged fields preserved
@@ -593,6 +640,7 @@ Body:
 **Permission Required:** `users:update` (own) or `users:update_all` (any)
 
 **Input:**
+
 ```json
 PATCH /api/v3/users/2/password
 Headers:
@@ -604,10 +652,12 @@ Body:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Success message
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Success",
@@ -616,6 +666,7 @@ Body:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Success message returned
 - ✅ Password hashed in database
@@ -630,6 +681,7 @@ Body:
 **Purpose:** Verify password update worked
 
 **Input:**
+
 ```json
 {
   "login": "testuser",
@@ -638,27 +690,32 @@ Body:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Valid JWT token
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
-  "_type": "Login",
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "user": {
-    "_type": "User",
-    "id": 2,
-    "login": "testuser",
-    "firstName": "Updated",
-    "lastName": "Name",
-    ...
+  "data": {
+    "_type": "Login",
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "user": {
+      "_type": "User",
+      "id": 2,
+      "login": "testuser",
+      "firstName": "Updated",
+      "lastName": "Name",
+      ...
+    }
   }
 }
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ Login successful with new password
 - ✅ Old password rejected
@@ -677,6 +734,7 @@ Body:
 **Permission Required:** `users:delete_all`
 
 **Input:**
+
 ```
 DELETE /api/v3/users/2
 Headers:
@@ -684,10 +742,12 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 200
 - Success message
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Success",
@@ -696,6 +756,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200
 - ✅ User deleted from database
 - ✅ Subsequent GET returns not found
@@ -710,6 +771,7 @@ Headers:
 **Purpose:** Verify user was deleted
 
 **Input:**
+
 ```
 GET /api/v3/users/2
 Headers:
@@ -717,9 +779,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Error response indicating user not found
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -729,6 +793,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Status code: 200 (with error body)
 - ✅ Error type: "not_found"
 - ✅ Appropriate error message
@@ -747,6 +812,7 @@ Headers:
 **Authentication:** Member user token
 
 **Input:**
+
 ```json
 POST /api/v3/users
 Headers:
@@ -760,9 +826,11 @@ Body:
 ```
 
 **Expected Output:**
+
 - Status Code: 403 Forbidden
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -772,6 +840,7 @@ Body:
 ```
 
 **Verification:**
+
 - ✅ Non-admin blocked from creating users
 - ✅ RBAC working correctly
 - ✅ Permission requirement enforced at route level
@@ -787,6 +856,7 @@ Body:
 **Authentication:** Member user token
 
 **Input:**
+
 ```
 GET /api/v3/users?offset=1&pageSize=10
 Headers:
@@ -794,9 +864,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 403 Forbidden
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -806,6 +878,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Permission `users:read_all` required
 - ✅ Members cannot list all users
 - ✅ RBAC enforced correctly
@@ -821,6 +894,7 @@ Headers:
 **Purpose:** Test email validation
 
 **Input:**
+
 ```json
 {
   "login": "testuser2",
@@ -832,9 +906,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 422 Unprocessable Entity
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -844,6 +920,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Email validation working
 - ✅ Status code: 422
 - ✅ Clear validation error message
@@ -857,6 +934,7 @@ Headers:
 **Purpose:** Test password minimum length validation
 
 **Input:**
+
 ```json
 {
   "login": "testuser3",
@@ -868,9 +946,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 422 Unprocessable Entity
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -880,6 +960,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Password validation working
 - ✅ Minimum length enforced (8 characters)
 - ✅ Status code: 422
@@ -893,6 +974,7 @@ Headers:
 **Purpose:** Test login minimum length validation
 
 **Input:**
+
 ```json
 {
   "login": "ab",
@@ -904,9 +986,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 422 Unprocessable Entity
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -916,6 +1000,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Login validation working
 - ✅ Minimum length enforced (3 characters)
 - ✅ Status code: 422
@@ -929,6 +1014,7 @@ Headers:
 **Purpose:** Test unique constraint on login
 
 **Input:**
+
 ```json
 {
   "login": "admin",
@@ -940,9 +1026,11 @@ Headers:
 ```
 
 **Expected Output:**
+
 - Status Code: 409 Conflict
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Error",
@@ -952,6 +1040,7 @@ Headers:
 ```
 
 **Verification:**
+
 - ✅ Unique constraint enforced
 - ✅ Status code: 409
 - ✅ Clear error message
@@ -965,15 +1054,18 @@ Headers:
 **Endpoint:** `GET /api/v3/users`
 
 **Input:**
+
 ```
 GET /api/v3/users?offset=1&pageSize=5
 ```
 
 **Expected Output:**
+
 - First 5 users
 - Pagination links
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Collection",
@@ -991,6 +1083,7 @@ GET /api/v3/users?offset=1&pageSize=5
 ```
 
 **Verification:**
+
 - ✅ Correct page size
 - ✅ Total count accurate
 - ✅ Offset parameter working
@@ -1002,15 +1095,18 @@ GET /api/v3/users?offset=1&pageSize=5
 **Endpoint:** `GET /api/v3/users`
 
 **Input:**
+
 ```
 GET /api/v3/users?offset=1&pageSize=1
 ```
 
 **Expected Output:**
+
 - One user per page
 - Navigation links
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Collection",
@@ -1029,6 +1125,7 @@ GET /api/v3/users?offset=1&pageSize=1
 ```
 
 **Verification:**
+
 - ✅ PageSize=1 working
 - ✅ Next link present
 - ✅ Count shows 1 item returned
@@ -1040,15 +1137,18 @@ GET /api/v3/users?offset=1&pageSize=1
 **Endpoint:** `GET /api/v3/users`
 
 **Input:**
+
 ```
 GET /api/v3/users?offset=2&pageSize=1
 ```
 
 **Expected Output:**
+
 - Second user
 - Previous link present
 
 **Actual Output:** ✅ PASS
+
 ```json
 {
   "_type": "Collection",
@@ -1068,6 +1168,7 @@ GET /api/v3/users?offset=2&pageSize=1
 ```
 
 **Verification:**
+
 - ✅ Offset=2 working
 - ✅ Previous link present
 - ✅ First link present
@@ -1082,15 +1183,18 @@ GET /api/v3/users?offset=2&pageSize=1
 **Endpoint:** `POST /api/v3/users/login`
 
 **Input:**
+
 ```
 POST /api/v3/users/login
 Body: {invalid json}
 ```
 
 **Expected Output:**
+
 - Status Code: 422
 
 **Actual Output:** ✅ PASS
+
 - Malformed JSON rejected
 - Appropriate error response
 
@@ -1101,6 +1205,7 @@ Body: {invalid json}
 **Endpoint:** `POST /api/v3/users`
 
 **Input:**
+
 ```json
 {
   "login": "testuser"
@@ -1108,10 +1213,12 @@ Body: {invalid json}
 ```
 
 **Expected Output:**
+
 - Status Code: 422
 - Validation errors for missing fields
 
 **Actual Output:** ✅ PASS
+
 - Required fields validated
 - Clear error messages
 
@@ -1122,15 +1229,18 @@ Body: {invalid json}
 **Endpoint:** `GET /api/v3/users/{id}`
 
 **Input:**
+
 ```
 GET /api/v3/users/abc
 ```
 
 **Expected Output:**
+
 - Status Code: 422
 - Validation error for invalid ID type
 
 **Actual Output:** ✅ PASS
+
 - Type validation working
 - Invalid parameter rejected
 
@@ -1140,30 +1250,32 @@ GET /api/v3/users/abc
 
 ### Overall Results
 
-| Category | Tests | Passed | Failed | Pass Rate |
-|----------|-------|--------|--------|-----------|
-| Server Startup | 1 | 1 | 0 | 100% |
-| Public Endpoints | 2 | 2 | 0 | 100% |
-| Authentication | 4 | 4 | 0 | 100% |
-| User Management | 8 | 8 | 0 | 100% |
-| Authorization | 2 | 2 | 0 | 100% |
-| Validation | 4 | 4 | 0 | 100% |
-| Pagination | 3 | 3 | 0 | 100% |
-| Error Handling | 2 | 2 | 0 | 100% |
-| **TOTAL** | **26** | **26** | **0** | **100%** |
+| Category         | Tests  | Passed | Failed | Pass Rate |
+| ---------------- | ------ | ------ | ------ | --------- |
+| Server Startup   | 1      | 1      | 0      | 100%      |
+| Public Endpoints | 2      | 2      | 0      | 100%      |
+| Authentication   | 4      | 4      | 0      | 100%      |
+| User Management  | 8      | 8      | 0      | 100%      |
+| Authorization    | 2      | 2      | 0      | 100%      |
+| Validation       | 4      | 4      | 0      | 100%      |
+| Pagination       | 3      | 3      | 0      | 100%      |
+| Error Handling   | 2      | 2      | 0      | 100%      |
+| **TOTAL**        | **26** | **26** | **0**  | **100%**  |
 
 ---
 
 ### Features Verified
 
 #### ✅ Security
+
 - JWT token generation and validation
-- Password hashing with bcrypt
+- Password hashing with argon2id
 - Role-based access control (RBAC)
 - Permission enforcement at route level
 - Authentication middleware blocking unauthorized access
 
 #### ✅ API Functionality
+
 - All CRUD operations working
 - HAL+JSON response format compliant
 - Pagination with metadata
@@ -1171,6 +1283,7 @@ GET /api/v3/users/abc
 - Password management
 
 #### ✅ Data Validation
+
 - Email format validation
 - Password minimum length (8 characters)
 - Login format and length (3-50 characters)
@@ -1178,6 +1291,7 @@ GET /api/v3/users/abc
 - Type validation
 
 #### ✅ Error Handling
+
 - Appropriate HTTP status codes
 - Clear error messages
 - HAL+JSON error format
@@ -1185,6 +1299,7 @@ GET /api/v3/users/abc
 - Authentication/authorization errors
 
 #### ✅ Business Logic
+
 - Unique constraints (login, email)
 - Auto-generated timestamps
 - Password not returned in responses
@@ -1205,6 +1320,7 @@ GET /api/v3/users/abc
 ### Security Observations
 
 ✅ **Strengths:**
+
 - Passwords hashed, never returned
 - JWT tokens with expiration
 - RBAC properly enforced
@@ -1212,6 +1328,7 @@ GET /api/v3/users/abc
 - No sensitive data in error messages
 
 ⚠️ **Production Recommendations:**
+
 - Use environment variables for SECRET_KEY
 - Implement rate limiting
 - Add HTTPS in production
@@ -1224,18 +1341,21 @@ GET /api/v3/users/abc
 ### API Compliance
 
 ✅ **HAL+JSON Format:**
+
 - All resources have `_type` field
 - All resources have `_links` with self
 - Collections use `_embedded` structure
 - Pagination metadata included
 
 ✅ **HTTP Standards:**
+
 - Correct status codes used
 - Proper HTTP methods (GET, POST, PATCH, DELETE)
 - Content-Type headers correct
 - Authentication via Bearer token
 
 ✅ **RESTful Design:**
+
 - Resource-based URLs
 - Stateless requests
 - Clear resource relationships

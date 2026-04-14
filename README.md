@@ -5,6 +5,7 @@ Production-ready Python FastAPI backend for OpenProject User module.
 ## Features
 
 ✅ **Complete User Management**
+
 - Create, Read, Update, Delete users
 - User authentication with JWT
 - Password management
@@ -12,13 +13,15 @@ Production-ready Python FastAPI backend for OpenProject User module.
 - Current user endpoint (/me)
 
 ✅ **Security**
+
 - JWT Bearer token authentication
-- Bcrypt password hashing
+- Argon2id password hashing
 - Role-Based Access Control (RBAC)
 - Middleware-driven security
 - Permissions checked at route level
 
 ✅ **Architecture**
+
 - Clean separation: Controllers, Services, Repositories, Domain
 - HAL+JSON response format (OpenProject API v3 compatible)
 - Centralized error handling
@@ -28,6 +31,7 @@ Production-ready Python FastAPI backend for OpenProject User module.
 - Database access only through repositories
 
 ✅ **Production Ready**
+
 - Comprehensive error handling
 - Request/response logging
 - Database session management
@@ -80,11 +84,13 @@ app/
 ## Installation
 
 1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. Create admin user:
+
 ```bash
 python create_admin.py
 ```
@@ -92,11 +98,13 @@ python create_admin.py
 ## Running
 
 Start the server:
+
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Or with auto-reload:
+
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -104,6 +112,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ## Testing
 
 Run comprehensive tests:
+
 ```bash
 python test_complete.py
 ```
@@ -111,12 +120,15 @@ python test_complete.py
 ## API Endpoints
 
 ### Public Endpoints
+
 - `POST /api/v3/users/login` - Authenticate and get JWT token
 
 ### Authenticated Endpoints
+
 - `GET /api/v3/users/me` - Get current user
 
 ### Admin Only Endpoints
+
 - `POST /api/v3/users` - Create user
 - `GET /api/v3/users` - List users (paginated)
 - `GET /api/v3/users/{id}` - Get user by ID
@@ -125,6 +137,7 @@ python test_complete.py
 - `DELETE /api/v3/users/{id}` - Delete user
 
 ### Utility Endpoints
+
 - `GET /health` - Health check
 - `GET /` - API root
 
@@ -132,7 +145,7 @@ python test_complete.py
 
 ```
 Login: admin
-Password: admin12345
+Password: admin123
 ```
 
 **⚠️ Change these in production!**
@@ -140,12 +153,14 @@ Password: admin12345
 ## Roles & Permissions
 
 ### Roles
+
 - `admin` - Full access to all operations
 - `member` - Can view and update own profile
 - `viewer` - Can view own profile
 - `anonymous` - No access
 
 ### Permissions
+
 - `users:create` - Create users
 - `users:read` - Read user data
 - `users:read_all` - List all users
@@ -159,6 +174,7 @@ Password: admin12345
 All responses follow HAL+JSON format:
 
 ### Single Resource
+
 ```json
 {
   "_type": "User",
@@ -181,6 +197,7 @@ All responses follow HAL+JSON format:
 ```
 
 ### Collection
+
 ```json
 {
   "_type": "Collection",
@@ -198,6 +215,7 @@ All responses follow HAL+JSON format:
 ```
 
 ### Error
+
 ```json
 {
   "_type": "Error",
@@ -220,14 +238,16 @@ DEBUG=False
 ## Security Best Practices
 
 ✅ **Implemented**
+
 - JWT token-based authentication
-- Password hashing with bcrypt
+- Password hashing with argon2id
 - Role-based access control
 - Input validation
 - SQL injection protection (SQLAlchemy ORM)
 - No sensitive data in logs
 
 ⚠️ **Production Recommendations**
+
 - Use PostgreSQL instead of SQLite
 - Set strong SECRET_KEY (32+ characters)
 - Enable HTTPS
@@ -260,13 +280,15 @@ CREATE TABLE users (
 ## Example Usage
 
 ### 1. Login
+
 ```bash
 curl -X POST http://localhost:8000/api/v3/users/login \
   -H "Content-Type: application/json" \
-  -d '{"login":"admin","password":"admin12345"}'
+  -d '{"login":"admin","password":"admin123"}'
 ```
 
 ### 2. Create User
+
 ```bash
 curl -X POST http://localhost:8000/api/v3/users \
   -H "Content-Type: application/json" \
@@ -282,12 +304,14 @@ curl -X POST http://localhost:8000/api/v3/users \
 ```
 
 ### 3. List Users
+
 ```bash
 curl -X GET "http://localhost:8000/api/v3/users?offset=1&pageSize=10" \
   -H "Authorization: Bearer <token>"
 ```
 
 ### 4. Get Current User
+
 ```bash
 curl -X GET http://localhost:8000/api/v3/users/me \
   -H "Authorization: Bearer <token>"
@@ -296,12 +320,14 @@ curl -X GET http://localhost:8000/api/v3/users/me \
 ## Development
 
 ### Adding New Endpoints
+
 1. Add service in `app/api/v3/users/services/`
 2. Add controller method in `controller.py`
 3. Add route in `routes.py` with permission
 4. Add tests
 
 ### Adding New Permissions
+
 1. Add to `core/rbac.py` Permission enum
 2. Add to `ROLE_PERMISSIONS` mapping
 3. Use in route with `require_permission()`
@@ -309,6 +335,7 @@ curl -X GET http://localhost:8000/api/v3/users/me \
 ## Testing Checklist
 
 ✅ All endpoints tested:
+
 - Health check
 - Root endpoint
 - Login (authentication)
