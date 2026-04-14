@@ -78,7 +78,7 @@ def get_current_user(
 
 @router.post(
     "",
-    # dependencies=[require_permission(USERS_CREATE)],
+    dependencies=[require_permission(USERS_CREATE)],
     summary="Create user",
     description="Create a new user",
     status_code=201
@@ -98,7 +98,7 @@ def create_user(
 
 @router.get(
     "",
-    # dependencies=[require_permission(USERS_READ_ALL)],
+    dependencies=[require_permission(USERS_READ_ALL)],
     summary="List users",
     description="List all users with pagination"
 )

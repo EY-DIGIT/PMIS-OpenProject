@@ -22,12 +22,13 @@ from .permissions import (
 from app.core.middleware.rbac import require_permission
 from app.infrastructure.db.session import get_db
 
-router = APIRouter(prefix="/meetings", tags=["meetings"])
+# Create two routers: one for project-scoped routes, one for standalone meeting routes
+projects_router = APIRouter(prefix="/projects", tags=["meetings"])
+meetings_router = APIRouter(prefix="/meetings", tags=["meetings"])
 
-# Meeting Endpoints
-
-@router.post(
-    "/projects/{project_id}/meetings",
+# Project-scoped meeting endpoints
+@projects_router.post(
+    "/{project_id}/meetings",
     dependencies=[require_permission(MEETINGS_CREATE)],
     summary="Create meeting",
     description="Create a new meeting in a project",
@@ -47,8 +48,8 @@ def create_meeting(
     return MeetingController.create_meeting(request, project_id, data, db)
 
 
-@router.get(
-    "/projects/{project_id}/meetings",
+@projects_router.get(
+    "/{project_id}/meetings",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="List meetings",
     description="List meetings in a project",
@@ -70,8 +71,9 @@ def list_meetings(
     return MeetingController.list_meetings(request, project_id, query, db)
 
 
-@router.get(
-    "/meetings/{meeting_id}",
+# Standalone meeting endpoints
+@meetings_router.get(
+    "/{meeting_id}",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="Get meeting",
     description="Get a meeting by ID",
@@ -90,8 +92,8 @@ def get_meeting(
     return MeetingController.get_meeting(request, meeting_id, db)
 
 
-@router.patch(
-    "/meetings/{meeting_id}",
+@meetings_router.patch(
+    "/{meeting_id}",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Update meeting",
     description="Update a meeting",
@@ -111,12 +113,13 @@ def update_meeting(
     return MeetingController.update_meeting(request, meeting_id, data, db)
 
 
-@router.delete(
-    "/meetings/{meeting_id}",
+@meetings_router.delete(
+    "/{meeting_id}",
     dependencies=[require_permission(MEETINGS_DELETE)],
     summary="Delete meeting",
     description="Delete a meeting",
-    status_code=204
+    status_code=204,
+    response_model=None
 )
 def delete_meeting(
     request: Request,
@@ -128,23 +131,21 @@ def delete_meeting(
 
     Requires: MEETINGS_DELETE permission
     """
-    MeetingController.delete_meeting(request, meeting_id, db)
+    return MeetingController.delete_meeting(request, meeting_id, db)
 
 
-# Participant Endpoints
-
-@router.post(
-    "/meetings/{meeting_id}/participants",
+# Meeting participants endpoints
+@meetings_router.post(
+    "/{meeting_id}/participants",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Add participant",
-    description="Add a user as a participant to a meeting",
+    description="Add a participant to a meeting",
     status_code=201
 )
 def add_participant(
     request: Request,
     meeting_id: int,
     data: ParticipantAddRequest,
-    project_id: int = Query(..., description="Project ID"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -152,11 +153,11 @@ def add_participant(
 
     Requires: MEETINGS_UPDATE permission
     """
-    return MeetingController.add_participant(request, meeting_id, project_id, data, db)
+    return MeetingController.add_participant(request, meeting_id, data, db)
 
 
-@router.get(
-    "/meetings/{meeting_id}/participants",
+@meetings_router.get(
+    "/{meeting_id}/participants",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="List participants",
     description="List participants in a meeting",
@@ -175,12 +176,13 @@ def list_participants(
     return MeetingController.list_participants(request, meeting_id, db)
 
 
-@router.delete(
-    "/meetings/{meeting_id}/participants/{user_id}",
+@meetings_router.delete(
+    "/{meeting_id}/participants/{user_id}",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Remove participant",
     description="Remove a participant from a meeting",
-    status_code=204
+    status_code=204,
+    response_model=None
 )
 def remove_participant(
     request: Request,
@@ -193,13 +195,12 @@ def remove_participant(
 
     Requires: MEETINGS_UPDATE permission
     """
-    MeetingController.remove_participant(request, meeting_id, user_id, db)
+    return MeetingController.remove_participant(request, meeting_id, user_id, db)
 
 
-# Agenda Item Endpoints
-
-@router.post(
-    "/meetings/{meeting_id}/agenda_items",
+# Meeting agenda endpoints
+@meetings_router.post(
+    "/{meeting_id}/agenda_items",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Create agenda item",
     description="Create an agenda item for a meeting",
@@ -209,7 +210,6 @@ def create_agenda_item(
     request: Request,
     meeting_id: int,
     data: AgendaItemCreateRequest,
-    project_id: int = Query(..., description="Project ID"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -217,11 +217,11 @@ def create_agenda_item(
 
     Requires: MEETINGS_UPDATE permission
     """
-    return MeetingController.create_agenda_item(request, meeting_id, project_id, data, db)
+    return MeetingController.create_agenda_item(request, meeting_id, data, db)
 
 
-@router.get(
-    "/meetings/{meeting_id}/agenda_items",
+@meetings_router.get(
+    "/{meeting_id}/agenda_items",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="List agenda items",
     description="List agenda items for a meeting",
@@ -240,7 +240,7 @@ def list_agenda_items(
     return MeetingController.list_agenda_items(request, meeting_id, db)
 
 
-@router.get(
+@meetings_router.get(
     "/agenda_items/{agenda_item_id}",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="Get agenda item",
@@ -260,7 +260,7 @@ def get_agenda_item(
     return MeetingController.get_agenda_item(request, agenda_item_id, db)
 
 
-@router.patch(
+@meetings_router.patch(
     "/agenda_items/{agenda_item_id}",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Update agenda item",
@@ -281,12 +281,13 @@ def update_agenda_item(
     return MeetingController.update_agenda_item(request, agenda_item_id, data, db)
 
 
-@router.delete(
+@meetings_router.delete(
     "/agenda_items/{agenda_item_id}",
     dependencies=[require_permission(MEETINGS_DELETE)],
     summary="Delete agenda item",
     description="Delete an agenda item",
-    status_code=204
+    status_code=204,
+    response_model=None
 )
 def delete_agenda_item(
     request: Request,
@@ -298,5 +299,6 @@ def delete_agenda_item(
 
     Requires: MEETINGS_DELETE permission
     """
-    MeetingController.delete_agenda_item(request, agenda_item_id, db)
+    return MeetingController.delete_agenda_item(request, agenda_item_id, db)
+
 

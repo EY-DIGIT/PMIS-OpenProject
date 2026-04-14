@@ -103,15 +103,17 @@ def test_login_success():
 
     login_data = {
         "login": "admin",
-        "password": "admin12345"
+        "password": "admin123"
     }
 
     try:
         response = requests.post(f"{BASE_URL}/api/v3/users/login", json=login_data)
         data = response.json()
+        token = data.get("data", {}).get("access_token") or data.get("access_token")
+        token_type = data.get("data", {}).get("token_type") or data.get("token_type")
         passed = (response.status_code == 200 and
-                 "access_token" in data and
-                 data.get("token_type") == "bearer")
+                 token is not None and
+                 token_type == "bearer")
 
         log_test(
             test_name="Login - Valid Credentials",
@@ -126,7 +128,7 @@ def test_login_success():
         )
 
         if passed:
-            return data["access_token"]
+            return token
         return None
     except Exception as e:
         log_test("Login - Valid Credentials", "/api/v3/users/login", "POST",
@@ -527,7 +529,8 @@ def test_login_with_new_password():
     try:
         response = requests.post(f"{BASE_URL}/api/v3/users/login", json=login_data)
         data = response.json()
-        passed = response.status_code == 200 and "access_token" in data
+        access_token = data.get("data", {}).get("access_token") or data.get("access_token")
+        passed = response.status_code == 200 and access_token is not None
 
         log_test(
             test_name="Login - Updated Password",
@@ -584,9 +587,11 @@ def test_pagination():
     print(f"{Colors.BLUE}{'='*80}{Colors.END}")
 
     # First, login to get token
-    login_data = {"login": "admin", "password": "admin12345"}
+    login_data = {"login": "admin", "password": "admin123"}
     response = requests.post(f"{BASE_URL}/api/v3/users/login", json=login_data)
-    token = response.json().get("access_token")
+    token = response.json().get("data", {}).get("access_token") or response.json().get("access_token")
+    if not token:
+        raise ValueError("No access_token found in login response")
     headers = {"Authorization": f"Bearer {token}"}
 
     # Test different page sizes

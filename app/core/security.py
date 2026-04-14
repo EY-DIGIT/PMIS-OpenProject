@@ -11,19 +11,19 @@ from jose import JWTError, jwt, ExpiredSignatureError
 from .config import settings
 
 # Password hashing context
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 # def _prehash_password(password: str) -> str:
 #     """
 #     Pre-hash password with SHA256 to safely handle passwords > 72 bytes
-#     (bcrypt's hard limit). Result is always 44 chars, well within limit.
+#     (argon2's hard limit). Result is always 44 chars, well within limit.
 #     """
 #     digest = hashlib.sha256(password.encode("utf-8")).digest()
 #     return base64.b64encode(digest).decode("utf-8")
 
 def hash_password(password: str) -> str:
     """
-    Hash a password using bcrypt.
+    Hash a password using argon2.
 
     Args:
         password: Plain text password

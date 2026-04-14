@@ -4,7 +4,10 @@ from enum import Enum
 import re
 import hashlib
 import secrets
-import bcrypt
+from passlib.context import CryptContext
+
+# Password hashing context using argon2
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 class UserStatus(Enum):
@@ -85,13 +88,9 @@ class User:
 
     @password.setter
     def password(self, clear_password: Optional[str]):
-        """Set password with bcrypt hashing"""
+        """Set password with argon2id hashing"""
         if clear_password:
-            salt = bcrypt.gensalt()
-            self._password_digest = bcrypt.hashpw(
-                clear_password.encode('utf-8'),
-                salt
-            ).decode('utf-8')
+            self._password_digest = pwd_context.hash(clear_password)
 
     def check_password(self, clear_password: str) -> bool:
         """
@@ -107,10 +106,7 @@ class User:
             return False
 
         try:
-            return bcrypt.checkpw(
-                clear_password.encode('utf-8'),
-                self._password_digest.encode('utf-8')
-            )
+            return pwd_context.verify(clear_password, self._password_digest)
         except Exception:
             return False
 

@@ -12,7 +12,6 @@ from .core.response import format_error_response, api_response
 from .core.middleware import AuthenticationMiddleware, LoggingMiddleware
 from .infrastructure.db.session import init_db
 from .api import api_v3_router
-# from fastapi.security import HTTPBearer
 
 # Configure logging
 logging.basicConfig(
@@ -51,8 +50,6 @@ app = FastAPI(
     lifespan=lifespan,
     swagger_ui_parameters={"persistAuthorization": True}
 )
-
-# security = HTTPBearer()
 
 # Add CORS middleware
 app.add_middleware(
@@ -130,31 +127,51 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(api_v3_router)
 
-# OpenAPI security scheme
-# Only for docs, not for code
-# from fastapi.openapi.utils import get_openapi
+# OpenAPI security scheme configuration
+from fastapi.openapi.utils import get_openapi
 
-# def custom_openapi():
-#     if app.openapi_schema:
-#         return app.openapi_schema
-#     openapi_schema = get_openapi(
-#         title=settings.APP_NAME,
-#         version=settings.APP_VERSION,
-#         description="OpenProject-compatible User Management API",
-#         routes=app.routes,
-#     )
-#     openapi_schema["components"]["securitySchemes"] = {
-#         "bearerAuth": {
-#             "type": "http",
-#             "scheme": "bearer",
-#             "bearerFormat": "JWT",
-#         }
-#     }
-#     openapi_schema["security"] = [{"bearerAuth": []}]
-#     app.openapi_schema = openapi_schema
-#     return app.openapi_schema
+def custom_openapi():
+    """
+    Customize OpenAPI schema to include Bearer token authentication.
 
-# app.openapi = custom_openapi
+    This ensures the Swagger UI shows the authentication token requirement
+    for all protected endpoints.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        description="OpenProject-compatible Project Management API with JWT Authentication",
+        routes=app.routes,
+    )
+
+    # Add security scheme for Bearer token
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearer": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT Bearer token. Obtain token via /api/v3/users/login"
+        }
+    }
+
+    # Apply bearer auth to all paths except public endpoints
+    public_paths = ["/health", "/", "/api/v3/users/login", "/api/v3/users/introspect"]
+
+    for path, path_item in openapi_schema.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if method in ["get", "post", "put", "patch", "delete", "options", "head", "trace"]:
+                # Add security requirement for non-public endpoints
+                if path not in public_paths:
+                    if "security" not in operation:
+                        operation["security"] = [{"bearer": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Health check endpoint
 @app.get("/health", tags=["health"])

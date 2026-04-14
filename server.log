@@ -1,0 +1,8 @@
+INFO:     Started server process [27572]
+INFO:     Waiting for application startup.
+2026-04-08 12:41:11,842 - app.main - INFO - Starting application...
+2026-04-08 12:41:11,842 - app.main - INFO - Initializing database...
+2026-04-08 12:41:11,860 - app.main - INFO - Database initialized successfully
+2026-04-08 12:41:11,860 - app.main - INFO - Application PMIS API v3.0.0 started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

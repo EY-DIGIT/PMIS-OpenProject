@@ -9,9 +9,10 @@ This is a complete Python implementation of the OpenProject User Service from th
 ### 1. Models (`models/`)
 
 #### User Model (`user.py`)
+
 - **User**: Main user class with full authentication and profile management
   - User statuses: ACTIVE, REGISTERED, INVITED, LOCKED, DELETED
-  - Password hashing with bcrypt
+  - Password hashing with argon2id
   - Failed login tracking with automatic account locking
   - Email and login validation
   - Display name formatting
@@ -25,10 +26,12 @@ This is a complete Python implementation of the OpenProject User Service from th
   - **PlaceholderUser**: Placeholder instances
 
 #### UserPassword Model (`user_password.py`)
+
 - Historical password tracking
 - Password reuse prevention
 
 #### UserPreference Model (`user_preference.py`)
+
 - User-specific preferences
 - Timezone settings
 - Theme preferences
@@ -38,6 +41,7 @@ This is a complete Python implementation of the OpenProject User Service from th
 ### 2. Services (`services/`)
 
 #### Base Service Classes (`base_service.py`)
+
 - **BaseService**: Abstract base for all services
 - **BaseCreateService**: Template for resource creation
 - **BaseUpdateService**: Template for resource updates
@@ -45,6 +49,7 @@ This is a complete Python implementation of the OpenProject User Service from th
 - **BaseSetAttributesService**: Template for attribute setting
 
 All base services implement:
+
 - Authorization checks
 - Validation
 - Pre/post operation hooks
@@ -53,6 +58,7 @@ All base services implement:
 #### User Services (`user_service.py`)
 
 **UserSetAttributesService**
+
 - Sets and validates user attributes
 - Handles preferences
 - Default attribute assignment
@@ -60,6 +66,7 @@ All base services implement:
 - Language defaults
 
 **UserCreateService**
+
 - Creates new users
 - Handles invited vs. active users
 - Validates all fields
@@ -67,18 +74,21 @@ All base services implement:
 - Sets default preferences
 
 **UserUpdateService**
+
 - Updates existing users
 - Preserves unchanged fields
 - Updates preferences
 - Triggers pre/post hooks
 
 **UserDeleteService**
+
 - Soft-deletes users
 - Handles self-deletion
 - Manages session cleanup
 - Sets DELETED status
 
 **UserLoginService**
+
 - Handles authentication
 - Session management
 - Autologin token creation
@@ -86,17 +96,20 @@ All base services implement:
 - Failed login tracking
 
 **UserLogoutService**
+
 - Session cleanup
 - Token invalidation
 - Audit logging
 
 **UserChangePasswordService**
+
 - Password change with current password verification
 - Password strength validation
 - Password confirmation matching
 - External auth checking
 
 **UserRegisterService**
+
 - Self-registration workflow
 - Sets REGISTERED status
 - Email activation preparation
@@ -104,6 +117,7 @@ All base services implement:
 ### 3. Utilities (`utils/`)
 
 #### ServiceResult (`service_result.py`)
+
 - Consistent return type for all services
 - Success/failure indication
 - Error collection
@@ -130,13 +144,14 @@ All operations follow this pattern:
 2. **Validation in Models**: Models validate themselves
 3. **ServiceResult**: Consistent response structure
 4. **Soft Deletes**: Users are marked as deleted, not removed
-5. **Password Security**: bcrypt hashing, history tracking, strength requirements
+5. **Password Security**: argon2id hashing, history tracking, strength requirements
 6. **Brute Force Protection**: Automatic account locking after failed attempts
 
 ## Features Implemented
 
 ### Security Features
-✅ Password hashing with bcrypt
+
+✅ Password hashing with argon2id
 ✅ Brute-force protection (account locking after 5 failed attempts)
 ✅ Password strength validation
 ✅ Password history tracking
@@ -145,6 +160,7 @@ All operations follow this pattern:
 ✅ External authentication support flags
 
 ### User Management
+
 ✅ User creation (active, registered, invited)
 ✅ User updates with preferences
 ✅ User deletion (soft delete)
@@ -152,6 +168,7 @@ All operations follow this pattern:
 ✅ User validation
 
 ### Authentication
+
 ✅ Login with username/email
 ✅ Password verification
 ✅ Failed login tracking
@@ -161,6 +178,7 @@ All operations follow this pattern:
 ✅ Logout
 
 ### User Preferences
+
 ✅ Timezone settings
 ✅ Theme preferences
 ✅ Comment sorting
@@ -179,6 +197,7 @@ The implementation includes comprehensive unit tests (`test_user_service.py`):
 - ✅ All tests passing
 
 Test coverage includes:
+
 - User model creation and validation
 - Password hashing and verification
 - User status management
@@ -232,7 +251,7 @@ user_service/
 │   └── service_result.py      # ServiceResult class
 ├── test_user_service.py       # Unit tests (22 tests, all passing)
 ├── example.py                 # Example usage
-├── requirements.txt           # Dependencies (bcrypt)
+├── requirements.txt           # Dependencies (argon2id)
 └── README.md                  # Documentation
 ```
 
@@ -271,6 +290,7 @@ To use in production, add:
 ## Reference Implementation
 
 Based on OpenProject stable/16 branch:
+
 - User Model: https://github.com/opf/openproject/blob/stable/16/app/models/user.rb
 - User Services: https://github.com/opf/openproject/tree/stable/16/app/services/users
 - Base Services: https://github.com/opf/openproject/tree/stable/16/app/services/base_services

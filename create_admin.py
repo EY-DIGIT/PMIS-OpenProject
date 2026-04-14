@@ -25,7 +25,7 @@ def create_admin_user():
             return
 
         # Create admin user
-        hashed_password = hash_password("admin12345")
+        hashed_password = hash_password("admin123")
 
         admin_user = repository.create(
             login="admin",
@@ -40,7 +40,7 @@ def create_admin_user():
         print("Admin user created successfully!")
         print(f"Login: {admin_user.login}")
         print(f"Email: {admin_user.email}")
-        print(f"Password: admin12345")
+        print(f"Password: admin123")
         print(f"Admin: {admin_user.admin}")
 
     except Exception as e:

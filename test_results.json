@@ -1,0 +1,123 @@
+{
+  "timestamp": "2026-04-08T13:45:38.740703",
+  "total_tests": 21,
+  "passed": 19,
+  "failed": 2,
+  "errors": [],
+  "endpoints_tested": {
+    "POST /api/v3/users/login": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Admin login successful",
+      "error": null
+    },
+    "GET /api/v3/users/me": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Get current user",
+      "error": null
+    },
+    "GET /api/v3/users": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List all users",
+      "error": null
+    },
+    "POST /api/v3/users": {
+      "status": "[PASS]",
+      "status_code": 201,
+      "description": "Create user",
+      "error": null
+    },
+    "GET /api/v3/users/1": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Get admin user by ID",
+      "error": null
+    },
+    "POST /api/v3/projects": {
+      "status": "[PASS]",
+      "status_code": 201,
+      "description": "Create project",
+      "error": null
+    },
+    "GET /api/v3/projects": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List projects",
+      "error": null
+    },
+    "GET /api/v3/projects/4": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Get project by ID",
+      "error": null
+    },
+    "GET /api/v3/roles": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List roles",
+      "error": null
+    },
+    "GET /api/v3/work_package_types": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List work package types",
+      "error": null
+    },
+    "POST /api/v3/projects/4/work_packages": {
+      "status": "[PASS]",
+      "status_code": 201,
+      "description": "Create work package",
+      "error": null
+    },
+    "GET /api/v3/projects/4/work_packages": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List work packages",
+      "error": null
+    },
+    "GET /api/v3/work_packages/4": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Get work package",
+      "error": null
+    },
+    "POST /api/v3/projects/4/meetings": {
+      "status": "[PASS]",
+      "status_code": 201,
+      "description": "Create meeting",
+      "error": null
+    },
+    "GET /api/v3/projects/4/meetings": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List meetings",
+      "error": null
+    },
+    "GET /api/v3/meetings/meetings/3": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Get meeting",
+      "error": null
+    },
+    "POST /api/v3/projects/4/memberships": {
+      "status": "[PASS]",
+      "status_code": 201,
+      "description": "Add member to project",
+      "error": null
+    },
+    "GET /api/v3/projects/4/memberships": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "List project memberships",
+      "error": null
+    },
+    "POST /api/v3/users/introspect": {
+      "status": "[PASS]",
+      "status_code": 200,
+      "description": "Introspect token",
+      "error": null
+    }
+  }
+}

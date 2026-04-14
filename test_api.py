@@ -32,7 +32,7 @@ print("\n\nTest 3: Create User Without Auth (Should Fail)")
 user_data = {
     "login": "admin",
     "email": "admin@example.com",
-    "password": "admin12345",
+    "password": "admin123",
     "firstName": "Admin",
     "lastName": "User",
     "admin": True

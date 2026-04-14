@@ -36,14 +36,16 @@ def test_api():
     print("\n\n=== TEST 3: Login as Admin ===")
     login_data = {
         "login": "admin",
-        "password": "admin12345"
+        "password": "admin123"
     }
     response = requests.post(f"{BASE_URL}/api/v3/users/login", json=login_data)
     print_response("Login", response)
     assert response.status_code == 200
 
     token_data = response.json()
-    access_token = token_data["access_token"]
+    access_token = token_data.get("data", {}).get("access_token") or token_data.get("access_token")
+    if not access_token:
+        raise ValueError("No access_token found in login response")
     headers = {"Authorization": f"Bearer {access_token}"}
 
     # Test 4: Get current user (/me endpoint)
