@@ -161,6 +161,11 @@ def format_project_response(
         "active": project_data.get("active", True),
         "public": project_data.get("public", False),
         "statusExplanation": project_data.get("status_explanation"),
+        "status": project_data.get("status"),
+        "owner": project_data.get("owner"),
+        "category": project_data.get("category"),
+        "startDate": project_data.get("start_date"),
+        "endDate": project_data.get("end_date"),
         "createdAt": project_data.get("created_at"),
         "updatedAt": project_data.get("updated_at"),
     }

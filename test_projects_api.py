@@ -9,12 +9,18 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.infrastructure.db.session import SessionLocal, init_db
 from sqlalchemy.orm import Session
+import time
 
 # Initialize database
 init_db()
 
 # Create test client
 client = TestClient(app)
+
+def get_unique_identifier(prefix="test"):
+    """Generate a unique identifier for testing."""
+    timestamp = str(int(time.time()))
+    return f"{prefix}-{timestamp}"
 
 def test_create_project():
     """Test creating a project."""
@@ -38,7 +44,7 @@ def test_create_project():
     response = client.post(
         "/api/v3/projects",
         json={
-            "identifier": "test-project",
+            "identifier": get_unique_identifier("api-test"),
             "name": "Test Project",
             "description": "A test project",
             "active": True,
@@ -52,10 +58,12 @@ def test_create_project():
     
     if response.status_code == 201:
         print("✓ Project created successfully")
-        return True
+        # Return the project ID for use in other tests
+        project_data = response.json()["data"]
+        return True, project_data["id"]
     else:
         print("✗ Failed to create project")
-        return False
+        return False, None
 
 
 def test_list_projects():
@@ -88,7 +96,7 @@ def test_list_projects():
         return False
 
 
-def test_get_project():
+def test_get_project(project_id):
     """Test getting a project by ID."""
     print("\n=== TEST: Get Project ===")
     
@@ -102,7 +110,7 @@ def test_get_project():
     
     # Get project
     response = client.get(
-        "/api/v3/projects/1",
+        f"/api/v3/projects/{project_id}",
         headers=headers
     )
     
@@ -117,7 +125,7 @@ def test_get_project():
         return False
 
 
-def test_update_project():
+def test_update_project(project_id):
     """Test updating a project."""
     print("\n=== TEST: Update Project ===")
     
@@ -131,7 +139,7 @@ def test_update_project():
     
     # Update project
     response = client.patch(
-        "/api/v3/projects/1",
+        f"/api/v3/projects/{project_id}",
         json={
             "name": "Updated Test Project"
         },
@@ -149,7 +157,7 @@ def test_update_project():
         return False
 
 
-def test_delete_project():
+def test_delete_project(project_id):
     """Test deleting a project."""
     print("\n=== TEST: Delete Project ===")
     
@@ -163,7 +171,7 @@ def test_delete_project():
     
     # Delete project
     response = client.delete(
-        "/api/v3/projects/1",
+        f"/api/v3/projects/{project_id}",
         headers=headers
     )
     
@@ -177,7 +185,7 @@ def test_delete_project():
         return False
 
 
-def test_response_format():
+def test_response_format(project_id):
     """Test that responses follow the correct format."""
     print("\n=== TEST: Response Format ===")
     
@@ -191,7 +199,7 @@ def test_response_format():
     
     # Get project
     response = client.get(
-        "/api/v3/projects/1",
+        f"/api/v3/projects/{project_id}",
         headers=headers
     )
     
@@ -223,6 +231,12 @@ def test_response_format():
             ("has 'public' field", "public" in project),
             ("has 'createdAt' field", "createdAt" in project),
             ("has 'updatedAt' field", "updatedAt" in project),
+            # New fields
+            ("has 'status' field", "status" in project),
+            ("has 'owner' field", "owner" in project),
+            ("has 'category' field", "category" in project),
+            ("has 'startDate' field", "startDate" in project),
+            ("has 'endDate' field", "endDate" in project),
         ])
     
     all_passed = True
@@ -239,13 +253,21 @@ if __name__ == "__main__":
     print("PROJECT API COMPREHENSIVE TEST SUITE")
     print("=" * 60)
     
+    # Create a project first and get its ID
+    create_result, project_id = test_create_project()
+    
+    if not create_result or not project_id:
+        print("\n❌ Cannot proceed with tests - project creation failed")
+        sys.exit(1)
+    
+    # Run other tests with the created project ID
     results = {
-        "Create Project": test_create_project(),
+        "Create Project": create_result,
         "List Projects": test_list_projects(),
-        "Get Project": test_get_project(),
-        "Update Project": test_update_project(),
-        "Response Format": test_response_format(),
-        "Delete Project": test_delete_project(),
+        "Get Project": test_get_project(project_id),
+        "Update Project": test_update_project(project_id),
+        "Response Format": test_response_format(project_id),
+        "Delete Project": test_delete_project(project_id),
     }
     
     print("\n" + "=" * 60)

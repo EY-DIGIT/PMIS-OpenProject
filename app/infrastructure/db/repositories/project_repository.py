@@ -41,6 +41,11 @@ class ProjectRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
             parent_id=model.parent_id,
+            status=model.status,
+            owner=model.owner,
+            category=model.category,
+            start_date=model.start_date,
+            end_date=model.end_date,
         )
 
     def create(
@@ -52,6 +57,11 @@ class ProjectRepository:
         public: bool = False,
         status_explanation: Optional[str] = None,
         parent_id: Optional[int] = None,
+        status: str = "new",
+        owner: Optional[str] = None,
+        category: Optional[str] = None,
+        start_date: Optional[object] = None,
+        end_date: Optional[object] = None,
     ) -> Project:
         """
         Create a new project.
@@ -64,6 +74,11 @@ class ProjectRepository:
             public: Whether project is public
             status_explanation: Project status explanation
             parent_id: Parent project ID
+            status: Project status (see PROJECT_STATUS_CHOICES in schemas.py)
+            owner: Project owner username
+            category: Project category (see PROJECT_CATEGORY_CHOICES in schemas.py)
+            start_date: Project start date
+            end_date: Project end date
 
         Returns:
             Created project domain model
@@ -76,6 +91,11 @@ class ProjectRepository:
             public=public,
             status_explanation=status_explanation,
             parent_id=parent_id,
+            status=status,
+            owner=owner,
+            category=category,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         self.db.add(project_model)
@@ -191,6 +211,11 @@ class ProjectRepository:
         public: Optional[bool] = None,
         status_explanation: Optional[str] = None,
         parent_id: Optional[int] = None,
+        status: Optional[str] = None,
+        owner: Optional[str] = None,
+        category: Optional[str] = None,
+        start_date: Optional[object] = None,
+        end_date: Optional[object] = None,
     ) -> Optional[Project]:
         """
         Update a project.
@@ -203,6 +228,11 @@ class ProjectRepository:
             public: New public status
             status_explanation: New status explanation
             parent_id: New parent project ID
+            status: New status
+            owner: New owner username
+            category: New category
+            start_date: New start date
+            end_date: New end date
 
         Returns:
             Updated project if found, None otherwise
@@ -223,6 +253,16 @@ class ProjectRepository:
             model.status_explanation = status_explanation
         if parent_id is not None:
             model.parent_id = parent_id
+        if status is not None:
+            model.status = status
+        if owner is not None:
+            model.owner = owner
+        if category is not None:
+            model.category = category
+        if start_date is not None:
+            model.start_date = start_date
+        if end_date is not None:
+            model.end_date = end_date
 
         self.db.commit()
         self.db.refresh(model)

@@ -299,22 +299,36 @@ class MeetingController:
         result = list_participants(db, meeting_id)
 
         if not result.success:
+            status_code = 400 if result.error_type == "validation_error" else 404 if result.error_type == "not_found" else 500
             return api_response(
                 error=result.error,
-                status=500
+                status=status_code
             )
 
         participants = result.data
-        formatted_participants = [format_meeting_participant_response(p.to_dict()) for p in participants]
+        formatted_participants = [format_meeting_participant_response(p.to_dict(), base_url="/api/v3") for p in participants]
+
+        # Build collection HAL for meeting participants
+        page = 1
+        page_size = len(participants)
+        total_pages = 1
+        base_collection = f"/api/v3/meetings/{meeting_id}/participants"
+
+        links = {"self": {"href": f"{base_collection}"}}
+        # No pagination for participants currently
+
+        collection_payload = {
+            "_type": "Collection",
+            "_links": links,
+            "total": len(participants),
+            "count": len(participants),
+            "pageSize": page_size,
+            "offset": page,
+            "_embedded": {"elements": formatted_participants}
+        }
 
         return api_response(
-            data=format_collection_response(
-                items=formatted_participants,
-                total=len(participants),
-                page=1,
-                page_size=len(participants),
-                collection_type="participants"
-            ),
+            data=collection_payload,
             status=200
         )
 

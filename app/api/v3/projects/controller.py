@@ -54,6 +54,11 @@ class ProjectController:
             public=data.public,
             status_explanation=data.statusExplanation,
             parent_id=data.parentId,
+            status=data.status,
+            owner=data.owner,
+            category=data.category,
+            start_date=data.start_date,
+            end_date=data.end_date,
         )
 
         if not result.is_success():
@@ -190,6 +195,11 @@ class ProjectController:
             public=data.public,
             status_explanation=data.statusExplanation,
             parent_id=data.parentId,
+            status=data.status,
+            owner=data.owner,
+            category=data.category,
+            start_date=data.start_date,
+            end_date=data.end_date,
         )
 
         if not result.is_success():

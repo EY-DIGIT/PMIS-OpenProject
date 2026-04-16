@@ -12,6 +12,7 @@ class WorkPackageCreateRequest(BaseModel):
             "example": {
                 "subject": "Implement user authentication",
                 "description": "Add JWT authentication to the API",
+                "typeId": 1,
                 "assigneeId": 5,
                 "status": "new",
                 "priority": "high",

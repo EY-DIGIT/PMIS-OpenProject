@@ -61,6 +61,7 @@ app.add_middleware(
 )
 
 # Add custom middleware
+# Run in reverse order of how added, Auth -> Logging
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthenticationMiddleware)
 

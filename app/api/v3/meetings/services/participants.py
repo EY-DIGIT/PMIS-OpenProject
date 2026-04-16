@@ -79,7 +79,16 @@ def list_participants(
         ServiceResult with list of participants or error
     """
     try:
+        meeting_repo = MeetingRepository(db)
         participant_repo = MeetingParticipantRepository(db)
+
+        # Verify meeting exists
+        if not meeting_repo.exists_by_id(meeting_id):
+            return ServiceResult.fail(
+                error=f"Meeting with ID {meeting_id} does not exist",
+                error_type="not_found"
+            )
+
         participants = participant_repo.list_by_meeting(meeting_id)
         return ServiceResult.ok(participants)
     except Exception as e:
