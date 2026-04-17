@@ -18,6 +18,7 @@ from .services import (
     delete_work_package,
 )
 from ....core.base_controller import BaseController
+from ....infrastructure.db.repositories.work_package_repository import WorkPackageRepository
 
 
 class WorkPackageController:
@@ -48,6 +49,8 @@ class WorkPackageController:
             "status": wp.get("status"),
             "priority": wp.get("priority"),
             "doneRatio": wp.get("done_ratio"),
+            "startDate": wp.get("start_date"),
+            "endDate": wp.get("end_date"),
             "createdAt": wp.get("created_at"),
             "updatedAt": wp.get("updated_at"),
         }
@@ -93,6 +96,8 @@ class WorkPackageController:
             status=data.status,
             priority=data.priority,
             done_ratio=data.doneRatio,
+            start_date=data.startDate,
+            end_date=data.endDate,
         )
 
         if not result.is_success():
@@ -194,6 +199,7 @@ class WorkPackageController:
             offset=query.offset,
             limit=query.pageSize,
             parent_id=query.parentId,
+            type_name=query.type,
         )
 
         if not result.is_success():
@@ -255,7 +261,8 @@ class WorkPackageController:
         Returns:
             JSONResponse with updated work package
         """
-        result = update_work_package(
+        # Build kwargs — only pass dates if explicitly provided in request
+        update_kwargs = dict(
             db=db,
             work_package_id=work_package_id,
             subject=data.subject,
@@ -266,6 +273,11 @@ class WorkPackageController:
             priority=data.priority,
             done_ratio=data.doneRatio,
         )
+        if data.startDate is not None:
+            update_kwargs["start_date"] = data.startDate
+        if data.endDate is not None:
+            update_kwargs["end_date"] = data.endDate
+        result = update_work_package(**update_kwargs)
 
         if not result.is_success():
             status = 400
@@ -309,3 +321,50 @@ class WorkPackageController:
             )
 
         return BaseController.no_content()
+
+    # ----- tree / children -----
+
+    @staticmethod
+    def _build_tree(flat_list, root_id, formatter):
+        """Assemble a flat list of work-package dicts into a nested tree."""
+        by_parent = {}
+        for wp in flat_list:
+            pid = wp.parent_id
+            by_parent.setdefault(pid, []).append(wp)
+
+        def _recurse(parent_id):
+            children = by_parent.get(parent_id, [])
+            result = []
+            for child in children:
+                node = formatter(child.to_dict())
+                node["_embedded"] = {"children": _recurse(child.id)}
+                result.append(node)
+            return result
+
+        return _recurse(root_id)
+
+    @staticmethod
+    def get_children(
+        request: Request,
+        work_package_id: int,
+        db: Session
+    ) -> JSONResponse:
+        """Return the full nested subtree under a work package."""
+        repository = WorkPackageRepository(db)
+
+        root = repository.get_by_id(work_package_id)
+        if not root:
+            return BaseController.error(
+                error_payload={"message": f"Work package {work_package_id} not found", "type": "not_found"},
+                status=404
+            )
+
+        descendants = repository.get_children_recursive(work_package_id)
+        root_formatted = WorkPackageController._format_work_package(root.to_dict())
+        root_formatted["_embedded"] = {
+            "children": WorkPackageController._build_tree(
+                descendants, work_package_id, WorkPackageController._format_work_package
+            )
+        }
+
+        return BaseController.ok(root_formatted)

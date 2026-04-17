@@ -2,8 +2,9 @@
 Work Package repository for database operations.
 """
 from typing import Optional, List, Tuple
+from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, text
 from ...db.models.work_package import WorkPackageModel
 from ....domain.work_packages.work_package import WorkPackage
 
@@ -41,6 +42,8 @@ class WorkPackageRepository:
             status=model.status,
             priority=model.priority,
             done_ratio=model.done_ratio,
+            start_date=model.start_date,
+            end_date=model.end_date,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -56,6 +59,8 @@ class WorkPackageRepository:
         priority: str = "normal",
         done_ratio: int = 0,
         type_id: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> WorkPackage:
         """
         Create a new work package.
@@ -83,6 +88,8 @@ class WorkPackageRepository:
             status=status,
             priority=priority,
             done_ratio=done_ratio,
+            start_date=start_date,
+            end_date=end_date,
         )
         self.db.add(wp_model)
         self.db.commit()
@@ -133,6 +140,7 @@ class WorkPackageRepository:
         offset: int = 1,
         limit: int = 20,
         parent_id: Optional[int] = None,
+        type_id: Optional[int] = None,
     ) -> Tuple[List[WorkPackage], int]:
         """
         List work packages by project.
@@ -152,6 +160,9 @@ class WorkPackageRepository:
 
         if parent_id is not None:
             query = query.filter(WorkPackageModel.parent_id == parent_id)
+
+        if type_id is not None:
+            query = query.filter(WorkPackageModel.type_id == type_id)
 
         total = query.count()
 
@@ -240,6 +251,8 @@ class WorkPackageRepository:
         priority: Optional[str] = None,
         done_ratio: Optional[int] = None,
         type_id: Optional[int] = None,
+        start_date: Optional[datetime] = ...,
+        end_date: Optional[datetime] = ...,
     ) -> Optional[WorkPackage]:
         """
         Update a work package.
@@ -277,10 +290,77 @@ class WorkPackageRepository:
             model.done_ratio = done_ratio
         if type_id is not None:
             model.type_id = type_id
+        if start_date is not ...:
+            model.start_date = start_date
+        if end_date is not ...:
+            model.end_date = end_date
 
         self.db.commit()
         self.db.refresh(model)
         return self._to_domain(model)
+
+    def get_ancestor_chain(self, work_package_id: int) -> List[WorkPackage]:
+        """Walk up the parent chain and return ancestors from root to immediate parent."""
+        ancestors: List[WorkPackage] = []
+        current_id = work_package_id
+        seen = set()
+        while current_id is not None:
+            if current_id in seen:
+                break  # circular reference guard
+            seen.add(current_id)
+            model = self.db.query(WorkPackageModel).filter(
+                WorkPackageModel.id == current_id
+            ).first()
+            if not model:
+                break
+            if model.id != work_package_id:
+                ancestors.append(self._to_domain(model))
+            current_id = model.parent_id
+        ancestors.reverse()
+        return ancestors
+
+    def get_children_recursive(self, root_id: int) -> List[WorkPackage]:
+        """Return all descendants of root_id using recursive CTE (flat list)."""
+        cte = text("""
+            WITH RECURSIVE tree AS (
+                SELECT id FROM work_packages WHERE parent_id = :root_id
+                UNION ALL
+                SELECT wp.id FROM work_packages wp
+                JOIN tree ON wp.parent_id = tree.id
+            )
+            SELECT id FROM tree
+        """)
+        result = self.db.execute(cte, {"root_id": root_id})
+        child_ids = [row[0] for row in result]
+        if not child_ids:
+            return []
+        models = self.db.query(WorkPackageModel).filter(
+            WorkPackageModel.id.in_(child_ids)
+        ).all()
+        return [self._to_domain(m) for m in models]
+
+    def get_direct_children(self, parent_id: int) -> List[WorkPackage]:
+        """Return immediate children of a work package."""
+        models = self.db.query(WorkPackageModel).filter(
+            WorkPackageModel.parent_id == parent_id
+        ).all()
+        return [self._to_domain(m) for m in models]
+
+    def get_type_internal_name(self, type_id: int) -> Optional[str]:
+        """Look up the internal_name for a work package type ID."""
+        from ...db.models.work_package_type import WorkPackageTypeModel
+        m = self.db.query(WorkPackageTypeModel).filter(
+            WorkPackageTypeModel.id == type_id
+        ).first()
+        return m.internal_name if m else None
+
+    def get_type_id_by_internal_name(self, internal_name: str) -> Optional[int]:
+        """Look up a work package type ID by its internal_name."""
+        from ...db.models.work_package_type import WorkPackageTypeModel
+        m = self.db.query(WorkPackageTypeModel).filter(
+            WorkPackageTypeModel.internal_name == internal_name
+        ).first()
+        return m.id if m else None
 
     def delete(self, work_package_id: int) -> bool:
         """

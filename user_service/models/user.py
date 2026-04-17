@@ -4,10 +4,11 @@ from enum import Enum
 import re
 import hashlib
 import secrets
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 
-# Password hashing context using argon2
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# argon2-cffi hasher (argon2id by default)
+_ph = PasswordHasher()
 
 
 class UserStatus(Enum):
@@ -90,7 +91,7 @@ class User:
     def password(self, clear_password: Optional[str]):
         """Set password with argon2id hashing"""
         if clear_password:
-            self._password_digest = pwd_context.hash(clear_password)
+            self._password_digest = _ph.hash(clear_password)
 
     def check_password(self, clear_password: str) -> bool:
         """
@@ -106,8 +107,8 @@ class User:
             return False
 
         try:
-            return pwd_context.verify(clear_password, self._password_digest)
-        except Exception:
+            return _ph.verify(self._password_digest, clear_password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
             return False
 
     def random_password(self, length: int = 16) -> str:

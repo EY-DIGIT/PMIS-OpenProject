@@ -60,6 +60,7 @@ def list_work_packages_in_project(
     offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     parentId: int = Query(None, description="Filter by parent work package ID"),
+    type: str = Query(None, description="Filter by type internal_name (milestone, activity, task)"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -67,7 +68,7 @@ def list_work_packages_in_project(
 
     Requires: WORK_PACKAGES_VIEW permission
     """
-    query = WorkPackageListQuery(offset=offset, pageSize=pageSize, parentId=parentId)
+    query = WorkPackageListQuery(offset=offset, pageSize=pageSize, parentId=parentId, type=type)
     return WorkPackageController.list(request, project_id, query, db)
 
 
@@ -109,6 +110,25 @@ def update_work_package(
     Requires: WORK_PACKAGES_UPDATE permission
     """
     return WorkPackageController.update(request, work_package_id, data, db)
+
+
+@work_packages_router.get(
+    "/{work_package_id}/children",
+    dependencies=[require_permission(WORK_PACKAGES_VIEW)],
+    summary="Get work package tree",
+    description="Get a work package with its full nested subtree"
+)
+def get_work_package_children(
+    request: Request,
+    work_package_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get work package with nested children tree.
+
+    Requires: WORK_PACKAGES_VIEW permission
+    """
+    return WorkPackageController.get_children(request, work_package_id, db)
 
 
 @work_packages_router.delete(

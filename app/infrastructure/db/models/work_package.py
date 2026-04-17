@@ -26,6 +26,8 @@ class WorkPackageModel(Base):
     status = Column(String(100), default="new", nullable=False, index=True)
     priority = Column(String(100), default="normal", nullable=False, index=True)
     done_ratio = Column(Integer, default=0, nullable=False)  # 0-100
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 

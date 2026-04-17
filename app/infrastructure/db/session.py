@@ -149,6 +149,7 @@ def init_db() -> None:
             ("Feature", "feature"),
             ("Story", "story"),
             ("Milestone", "milestone"),
+            ("Activity", "activity"),
         ]
 
         for pos, (name, internal) in enumerate(builtin_types, start=1):

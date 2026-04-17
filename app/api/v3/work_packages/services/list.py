@@ -15,6 +15,7 @@ def list_work_packages_by_project(
     offset: int = 1,
     limit: int = 20,
     parent_id: int = None,
+    type_name: str = None,
 ) -> ServiceResult[Tuple[List[WorkPackage], int]]:
     """
     List work packages in a project.
@@ -52,12 +53,23 @@ def list_work_packages_by_project(
             error_type="validation_error"
         )
 
+    # Resolve type filter to type_id
+    type_id_filter = None
+    if type_name:
+        type_id_filter = repository.get_type_id_by_internal_name(type_name)
+        if type_id_filter is None:
+            return ServiceResult.fail(
+                error=f"Unknown type '{type_name}'",
+                error_type="validation_error"
+            )
+
     try:
         work_packages, total = repository.list_by_project(
             project_id=project_id,
             offset=offset,
             limit=limit,
             parent_id=parent_id,
+            type_id=type_id_filter,
         )
         return ServiceResult.ok((work_packages, total))
     except Exception as e:

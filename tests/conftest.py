@@ -206,7 +206,8 @@ def builtin_wp_types(db_session: Session):
     """Create built-in work package types."""
     types = []
     for pos, (name, internal) in enumerate(
-        [("Task", "task"), ("Bug", "bug"), ("Feature", "feature")], start=1
+        [("Task", "task"), ("Bug", "bug"), ("Feature", "feature"),
+         ("Milestone", "milestone"), ("Activity", "activity")], start=1
     ):
         wpt = WorkPackageTypeModel(
             name=name,

@@ -27,6 +27,8 @@ class WorkPackage:
     created_at: datetime
     updated_at: datetime
     parent_id: Optional[int] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
     def to_dict(self) -> dict:
         """
@@ -46,6 +48,8 @@ class WorkPackage:
             "status": self.status,
             "priority": self.priority,
             "done_ratio": self.done_ratio,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
