@@ -19,8 +19,8 @@ from .permissions import (
     MEETINGS_UPDATE,
     MEETINGS_DELETE,
 )
-from app.core.middleware.rbac import require_permission
-from app.infrastructure.db.session import get_db
+from ....core.middleware.rbac import require_permission
+from ....infrastructure.db.session import get_db
 
 # Create two routers: one for project-scoped routes, one for standalone meeting routes
 projects_router = APIRouter(prefix="/projects", tags=["meetings"])
@@ -58,8 +58,8 @@ def create_meeting(
 def list_meetings(
     request: Request,
     project_id: int,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -67,7 +67,7 @@ def list_meetings(
 
     Requires: MEETINGS_VIEW permission
     """
-    query = MeetingListQuery(offset=offset, limit=limit)
+    query = MeetingListQuery(offset=offset, pageSize=pageSize)
     return MeetingController.list_meetings(request, project_id, query, db)
 
 

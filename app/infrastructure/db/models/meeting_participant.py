@@ -1,7 +1,11 @@
 """
 Meeting Participant database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, DateTime, Index, ForeignKey, UniqueConstraint
 from ..session import Base
 
@@ -14,7 +18,7 @@ class MeetingParticipantModel(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     # Unique constraint: one participation per meeting-user pair
     __table_args__ = (

@@ -1,29 +1,21 @@
 """
 Security utilities for JWT and password handling.
 """
-import hashlib
-import base64
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 from uuid import uuid4
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from jose import JWTError, jwt, ExpiredSignatureError
 from .config import settings
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+# argon2-cffi hasher (argon2id by default)
+_ph = PasswordHasher()
 
-# def _prehash_password(password: str) -> str:
-#     """
-#     Pre-hash password with SHA256 to safely handle passwords > 72 bytes
-#     (argon2's hard limit). Result is always 44 chars, well within limit.
-#     """
-#     digest = hashlib.sha256(password.encode("utf-8")).digest()
-#     return base64.b64encode(digest).decode("utf-8")
 
 def hash_password(password: str) -> str:
     """
-    Hash a password using argon2.
+    Hash a password using argon2id.
 
     Args:
         password: Plain text password
@@ -31,7 +23,7 @@ def hash_password(password: str) -> str:
     Returns:
         Hashed password
     """
-    return pwd_context.hash(password)
+    return _ph.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -45,7 +37,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return _ph.verify(hashed_password, plain_password)
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
 
 
 def create_access_token(

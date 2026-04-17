@@ -2,7 +2,11 @@
 Work Package request/response schemas.
 """
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+
+WORK_PACKAGE_STATUS_CHOICES = ["new", "in_progress", "resolved", "closed", "on_hold"]
+WORK_PACKAGE_PRIORITY_CHOICES = ["low", "normal", "high", "urgent"]
 
 
 class WorkPackageCreateRequest(BaseModel):
@@ -30,6 +34,24 @@ class WorkPackageCreateRequest(BaseModel):
     priority: str = Field(default="normal", description="Priority: low, normal, high, urgent")
     doneRatio: int = Field(default=0, ge=0, le=100, description="Completion percentage")
 
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v not in WORK_PACKAGE_STATUS_CHOICES:
+            raise ValueError(
+                f"Invalid status '{v}'. Allowed values: {', '.join(WORK_PACKAGE_STATUS_CHOICES)}"
+            )
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v):
+        if v not in WORK_PACKAGE_PRIORITY_CHOICES:
+            raise ValueError(
+                f"Invalid priority '{v}'. Allowed values: {', '.join(WORK_PACKAGE_PRIORITY_CHOICES)}"
+            )
+        return v
+
 
 class WorkPackageUpdateRequest(BaseModel):
     """Request to update a work package."""
@@ -50,6 +72,24 @@ class WorkPackageUpdateRequest(BaseModel):
     priority: Optional[str] = Field(None, description="Priority: low, normal, high, urgent")
     doneRatio: Optional[int] = Field(None, ge=0, le=100, description="Completion percentage")
     typeId: Optional[int] = Field(None, description="Work package type ID")
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v is not None and v not in WORK_PACKAGE_STATUS_CHOICES:
+            raise ValueError(
+                f"Invalid status '{v}'. Allowed values: {', '.join(WORK_PACKAGE_STATUS_CHOICES)}"
+            )
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v):
+        if v is not None and v not in WORK_PACKAGE_PRIORITY_CHOICES:
+            raise ValueError(
+                f"Invalid priority '{v}'. Allowed values: {', '.join(WORK_PACKAGE_PRIORITY_CHOICES)}"
+            )
+        return v
 
 
 class WorkPackageListQuery(BaseModel):

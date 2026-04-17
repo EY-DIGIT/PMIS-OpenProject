@@ -1,7 +1,11 @@
 """
 Meeting database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, DateTime, Index, ForeignKey, Text
 from ..session import Base
 
@@ -19,8 +23,8 @@ class MeetingModel(Base):
     duration_minutes = Column(Integer, nullable=True)
     location = Column(String(255), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Indexes
     __table_args__ = (

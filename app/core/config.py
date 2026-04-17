@@ -3,11 +3,12 @@ Core configuration module.
 """
 from typing import Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 
 class Settings(BaseSettings):
     """Application settings."""
+    model_config = ConfigDict(env_file=".env", case_sensitive=True)
 
     # Application
     APP_NAME: str = "PMIS API"
@@ -37,10 +38,6 @@ class Settings(BaseSettings):
     # Pagination
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()

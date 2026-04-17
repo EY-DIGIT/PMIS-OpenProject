@@ -1,7 +1,11 @@
 """
 Work Package Type DB model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, UniqueConstraint
 from ..session import Base
 
@@ -15,8 +19,8 @@ class WorkPackageTypeModel(Base):
     is_builtin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     position = Column(Integer, default=0, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('internal_name', name='uq_work_package_types_internal_name'),

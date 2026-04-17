@@ -1,7 +1,11 @@
 """
 User database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index
 from ..session import Base
 
@@ -19,8 +23,8 @@ class UserModel(Base):
     last_name = Column(String(255), nullable=True)
     admin = Column(Boolean, default=False, nullable=False)
     status = Column(String(50), default="active", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     # Refresh token tracking for stateless rotation
     refresh_token_jti = Column(String(64), nullable=True, index=False)
     refresh_token_expires_at = Column(DateTime, nullable=True)

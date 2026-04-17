@@ -3,7 +3,7 @@ RBAC middleware for permission-based authorization.
 """
 from typing import Callable
 from fastapi import Request, Depends
-from ..rbac import Permission, has_permission
+from ..rbac import Permission, Role, has_permission
 from ..dependencies import get_current_user_role
 from ..errors import AuthenticationError, AuthorizationError
 
@@ -32,7 +32,7 @@ def require_permission(permission: Permission):
         user_role = get_current_user_role(request)
 
         # Check if user is authenticated (not anonymous)
-        if user_role.value == "anonymous":
+        if user_role == Role.ANONYMOUS:
             raise AuthenticationError("Authentication required")
 
         # Check if user has required permission
@@ -63,7 +63,7 @@ def require_authenticated():
         """
         user_role = get_current_user_role(request)
 
-        if user_role.value == "anonymous":
+        if user_role == Role.ANONYMOUS:
             raise AuthenticationError("Authentication required")
 
     return Depends(check_authenticated)
@@ -89,7 +89,7 @@ def require_admin():
         """
         user_role = get_current_user_role(request)
 
-        if user_role.value == "anonymous":
+        if user_role == Role.ANONYMOUS:
             raise AuthenticationError("Authentication required")
 
         is_admin = getattr(request.state, "is_admin", False)

@@ -1,7 +1,11 @@
 """
 Work Package database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Text, DateTime, Index, ForeignKey
 from sqlalchemy.orm import relationship
 from ..session import Base
@@ -22,8 +26,8 @@ class WorkPackageModel(Base):
     status = Column(String(100), default="new", nullable=False, index=True)
     priority = Column(String(100), default="normal", nullable=False, index=True)
     done_ratio = Column(Integer, default=0, nullable=False)  # 0-100
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Relationships
     project = relationship("ProjectModel", foreign_keys=[project_id])

@@ -4,8 +4,7 @@ Database session management.
 from typing import Generator
 import logging
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from ...core.config import settings
 
 # Create database engine
@@ -19,7 +18,8 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create declarative base
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -50,7 +50,7 @@ def init_db() -> None:
     # This ensures models are registered with Base before table creation
     from .models import UserModel, ProjectModel, RoleModel, ProjectMemberModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel, MeetingAgendaItemModel  # noqa: F401
     from ...core.security import hash_password
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     Base.metadata.create_all(bind=engine)
 
@@ -128,8 +128,8 @@ def init_db() -> None:
                 last_name="System",
                 admin=True,
                 status="active",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             )
             db.add(admin_user)
             db.commit()

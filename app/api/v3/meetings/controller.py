@@ -139,11 +139,12 @@ class MeetingController:
         Returns:
             JSONResponse with paginated meetings
         """
+        skip = (query.offset - 1) * query.pageSize
         result = list_meetings_by_project(
             db=db,
             project_id=project_id,
-            offset=query.offset,
-            limit=query.limit,
+            offset=skip,
+            limit=query.pageSize,
         )
 
         if not result.success:
@@ -159,8 +160,8 @@ class MeetingController:
             data=format_collection_response(
                 items=formatted_meetings,
                 total=total,
-                page=query.offset + 1,
-                page_size=query.limit,
+                page=query.offset,
+                page_size=query.pageSize,
                 collection_type="meetings"
             ),
             status=200

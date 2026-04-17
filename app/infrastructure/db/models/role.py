@@ -1,7 +1,11 @@
 """
 Role database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, JSON
 from ..session import Base
 
@@ -15,8 +19,8 @@ class RoleModel(Base):
     name = Column(String(255), unique=True, nullable=False, index=True)
     permissions = Column(JSON, default=list, nullable=False)
     builtin = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Indexes
     __table_args__ = (

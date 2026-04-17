@@ -58,9 +58,10 @@ class ProjectCreateRequest(BaseModel):
     def validate_dates_in_future(cls, v):
         """Validate that dates are in the future."""
         if v is not None:
-            # Ensure we're comparing timezone-aware datetimes
             now = datetime.now(timezone.utc)
-            if v <= now:
+            # Normalize naive datetimes to UTC for comparison
+            check_v = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
+            if check_v <= now:
                 raise ValueError("Date must be in the future")
         return v
 
@@ -116,9 +117,10 @@ class ProjectUpdateRequest(BaseModel):
     def validate_dates_in_future(cls, v):
         """Validate that dates are in the future."""
         if v is not None:
-            # Ensure we're comparing timezone-aware datetimes
             now = datetime.now(timezone.utc)
-            if v <= now:
+            # Normalize naive datetimes to UTC for comparison
+            check_v = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
+            if check_v <= now:
                 raise ValueError("Date must be in the future")
         return v
 

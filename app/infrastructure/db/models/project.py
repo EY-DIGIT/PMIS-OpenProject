@@ -1,7 +1,11 @@
 """
 Project database model.
 """
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, ForeignKey, Text
 from ..session import Base
 
@@ -29,8 +33,8 @@ class ProjectModel(Base):
     # Dates: Must be in the future, end_date must be after start_date
     start_date = Column(DateTime, nullable=True, index=True)
     end_date = Column(DateTime, nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Indexes
     __table_args__ = (

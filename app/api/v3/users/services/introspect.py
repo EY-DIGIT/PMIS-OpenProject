@@ -3,7 +3,7 @@ Introspection service for tokens.
 
 Handles public introspection and refresh token rotation.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from .....core.security import (
@@ -75,7 +75,7 @@ def introspect_tokens(
             return ServiceResult.fail(error="Refresh token invalid or reused", error_type="authentication_error")
 
         # Check not expired according to stored_expires
-        if stored_expires and stored_expires < datetime.utcnow():
+        if stored_expires and stored_expires < datetime.now(timezone.utc):
             return ServiceResult.fail(error="Refresh token expired", error_type="authentication_error")
 
         # Issue new tokens (rotation)

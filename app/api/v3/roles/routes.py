@@ -50,7 +50,7 @@ def create_role(
 )
 def list_roles(
     request: Request,
-    offset: int = Query(0, ge=0, description="Number of items to skip"),
+    offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
