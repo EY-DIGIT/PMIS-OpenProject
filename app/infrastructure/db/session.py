@@ -48,7 +48,13 @@ def init_db() -> None:
     """
     # Import models here to avoid circular imports
     # This ensures models are registered with Base before table creation
-    from .models import UserModel, ProjectModel, RoleModel, ProjectMemberModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel, MeetingAgendaItemModel  # noqa: F401
+    from .models import (  # noqa: F401
+        UserModel, ProjectModel, RoleModel, ProjectMemberModel,
+        WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
+        MeetingAgendaItemModel,
+        MilestoneModel, ActivityModel, ActivityResourceModel,
+        TaskModel, TaskResourceModel, SubtaskModel, SubtaskResourceModel,
+    )
     from ...core.security import hash_password
     from datetime import datetime, timezone
     

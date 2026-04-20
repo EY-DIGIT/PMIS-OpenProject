@@ -60,6 +60,34 @@ class Permission(str, Enum):
     MEETINGS_UPDATE = "meetings:update"
     MEETINGS_DELETE = "meetings:delete"
 
+    # Milestones permissions
+    MILESTONES_CREATE = "milestones:create"
+    MILESTONES_READ = "milestones:read"
+    MILESTONES_UPDATE = "milestones:update"
+    MILESTONES_DELETE = "milestones:delete"
+    MILESTONES_RESTORE = "milestones:restore"
+
+    # Activities permissions
+    ACTIVITIES_CREATE = "activities:create"
+    ACTIVITIES_READ = "activities:read"
+    ACTIVITIES_UPDATE = "activities:update"
+    ACTIVITIES_DELETE = "activities:delete"
+    ACTIVITIES_RESTORE = "activities:restore"
+
+    # Tasks permissions
+    TASKS_CREATE = "tasks:create"
+    TASKS_READ = "tasks:read"
+    TASKS_UPDATE = "tasks:update"
+    TASKS_DELETE = "tasks:delete"
+    TASKS_RESTORE = "tasks:restore"
+
+    # Subtasks permissions
+    SUBTASKS_CREATE = "subtasks:create"
+    SUBTASKS_READ = "subtasks:read"
+    SUBTASKS_UPDATE = "subtasks:update"
+    SUBTASKS_DELETE = "subtasks:delete"
+    SUBTASKS_RESTORE = "subtasks:restore"
+
 
 # Role -> Permissions mapping
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
@@ -96,6 +124,26 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.MEETINGS_CREATE,
         Permission.MEETINGS_UPDATE,
         Permission.MEETINGS_DELETE,
+        Permission.MILESTONES_CREATE,
+        Permission.MILESTONES_READ,
+        Permission.MILESTONES_UPDATE,
+        Permission.MILESTONES_DELETE,
+        Permission.MILESTONES_RESTORE,
+        Permission.ACTIVITIES_CREATE,
+        Permission.ACTIVITIES_READ,
+        Permission.ACTIVITIES_UPDATE,
+        Permission.ACTIVITIES_DELETE,
+        Permission.ACTIVITIES_RESTORE,
+        Permission.TASKS_CREATE,
+        Permission.TASKS_READ,
+        Permission.TASKS_UPDATE,
+        Permission.TASKS_DELETE,
+        Permission.TASKS_RESTORE,
+        Permission.SUBTASKS_CREATE,
+        Permission.SUBTASKS_READ,
+        Permission.SUBTASKS_UPDATE,
+        Permission.SUBTASKS_DELETE,
+        Permission.SUBTASKS_RESTORE,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
@@ -115,6 +163,22 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.MEETINGS_CREATE,
         Permission.MEETINGS_UPDATE,
         Permission.MEETINGS_DELETE,
+        Permission.MILESTONES_CREATE,
+        Permission.MILESTONES_READ,
+        Permission.MILESTONES_UPDATE,
+        Permission.MILESTONES_DELETE,
+        Permission.ACTIVITIES_CREATE,
+        Permission.ACTIVITIES_READ,
+        Permission.ACTIVITIES_UPDATE,
+        Permission.ACTIVITIES_DELETE,
+        Permission.TASKS_CREATE,
+        Permission.TASKS_READ,
+        Permission.TASKS_UPDATE,
+        Permission.TASKS_DELETE,
+        Permission.SUBTASKS_CREATE,
+        Permission.SUBTASKS_READ,
+        Permission.SUBTASKS_UPDATE,
+        Permission.SUBTASKS_DELETE,
     },
     Role.VIEWER: {
         Permission.USERS_READ,
@@ -122,6 +186,10 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECT_MEMBERS_READ,
         Permission.WORK_PACKAGES_VIEW,
         Permission.MEETINGS_VIEW,
+        Permission.MILESTONES_READ,
+        Permission.ACTIVITIES_READ,
+        Permission.TASKS_READ,
+        Permission.SUBTASKS_READ,
     },
     Role.ANONYMOUS: set(),
 }
