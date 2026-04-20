@@ -6,6 +6,7 @@ from .get import get_project_by_id, get_project_by_identifier
 from .list import list_projects
 from .update import update_project
 from .delete import delete_project
+from .upsert import upsert_project
 
 __all__ = [
     "create_project",
@@ -14,4 +15,5 @@ __all__ = [
     "list_projects",
     "update_project",
     "delete_project",
+    "upsert_project",
 ]

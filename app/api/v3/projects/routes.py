@@ -8,6 +8,7 @@ from .controller import ProjectController
 from .schemas import (
     ProjectCreateRequest,
     ProjectUpdateRequest,
+    ProjectUpsertRequest,
     ProjectListQuery
 )
 from .permissions import (
@@ -42,6 +43,34 @@ def create_project(
     Requires: PROJECTS_CREATE permission (member+)
     """
     return ProjectController.create(request, data, db)
+
+
+@router.put(
+    "/{identifier}",
+    dependencies=[require_permission(PROJECTS_CREATE)],
+    summary="Create or update project by identifier (idempotent)",
+    description=(
+        "Idempotent create-or-update of a project keyed by its identifier. "
+        "Intended for multi-step creation wizards: re-submitting the same "
+        "identifier updates the existing project instead of creating a "
+        "duplicate. Returns 201 on first call, 200 on subsequent calls. "
+        "Requires ownership of the existing project (or admin) on the "
+        "update path."
+    ),
+)
+def upsert_project_by_identifier(
+    request: Request,
+    identifier: str,
+    data: ProjectUpsertRequest,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Upsert a project by identifier.
+
+    Requires: PROJECTS_CREATE permission (member+).
+    On update path, caller must be the project's owner or an admin.
+    """
+    return ProjectController.upsert(request, identifier, data, db)
 
 
 @router.get(

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .schemas import (
     ProjectCreateRequest,
     ProjectUpdateRequest,
+    ProjectUpsertRequest,
     ProjectListQuery
 )
 from .services import (
@@ -14,7 +15,8 @@ from .services import (
     get_project_by_id,
     list_projects,
     update_project,
-    delete_project
+    delete_project,
+    upsert_project,
 )
 from ....core.response import (
     format_project_response,
@@ -81,6 +83,72 @@ class ProjectController:
         formatted = format_project_response(project_dict, "/api/v3")
 
         return BaseController.created(data=formatted)
+
+    @staticmethod
+    def upsert(
+        request: Request,
+        identifier: str,
+        data: ProjectUpsertRequest,
+        db: Session,
+    ) -> JSONResponse:
+        """
+        Idempotent create-or-update of a project by identifier.
+
+        Use case: the project creation wizard. Re-submitting Step 1 (e.g. after
+        pressing Back) reuses the existing row instead of creating a duplicate.
+
+        Returns 201 Created on insert, 200 OK on update, 403 on ownership
+        violation, 404 if parent_id references a missing project, 422/400 on
+        validation errors.
+        """
+        current_user_login = getattr(request.state, "user_login", None)
+        is_admin = getattr(request.state, "is_admin", False)
+
+        result = upsert_project(
+            db=db,
+            identifier=identifier,
+            name=data.name,
+            current_user_login=current_user_login,
+            is_admin=is_admin,
+            description=data.description,
+            active=data.active,
+            public=data.public,
+            status_explanation=data.statusExplanation,
+            parent_id=data.parentId,
+            status=data.status,
+            owner=data.owner,
+            category=data.category,
+            start_date=data.start_date,
+            end_date=data.end_date,
+        )
+
+        if not result.is_success():
+            status = 400
+            if result.error_type == "not_found":
+                status = 404
+            elif result.error_type == "forbidden":
+                status = 403
+            elif result.error_type == "internal_error":
+                status = 500
+
+            error_payload = {
+                "_type": "Error",
+                "errorIdentifier": result.error_type,
+                "message": result.error,
+            }
+            return BaseController.error(error_payload, status=status)
+
+        project, created = result.data
+        project_dict = project.to_dict()
+        formatted = format_project_response(project_dict, "/api/v3")
+
+        # Surface the insert-vs-update signal in the response envelope so the
+        # frontend wizard can distinguish the first save from subsequent ones.
+        formatted["_created"] = created
+
+        if created:
+            return BaseController.created(data=formatted)
+        return BaseController.ok(data=formatted)
 
     @staticmethod
     def list(

@@ -1,11 +1,28 @@
 """
 Project repository for database operations.
 """
+from datetime import datetime, timezone
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ...db.models.project import ProjectModel
 from ....domain.projects.project import Project
+
+
+def _dialect_insert(db: Session):
+    """Return the dialect-specific insert() construct that supports
+    on_conflict_do_update() (PostgreSQL or SQLite)."""
+    dialect = db.bind.dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as _insert
+        return _insert
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as _insert
+        return _insert
+    raise NotImplementedError(
+        f"Upsert is not supported for dialect '{dialect}'. "
+        "Only PostgreSQL and SQLite are supported."
+    )
 
 
 class ProjectRepository:
@@ -103,6 +120,93 @@ class ProjectRepository:
         self.db.refresh(project_model)
 
         return self._to_domain(project_model)
+
+    def upsert_by_identifier(
+        self,
+        identifier: str,
+        name: str,
+        description: Optional[str] = None,
+        active: bool = True,
+        public: bool = False,
+        status_explanation: Optional[str] = None,
+        parent_id: Optional[int] = None,
+        status: str = "new",
+        owner: Optional[str] = None,
+        category: Optional[str] = None,
+        start_date: Optional[object] = None,
+        end_date: Optional[object] = None,
+    ) -> Tuple[Project, bool]:
+        """
+        Insert a project if no row with this identifier exists, otherwise
+        update the existing row. Atomic at the database level using
+        INSERT ... ON CONFLICT (identifier) DO UPDATE (SQLite 3.24+ / Postgres 9.5+).
+
+        The identifier and created_at columns are never overwritten on the
+        update path; updated_at is set to the current UTC time.
+
+        Returns:
+            Tuple of (project domain model, created flag). created=True when
+            the row was freshly inserted, False when an existing row was
+            updated.
+        """
+        insert_fn = _dialect_insert(self.db)
+        now = datetime.now(timezone.utc)
+
+        values = dict(
+            identifier=identifier,
+            name=name,
+            description=description,
+            active=active,
+            public=public,
+            status_explanation=status_explanation,
+            parent_id=parent_id,
+            status=status,
+            owner=owner,
+            category=category,
+            start_date=start_date,
+            end_date=end_date,
+            created_at=now,
+            updated_at=now,
+        )
+        stmt = insert_fn(ProjectModel).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["identifier"],
+            set_={
+                "name": stmt.excluded.name,
+                "description": stmt.excluded.description,
+                "active": stmt.excluded.active,
+                "public": stmt.excluded.public,
+                "status_explanation": stmt.excluded.status_explanation,
+                "parent_id": stmt.excluded.parent_id,
+                "status": stmt.excluded.status,
+                "owner": stmt.excluded.owner,
+                "category": stmt.excluded.category,
+                "start_date": stmt.excluded.start_date,
+                "end_date": stmt.excluded.end_date,
+                "updated_at": now,
+                # NOTE: identifier and created_at intentionally preserved.
+            },
+        )
+
+        # Detect insert vs. update portably: check existence before executing.
+        # (ON CONFLICT itself is atomic; this extra query is only used to
+        # label the outcome for the API response.)
+        existed_before = (
+            self.db.query(ProjectModel.id)
+            .filter(ProjectModel.identifier == identifier)
+            .first()
+            is not None
+        )
+
+        self.db.execute(stmt)
+        self.db.commit()
+
+        model = (
+            self.db.query(ProjectModel)
+            .filter(ProjectModel.identifier == identifier)
+            .first()
+        )
+        return self._to_domain(model), (not existed_before)
 
     def get_by_id(self, project_id: int) -> Optional[Project]:
         """
