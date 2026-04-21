@@ -10,17 +10,20 @@ TASK_TYPE_TRANSACTIONAL = "transactional"
 TASK_TYPES = (TASK_TYPE_STANDARD, TASK_TYPE_RESOURCE, TASK_TYPE_TRANSACTIONAL)
 
 
+RESOURCE_MODE_COUNT = "count"
+RESOURCE_MODE_DETAILS = "details"
+RESOURCE_MODES = (RESOURCE_MODE_COUNT, RESOURCE_MODE_DETAILS)
+
+
 @dataclass
 class Task:
     """
-    Task domain entity.
-
-    Parent is an Activity. Same shape as Activity but under a different
-    parent. Resource sub-entity applies when type == 'resource'.
+    Task domain entity. Same semantics as Activity; parent is an Activity.
+    See Activity docstring for resource_mode / resource_count rules.
     """
-    id: int
-    project_id: int
-    activity_id: int
+    id: str
+    project_id: str
+    activity_id: str
     name: str
     description: Optional[str]
     type: str
@@ -34,6 +37,8 @@ class Task:
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
     deleted_at: Optional[datetime] = None
+    resource_mode: Optional[str] = None
+    resource_count: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -48,6 +53,8 @@ class Task:
             "actual_start_date": self.actual_start_date.isoformat() if self.actual_start_date else None,
             "actual_end_date": self.actual_end_date.isoformat() if self.actual_end_date else None,
             "position": self.position,
+            "resource_mode": self.resource_mode,
+            "resource_count": self.resource_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

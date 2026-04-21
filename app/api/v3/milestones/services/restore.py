@@ -8,7 +8,7 @@ from .....infrastructure.db.repositories.milestone_repository import MilestoneRe
 from .....domain.milestones.milestone import Milestone
 
 
-def restore_milestone(db: Session, *, milestone_id: int, current_user_id: Optional[int]) -> Milestone:
+def restore_milestone(db: Session, *, milestone_id: str, current_user_id: Optional[int]) -> Milestone:
     repo = MilestoneRepository(db)
     model = repo.get_model(milestone_id, include_deleted=True)
     if model is None:

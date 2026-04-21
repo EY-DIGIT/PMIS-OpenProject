@@ -1,13 +1,22 @@
 """
 Project database model.
+
+`id` is a UUID string (VARCHAR(36)) — the public handle exposed in URLs and
+response bodies. Server-generated via uuid4 on insert. Never changes once
+assigned.
+
+`project_code` is an additional human-readable unique handle
+(UIDAI-PRYYMMDDHHMMSS in IST), also server-generated.
 """
 from datetime import datetime, timezone
+from uuid import uuid4
+
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, ForeignKey, Text, text
+from ..session import Base
 
 
 def _utcnow():
     return datetime.now(timezone.utc)
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, ForeignKey, Text, text
-from ..session import Base
 
 
 class ProjectModel(Base):
@@ -15,16 +24,31 @@ class ProjectModel(Base):
 
     __tablename__ = "projects"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    identifier = Column(String(255), unique=True, nullable=False, index=True)
+    # UUID primary key. No separate "uuid" column — `id` itself is the UUID.
+    id = Column(
+        String(36),
+        primary_key=True,
+        index=True,
+        default=lambda: str(uuid4()),
+    )
+
+    # Human-readable code: UIDAI-PRYYMMDDHHMMSS (IST timezone).
+    # Server-generated on create; fresh code on every version.
+    project_code = Column(String(30), unique=True, nullable=False, index=True)
+
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
     public = Column(Boolean, default=False, nullable=False)
     status_explanation = Column(Text, nullable=True)
-    parent_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+
+    # Self-FKs — all must match the new String(36) id type.
+    parent_id = Column(String(36), ForeignKey("projects.id"), nullable=True, index=True)
+    version_of = Column(String(36), ForeignKey("projects.id"), nullable=True, index=True)
+    baseline_id = Column(String(36), ForeignKey("projects.id"), nullable=True, index=True)
+    version_no = Column(Integer, nullable=True)
+
     # Status: lowercase values. Allowed: new, draft, published, closed, suspended.
-    # See app/api/v3/projects/schemas.py PROJECT_STATUS_CHOICES.
     status = Column(String(50), default="new", nullable=False, index=True)
     owner = Column(String(255), nullable=True, index=True)
     # Category: MSAP, MSIP, BSP. Immutable after create.
@@ -34,16 +58,10 @@ class ProjectModel(Base):
     # Versions may record the project's actual end date; baselines leave it NULL.
     actual_end_date = Column(DateTime, nullable=True)
 
-    # Versioning: a version is a row with is_version=true, version_of pointing
-    # at the non-version (baseline) row it was cloned from. baseline_id mirrors
-    # version_of on versions (kept as a separate column for future divergence,
-    # e.g. versions of versions). NULL on non-versions.
+    # Versioning marker.
     is_version = Column(Boolean, default=False, nullable=False, index=True)
-    version_of = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
-    baseline_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
-    version_no = Column(Integer, nullable=True)
 
-    # Audit + soft delete
+    # Audit + soft delete. users.id is still INTEGER, so these stay Integer.
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
@@ -55,7 +73,7 @@ class ProjectModel(Base):
     # Enforces "one active version per baseline" at the DB layer.
     # Active = is_version AND status != 'suspended' AND not soft-deleted.
     __table_args__ = (
-        Index("idx_projects_identifier", "identifier"),
+        Index("idx_projects_project_code", "project_code"),
         Index("idx_projects_name", "name"),
         Index("idx_projects_active", "active"),
         Index("idx_projects_public", "public"),
@@ -79,4 +97,8 @@ class ProjectModel(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ProjectModel(id={self.id}, identifier='{self.identifier}', name='{self.name}', status='{self.status}', is_version={self.is_version})>"
+        return (
+            f"<ProjectModel(id='{self.id}', "
+            f"project_code='{self.project_code}', name='{self.name}', "
+            f"status='{self.status}', is_version={self.is_version})>"
+        )

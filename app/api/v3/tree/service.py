@@ -44,7 +44,7 @@ def _resource_payload(r) -> Dict[str, Any]:
     }
 
 
-def build_project_tree(db: Session, project_id: int, include_deleted: bool = False) -> Dict[str, Any]:
+def build_project_tree(db: Session, project_id: str, include_deleted: bool = False) -> Dict[str, Any]:
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if project is None:
         raise NotFoundError(f"Project with ID {project_id} not found")
@@ -87,7 +87,12 @@ def build_project_tree(db: Session, project_id: int, include_deleted: bool = Fal
 
     # --- Stitch bottom-up ---
     def subtask_node(s: SubtaskModel) -> Dict[str, Any]:
-        resource = sr_by_sub.get(s.id) if s.type == "resource" else None
+        # Resource row exists only in details mode; count mode uses resource_count.
+        resource = (
+            sr_by_sub.get(s.id)
+            if s.type == "resource" and getattr(s, "resource_mode", None) == "details"
+            else None
+        )
         return {
             "id": s.id, "taskId": s.task_id, "projectId": s.project_id,
             "name": s.name, "description": s.description, "type": s.type,
@@ -95,12 +100,18 @@ def build_project_tree(db: Session, project_id: int, include_deleted: bool = Fal
             "actualStartDate": _iso(s.actual_start_date),
             "actualEndDate": _iso(s.actual_end_date),
             "position": s.position,
+            "resourceMode": getattr(s, "resource_mode", None),
+            "resourceCount": getattr(s, "resource_count", None),
             "deletedAt": _iso(s.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
         }
 
     def task_node(t: TaskModel) -> Dict[str, Any]:
-        resource = tr_by_task.get(t.id) if t.type == "resource" else None
+        resource = (
+            tr_by_task.get(t.id)
+            if t.type == "resource" and getattr(t, "resource_mode", None) == "details"
+            else None
+        )
         return {
             "id": t.id, "activityId": t.activity_id, "projectId": t.project_id,
             "name": t.name, "description": t.description, "type": t.type,
@@ -108,13 +119,19 @@ def build_project_tree(db: Session, project_id: int, include_deleted: bool = Fal
             "actualStartDate": _iso(t.actual_start_date),
             "actualEndDate": _iso(t.actual_end_date),
             "position": t.position,
+            "resourceMode": getattr(t, "resource_mode", None),
+            "resourceCount": getattr(t, "resource_count", None),
             "deletedAt": _iso(t.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "subtasks": [subtask_node(s) for s in subs_by_task.get(t.id, [])],
         }
 
     def activity_node(a: ActivityModel) -> Dict[str, Any]:
-        resource = ar_by_act.get(a.id) if a.type == "resource" else None
+        resource = (
+            ar_by_act.get(a.id)
+            if a.type == "resource" and getattr(a, "resource_mode", None) == "details"
+            else None
+        )
         return {
             "id": a.id, "milestoneId": a.milestone_id, "projectId": a.project_id,
             "name": a.name, "description": a.description, "type": a.type,
@@ -122,6 +139,8 @@ def build_project_tree(db: Session, project_id: int, include_deleted: bool = Fal
             "actualStartDate": _iso(a.actual_start_date),
             "actualEndDate": _iso(a.actual_end_date),
             "position": a.position,
+            "resourceMode": getattr(a, "resource_mode", None),
+            "resourceCount": getattr(a, "resource_count", None),
             "deletedAt": _iso(a.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "tasks": [task_node(t) for t in tasks_by_activity.get(a.id, [])],
@@ -150,15 +169,17 @@ def build_project_tree(db: Session, project_id: int, include_deleted: bool = Fal
         "subtaskResources": len(sub_resources),
     }
 
+    # project.id IS the public UUID handle (no separate uuid column).
+    project_id = project.id
     return {
         "_type": "ProjectTree",
         "_links": {
-            "self": {"href": f"/api/v3/projects/{project_id}/tree"},
-            "project": {"href": f"/api/v3/projects/{project_id}"},
+            "self": {"href": f"/api/v3/projects/{project_id}/tree" if project_id else None},
+            "project": {"href": f"/api/v3/projects/{project_id}" if project_id else None},
         },
         "project": {
-            "id": project.id,
-            "identifier": getattr(project, "identifier", None),
+            "id": project_id,
+            "projectCode": getattr(project, "project_code", None),
             "name": getattr(project, "name", None),
             "description": getattr(project, "description", None),
             "status": getattr(project, "status", None),

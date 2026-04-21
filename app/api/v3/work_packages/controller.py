@@ -69,7 +69,7 @@ class WorkPackageController:
     @staticmethod
     def create_in_project(
         request: Request,
-        project_id: int,
+        project_id: str,
         data: WorkPackageCreateRequest,
         db: Session
     ) -> JSONResponse:
@@ -145,7 +145,7 @@ class WorkPackageController:
     @staticmethod
     def get_in_project(
         request: Request,
-        project_id: int,
+        project_id: str,
         work_package_id: int,
         db: Session
     ) -> JSONResponse:
@@ -177,7 +177,7 @@ class WorkPackageController:
     @staticmethod
     def list(
         request: Request,
-        project_id: int,
+        project_id: str,
         query: WorkPackageListQuery,
         db: Session
     ) -> JSONResponse:

@@ -4,7 +4,13 @@ from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ....domain.tasks.task import TASK_TYPES, TASK_TYPE_RESOURCE
+from ....domain.tasks.task import (
+    TASK_TYPES,
+    TASK_TYPE_RESOURCE,
+    RESOURCE_MODES,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 
 
 class ResourcePayload(BaseModel):
@@ -31,15 +37,30 @@ class TaskCreateRequest(BaseModel):
     actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
     position: Optional[int] = Field(None, ge=0)
+    resource_mode: Optional[str] = Field(None, alias="resourceMode")
+    resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
 
-    @field_validator("type")
+    @field_validator("type", mode="before")
     @classmethod
     def _validate_type(cls, v):
+        if isinstance(v, str):
+            v = v.strip().lower()
         if v not in TASK_TYPES:
             raise ValueError(
-                "Task type must be one of: Standard, Resource, or Transactional."
+                "Task type must be one of: standard, resource, transactional."
             )
+        return v
+
+    @field_validator("resource_mode", mode="before")
+    @classmethod
+    def _validate_mode(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in RESOURCE_MODES:
+            raise ValueError("Resource mode must be either 'count' or 'details'.")
         return v
 
     @field_validator("end_date")
@@ -51,15 +72,36 @@ class TaskCreateRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _resource_presence(self):
-        if self.type == TASK_TYPE_RESOURCE and self.resource is None:
+    def _resource_shape(self):
+        is_resource_type = self.type == TASK_TYPE_RESOURCE
+        if not is_resource_type:
+            if self.resource_mode is not None:
+                raise ValueError(
+                    "Resource mode should only be provided when the task type is 'resource'."
+                )
+            if self.resource_count is not None:
+                raise ValueError(
+                    "Resource count should only be provided when the task type is 'resource'."
+                )
+            if self.resource is not None:
+                raise ValueError(
+                    "Resource details should only be provided when the task type is 'resource'."
+                )
+            return self
+        if self.resource_mode is None:
             raise ValueError(
-                "Resource details are required when the task type is 'Resource'."
+                "Please choose a resource mode ('count' or 'details') for a resource-type task."
             )
-        if self.type != TASK_TYPE_RESOURCE and self.resource is not None:
-            raise ValueError(
-                "Resource details should only be provided when the task type is 'Resource'."
-            )
+        if self.resource_mode == RESOURCE_MODE_COUNT:
+            if self.resource_count is None:
+                raise ValueError("Resource count is required when resource mode is 'count'.")
+            if self.resource is not None:
+                raise ValueError("Resource details should be omitted when resource mode is 'count'.")
+        else:
+            if self.resource is None:
+                raise ValueError("Resource details are required when resource mode is 'details'.")
+            if self.resource_count is not None:
+                raise ValueError("Resource count should be omitted when resource mode is 'details'.")
         return self
 
 
@@ -73,15 +115,32 @@ class TaskUpdateRequest(BaseModel):
     actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
     position: Optional[int] = Field(None, ge=0)
+    resource_mode: Optional[str] = Field(None, alias="resourceMode")
+    resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
 
-    @field_validator("type")
+    @field_validator("type", mode="before")
     @classmethod
     def _validate_type(cls, v):
-        if v is not None and v not in TASK_TYPES:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in TASK_TYPES:
             raise ValueError(
-                "Task type must be one of: Standard, Resource, or Transactional."
+                "Task type must be one of: standard, resource, transactional."
             )
+        return v
+
+    @field_validator("resource_mode", mode="before")
+    @classmethod
+    def _validate_mode(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in RESOURCE_MODES:
+            raise ValueError("Resource mode must be either 'count' or 'details'.")
         return v
 
 

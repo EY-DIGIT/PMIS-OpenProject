@@ -13,7 +13,7 @@ from .....shared.service_result import ServiceResult
 
 def add_project_member(
     db: Session,
-    project_id: int,
+    project_id: str,
     user_id: int,
     roles: Optional[List[str]] = None,
 ) -> ServiceResult[Membership]:

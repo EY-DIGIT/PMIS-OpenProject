@@ -14,24 +14,17 @@ from .services.transitions import (
 class ProjectCreateRequest(BaseModel):
     """Request schema for creating a project.
 
-    ``identifier`` is optional — if omitted, the server generates ``prj{n:03d}``.
-    Version identifiers are always server-generated (see POST /versions).
+    The server generates ``id`` (UUID) and ``projectCode`` on insert; neither
+    is accepted in the request body.
     """
     model_config = ConfigDict(populate_by_name=True)
 
-    identifier: Optional[str] = Field(
-        None,
-        min_length=1,
-        max_length=255,
-        pattern="^[a-z0-9_-]+$",
-        description="Optional. Server-generates prj{n:03d} when omitted.",
-    )
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=5000)
     active: bool = Field(True)
     public: bool = Field(False, alias="isPublic")
     statusExplanation: Optional[str] = Field(None, max_length=5000, alias="status_explanation")
-    parentId: Optional[int] = Field(None, alias="parent_id")
+    parentId: Optional[str] = Field(None, alias="parent_id", description="Parent project UUID")
     status: str = Field(
         "new",
         description=f"Project status. One of: {', '.join(PROJECT_STATUS_CHOICES)}",
@@ -99,7 +92,7 @@ class ProjectUpdateRequest(BaseModel):
     active: Optional[bool] = None
     public: Optional[bool] = Field(None, alias="isPublic")
     statusExplanation: Optional[str] = Field(None, max_length=5000, alias="status_explanation")
-    parentId: Optional[int] = Field(None, alias="parent_id")
+    parentId: Optional[str] = Field(None, alias="parent_id", description="Parent project UUID")
     status: Optional[str] = Field(None)
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)
@@ -161,10 +154,12 @@ class ProjectCloseRequest(BaseModel):
 
 
 class ProjectUpsertRequest(BaseModel):
-    """Body for PUT /projects/{identifier} (idempotent create-or-update).
+    """Body for PUT /projects/{project_uuid} (idempotent create-or-update).
 
-    The identifier is taken from the URL path and is NOT accepted in the
-    body, so the upsert endpoint cannot be used to rename a project.
+    The project's ``id`` comes from the URL path (a UUID string). The server
+    auto-generates ``projectCode`` on the INSERT branch and preserves it on
+    the UPDATE branch. Neither ``id`` nor ``projectCode`` is accepted in the
+    body.
     """
     model_config = ConfigDict(populate_by_name=True)
 
@@ -173,7 +168,7 @@ class ProjectUpsertRequest(BaseModel):
     active: bool = Field(True)
     public: bool = Field(False, alias="isPublic")
     statusExplanation: Optional[str] = Field(None, max_length=5000, alias="status_explanation")
-    parentId: Optional[int] = Field(None, alias="parent_id")
+    parentId: Optional[str] = Field(None, alias="parent_id", description="Parent project UUID")
     status: str = Field("new")
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)

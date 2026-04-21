@@ -9,7 +9,7 @@ from typing import Optional, Any, Dict
 @dataclass
 class ProjectAuditLog:
     id: int
-    project_id: int
+    project_id: str
     actor_id: Optional[int]
     action: str
     before: Optional[Dict[str, Any]]

@@ -18,7 +18,7 @@ class PagedActivities:
 
 
 def list_activities(
-    db: Session, *, milestone_id: int, page: int, page_size: int, include_deleted: bool,
+    db: Session, *, milestone_id: str, page: int, page_size: int, include_deleted: bool,
 ) -> PagedActivities:
     m = (
         db.query(MilestoneModel)

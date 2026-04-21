@@ -9,7 +9,7 @@ from .....infrastructure.db.repositories.subtask_repository import SubtaskReposi
 from .....domain.subtasks.subtask import Subtask
 
 
-def restore_subtask(db: Session, *, subtask_id: int, current_user_id: Optional[int]) -> Subtask:
+def restore_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[int]) -> Subtask:
     repo = SubtaskRepository(db)
     model = repo.get_model(subtask_id, include_deleted=True)
     if model is None:

@@ -16,7 +16,7 @@ class ProjectAuditLogModel(Base):
     __tablename__ = "project_audit_logs"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     actor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     action = Column(String(64), nullable=False, index=True)
     before = Column(JSON, nullable=True)

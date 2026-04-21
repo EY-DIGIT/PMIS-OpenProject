@@ -16,7 +16,7 @@ class ProjectMemberModel(Base):
     __tablename__ = "project_members"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     roles = Column(JSON, default=list, nullable=False)
     created_at = Column(DateTime, default=_utcnow, nullable=False)

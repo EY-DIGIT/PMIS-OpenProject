@@ -30,6 +30,8 @@ class TaskRepository:
             actual_start_date=t.actual_start_date,
             actual_end_date=t.actual_end_date,
             position=t.position,
+            resource_mode=t.resource_mode,
+            resource_count=t.resource_count,
             created_at=t.created_at,
             updated_at=t.updated_at,
             created_by=t.created_by,
@@ -59,21 +61,21 @@ class TaskRepository:
 
     # ---------- reads ----------
 
-    def get_by_id(self, task_id: int, include_deleted: bool = False) -> Optional[Task]:
+    def get_by_id(self, task_id: str, include_deleted: bool = False) -> Optional[Task]:
         q = self.db.query(TaskModel).filter(TaskModel.id == task_id)
         if not include_deleted:
             q = q.filter(TaskModel.deleted_at.is_(None))
         row = q.first()
         return self._to_domain(row) if row else None
 
-    def get_model(self, task_id: int, include_deleted: bool = False) -> Optional[TaskModel]:
+    def get_model(self, task_id: str, include_deleted: bool = False) -> Optional[TaskModel]:
         q = self.db.query(TaskModel).filter(TaskModel.id == task_id)
         if not include_deleted:
             q = q.filter(TaskModel.deleted_at.is_(None))
         return q.first()
 
     def list_by_activity(
-        self, activity_id: int, offset: int = 0, limit: int = 20,
+        self, activity_id: str, offset: int = 0, limit: int = 20,
         include_deleted: bool = False,
     ) -> Tuple[List[Task], int]:
         base = self.db.query(TaskModel).filter(TaskModel.activity_id == activity_id)
@@ -86,7 +88,7 @@ class TaskRepository:
         )
         return [self._to_domain(r) for r in rows], total
 
-    def next_position(self, activity_id: int) -> int:
+    def next_position(self, activity_id: str) -> int:
         cur = (
             self.db.query(func.max(TaskModel.position))
             .filter(TaskModel.activity_id == activity_id)
@@ -95,7 +97,7 @@ class TaskRepository:
         )
         return (cur or 0) + 1
 
-    def get_live_resource(self, task_id: int) -> Optional[TaskResource]:
+    def get_live_resource(self, task_id: str) -> Optional[TaskResource]:
         row = (
             self.db.query(TaskResourceModel)
             .filter(TaskResourceModel.task_id == task_id)
@@ -108,10 +110,12 @@ class TaskRepository:
 
     def create(
         self, *,
-        project_id: int, activity_id: int, name: str, description: Optional[str],
+        project_id: str, activity_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
         position: int, created_by: Optional[int],
+        resource_mode: Optional[str] = None,
+        resource_count: Optional[int] = None,
     ) -> Task:
         t = TaskModel(
             project_id=project_id,
@@ -124,6 +128,8 @@ class TaskRepository:
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
             position=position,
+            resource_mode=resource_mode,
+            resource_count=resource_count,
             created_by=created_by,
             updated_by=created_by,
         )
@@ -131,7 +137,7 @@ class TaskRepository:
         self.db.flush()
         return self._to_domain(t)
 
-    def update(self, task_id: int, *, updates: dict, updated_by: Optional[int]) -> Task:
+    def update(self, task_id: str, *, updates: dict, updated_by: Optional[int]) -> Task:
         t = self.get_model(task_id)
         if t is None:
             raise LookupError(f"Task {task_id} not found")
@@ -143,7 +149,7 @@ class TaskRepository:
 
     # ---------- resource sub-entity ----------
 
-    def insert_resource(self, *, task_id: int, project_id: int, data: dict) -> TaskResource:
+    def insert_resource(self, *, task_id: str, project_id: str, data: dict) -> TaskResource:
         r = TaskResourceModel(
             task_id=task_id,
             project_id=project_id,
@@ -162,7 +168,7 @@ class TaskRepository:
         self.db.flush()
         return self._resource_to_domain(r)
 
-    def upsert_resource(self, *, task_id: int, project_id: int, data: dict) -> TaskResource:
+    def upsert_resource(self, *, task_id: str, project_id: str, data: dict) -> TaskResource:
         existing = (
             self.db.query(TaskResourceModel)
             .filter(
@@ -184,7 +190,7 @@ class TaskRepository:
         self.db.flush()
         return self._resource_to_domain(existing)
 
-    def soft_delete_live_resource(self, task_id: int) -> None:
+    def soft_delete_live_resource(self, task_id: str) -> None:
         now = datetime.now(timezone.utc)
         self.db.execute(
             update(TaskResourceModel)
@@ -197,7 +203,7 @@ class TaskRepository:
 
     # ---------- delete + cascade (task subtree) ----------
 
-    def soft_delete_with_cascade(self, task_id: int, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, task_id: str, deleted_by: Optional[int]) -> None:
         now = datetime.now(timezone.utc)
         subtask_ids = select(SubtaskModel.id).where(
             SubtaskModel.task_id == task_id,
@@ -221,7 +227,7 @@ class TaskRepository:
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
         self.db.commit()
 
-    def restore(self, task_id: int, restored_by: Optional[int]) -> Task:
+    def restore(self, task_id: str, restored_by: Optional[int]) -> Task:
         t = self.get_model(task_id, include_deleted=True)
         if t is None:
             raise LookupError(f"Task {task_id} not found")

@@ -1,5 +1,7 @@
 """Activity Resource SQLAlchemy model (1-to-1 with activities)."""
 from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Numeric, Index, text,
 )
@@ -11,18 +13,14 @@ def _utcnow():
 
 
 class ActivityResourceModel(Base):
-    """
-    Resource details for Resource-type activities.
-
-    A partial unique index on (activity_id) WHERE deleted_at IS NULL enforces
-    at most one live resource row per activity. Soft-deleted historical rows
-    are allowed to coexist.
-    """
     __tablename__ = "activity_resources"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    id = Column(
+        String(36), primary_key=True, index=True,
+        default=lambda: str(uuid4()),
+    )
+    activity_id = Column(String(36), ForeignKey("activities.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
 
     resource_name = Column(String(255), nullable=False)
 
@@ -42,7 +40,6 @@ class ActivityResourceModel(Base):
     deleted_at = Column(DateTime, nullable=True, index=True)
 
     __table_args__ = (
-        # Partial unique index: SQLite 3.8+ and PostgreSQL both support this.
         Index(
             "uq_activity_resources_activity_live",
             "activity_id",
@@ -54,4 +51,4 @@ class ActivityResourceModel(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ActivityResourceModel(id={self.id}, activity_id={self.activity_id})>"
+        return f"<ActivityResourceModel(id='{self.id}', activity_id='{self.activity_id}')>"

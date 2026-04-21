@@ -1,4 +1,9 @@
-"""Update a task — same 4-path type-transition logic as activities."""
+"""Update a task. Full type × resource-mode transition matrix.
+
+See activities/services/update.py for the canonical commentary -- the logic
+here is structurally identical; only the parent entity and the resource
+sub-entity differ.
+"""
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -10,14 +15,19 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.activity import ActivityModel
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....domain.tasks.task import Task, TASK_TYPE_RESOURCE
+from .....domain.tasks.task import (
+    Task,
+    TASK_TYPE_RESOURCE,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 from .....domain.tasks.task_resource import TaskResource
 
 
 def update_task(
     db: Session,
     *,
-    task_id: int,
+    task_id: str,
     name: Optional[str],
     description: Optional[str],
     type: Optional[str],
@@ -26,6 +36,8 @@ def update_task(
     actual_start_date: Optional[datetime],
     actual_end_date: Optional[datetime],
     position: Optional[int],
+    resource_mode: Optional[str],
+    resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
 ) -> Tuple[Task, Optional[TaskResource]]:
@@ -67,20 +79,52 @@ def update_task(
         parent_label="activity",
     )
 
-    old_type = model.type
-    new_type = type if type is not None else old_type
+    new_type = type if type is not None else model.type
+    new_mode = resource_mode if resource_mode is not None else model.resource_mode
+    new_count = resource_count if resource_count is not None else model.resource_count
 
-    if new_type == TASK_TYPE_RESOURCE:
-        if old_type != TASK_TYPE_RESOURCE and (resource is None or not resource.get("resource_name")):
+    if new_type != TASK_TYPE_RESOURCE:
+        if resource_mode is not None:
             raise ValidationError(
-                "Please provide the resource details (including the resource name) "
-                "when changing the task type to 'Resource'."
+                "Resource mode should only be provided when the task type is 'resource'."
             )
-    else:
+        if resource_count is not None:
+            raise ValidationError(
+                "Resource count should only be provided when the task type is 'resource'."
+            )
         if resource is not None:
             raise ValidationError(
-                "Resource details should only be provided when the task type is 'Resource'."
+                "Resource details should only be provided when the task type is 'resource'."
             )
+        final_mode = None
+        final_count = None
+        target_has_resource_row = False
+    else:
+        if new_mode is None:
+            raise ValidationError(
+                "Please choose a resource mode ('count' or 'details') for a Resource-type task."
+            )
+        if new_mode == RESOURCE_MODE_COUNT:
+            if new_count is None:
+                raise ValidationError("Resource count is required when resource mode is 'count'.")
+            if resource is not None:
+                raise ValidationError("Resource details should be omitted when resource mode is 'count'.")
+            final_mode = RESOURCE_MODE_COUNT
+            final_count = new_count
+            target_has_resource_row = False
+        else:
+            had_live_resource = repo.get_live_resource(task_id) is not None
+            if not had_live_resource and resource is None:
+                raise ValidationError(
+                    "Please provide the resource details when using resource mode 'details'."
+                )
+            # Reject only if the CALLER explicitly sent resource_count.
+            # A stale value inherited from prior 'count' mode is silently cleared.
+            if resource_count is not None:
+                raise ValidationError("Resource count should be omitted when resource mode is 'details'.")
+            final_mode = RESOURCE_MODE_DETAILS
+            final_count = None
+            target_has_resource_row = True
 
     if resource is not None:
         validate_resource_dates(
@@ -100,11 +144,15 @@ def update_task(
     if actual_start_date is not None: updates["actual_start_date"] = actual_start_date
     if actual_end_date is not None: updates["actual_end_date"] = actual_end_date
     if position is not None: updates["position"] = position
+    if final_mode != model.resource_mode or final_count != model.resource_count:
+        updates["resource_mode"] = final_mode
+        updates["resource_count"] = final_count
+
     if updates:
         repo.update(task_id, updates=updates, updated_by=current_user_id)
 
     resource_domain: Optional[TaskResource] = None
-    if new_type == TASK_TYPE_RESOURCE:
+    if target_has_resource_row:
         if resource is not None:
             resource_domain = repo.upsert_resource(
                 task_id=task_id, project_id=model.project_id, data=resource,
@@ -112,8 +160,8 @@ def update_task(
         else:
             resource_domain = repo.get_live_resource(task_id)
     else:
-        if old_type == TASK_TYPE_RESOURCE:
-            repo.soft_delete_live_resource(task_id)
+        repo.soft_delete_live_resource(task_id)
+        resource_domain = None
 
     db.commit()
     updated = repo.get_by_id(task_id)

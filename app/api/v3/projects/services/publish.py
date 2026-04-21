@@ -19,7 +19,7 @@ from .transitions import STATUS_PUBLISHED, assert_transition_allowed
 
 def publish_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     *,
     actor_id: Optional[int],
     actor_is_admin: bool,

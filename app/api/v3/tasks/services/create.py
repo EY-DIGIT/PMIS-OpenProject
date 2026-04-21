@@ -10,14 +10,19 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.activity import ActivityModel
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....domain.tasks.task import Task, TASK_TYPE_RESOURCE
+from .....domain.tasks.task import (
+    Task,
+    TASK_TYPE_RESOURCE,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 from .....domain.tasks.task_resource import TaskResource
 
 
 def create_task(
     db: Session,
     *,
-    activity_id: int,
+    activity_id: str,
     name: str,
     description: Optional[str],
     type: str,
@@ -26,6 +31,8 @@ def create_task(
     actual_start_date: Optional[datetime],
     actual_end_date: Optional[datetime],
     position: Optional[int],
+    resource_mode: Optional[str],
+    resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
 ) -> Tuple[Task, Optional[TaskResource]]:
@@ -56,15 +63,6 @@ def create_task(
         parent_label="activity",
     )
 
-    if type == TASK_TYPE_RESOURCE and resource is None:
-        raise ValidationError(
-            "Resource details are required when the task type is 'Resource'."
-        )
-    if type != TASK_TYPE_RESOURCE and resource is not None:
-        raise ValidationError(
-            "Resource details should only be provided when the task type is 'Resource'."
-        )
-
     if resource is not None:
         validate_resource_dates(
             onboard=resource.get("onboard_date"),
@@ -76,6 +74,11 @@ def create_task(
 
     repo = TaskRepository(db)
     pos = position if position is not None else repo.next_position(activity_id)
+
+    store_mode = resource_mode if type == TASK_TYPE_RESOURCE else None
+    store_count = resource_count if (
+        type == TASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
+    ) else None
 
     task = repo.create(
         project_id=activity.project_id,
@@ -89,11 +92,14 @@ def create_task(
         actual_end_date=actual_end_date,
         position=pos,
         created_by=current_user_id,
+        resource_mode=store_mode,
+        resource_count=store_count,
     )
     resource_domain = None
-    if resource is not None:
+    if type == TASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:
         resource_domain = repo.insert_resource(
             task_id=task.id, project_id=activity.project_id, data=resource,
         )
     db.commit()
-    return task, resource_domain
+    refreshed = repo.get_by_id(task.id)
+    return refreshed or task, resource_domain

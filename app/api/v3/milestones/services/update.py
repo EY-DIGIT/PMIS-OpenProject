@@ -15,7 +15,7 @@ from .....domain.milestones.milestone import Milestone
 def update_milestone(
     db: Session,
     *,
-    milestone_id: int,
+    milestone_id: str,
     name: Optional[str],
     description: Optional[str],
     start_date: Optional[datetime],

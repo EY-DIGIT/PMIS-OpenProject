@@ -16,7 +16,9 @@ from .permissions import (
     PROJECT_MEMBERS_UPDATE,
     PROJECT_MEMBERS_DELETE,
 )
+from ....core.errors import NotFoundError
 from ....core.middleware.rbac import require_permission, require_authenticated
+from ....infrastructure.db.repositories.project_repository import ProjectRepository
 from ....infrastructure.db.session import get_db
 
 # Create two routers: one for project-scoped routes, one for standalone membership routes
@@ -24,8 +26,14 @@ projects_router = APIRouter(prefix="/projects", tags=["project_members"])
 memberships_router = APIRouter(prefix="/memberships", tags=["project_members"])
 
 
+def _resolve_project_id(db: Session, project_uuid: str) -> str:
+    if not ProjectRepository(db).exists_by_id(project_uuid):
+        raise NotFoundError("The project could not be found.")
+    return project_uuid
+
+
 @projects_router.post(
-    "/{project_id}/memberships",
+    "/{project_uuid}/memberships",
     dependencies=[require_permission(PROJECT_MEMBERS_ADD)],
     summary="Add project member",
     description="Add a user to a project",
@@ -33,36 +41,30 @@ memberships_router = APIRouter(prefix="/memberships", tags=["project_members"])
 )
 def add_project_member(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: ProjectMemberAddRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Add a user to a project.
-
-    Requires: PROJECT_MEMBERS_ADD permission
-    """
+    """Add a user to a project."""
+    project_id = _resolve_project_id(db, project_uuid)
     return ProjectMembersController.add_member(request, project_id, data, db)
 
 
 @projects_router.get(
-    "/{project_id}/memberships",
+    "/{project_uuid}/memberships",
     dependencies=[require_permission(PROJECT_MEMBERS_READ)],
     summary="List project members",
     description="List members of a project with pagination"
 )
 def list_project_members(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    List members of a project.
-
-    Requires: PROJECT_MEMBERS_READ permission
-    """
+    """List members of a project."""
+    project_id = _resolve_project_id(db, project_uuid)
     query = ProjectMembersListQuery(offset=offset, pageSize=pageSize)
     return ProjectMembersController.list_members(request, project_id, query, db)
 

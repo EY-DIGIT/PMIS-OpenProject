@@ -1,4 +1,7 @@
-"""Update a subtask — same 4-path type-transition logic."""
+"""Update a subtask. Full type × resource-mode transition matrix.
+
+See activities/services/update.py for the canonical commentary.
+"""
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -10,14 +13,19 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....domain.subtasks.subtask import Subtask, SUBTASK_TYPE_RESOURCE
+from .....domain.subtasks.subtask import (
+    Subtask,
+    SUBTASK_TYPE_RESOURCE,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 from .....domain.subtasks.subtask_resource import SubtaskResource
 
 
 def update_subtask(
     db: Session,
     *,
-    subtask_id: int,
+    subtask_id: str,
     name: Optional[str],
     description: Optional[str],
     type: Optional[str],
@@ -26,6 +34,8 @@ def update_subtask(
     actual_start_date: Optional[datetime],
     actual_end_date: Optional[datetime],
     position: Optional[int],
+    resource_mode: Optional[str],
+    resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
@@ -66,20 +76,52 @@ def update_subtask(
         parent_label="task",
     )
 
-    old_type = model.type
-    new_type = type if type is not None else old_type
+    new_type = type if type is not None else model.type
+    new_mode = resource_mode if resource_mode is not None else model.resource_mode
+    new_count = resource_count if resource_count is not None else model.resource_count
 
-    if new_type == SUBTASK_TYPE_RESOURCE:
-        if old_type != SUBTASK_TYPE_RESOURCE and (resource is None or not resource.get("resource_name")):
+    if new_type != SUBTASK_TYPE_RESOURCE:
+        if resource_mode is not None:
             raise ValidationError(
-                "Please provide the resource details (including the resource name) "
-                "when changing the subtask type to 'Resource'."
+                "Resource mode should only be provided when the subtask type is 'resource'."
             )
-    else:
+        if resource_count is not None:
+            raise ValidationError(
+                "Resource count should only be provided when the subtask type is 'resource'."
+            )
         if resource is not None:
             raise ValidationError(
-                "Resource details should only be provided when the subtask type is 'Resource'."
+                "Resource details should only be provided when the subtask type is 'resource'."
             )
+        final_mode = None
+        final_count = None
+        target_has_resource_row = False
+    else:
+        if new_mode is None:
+            raise ValidationError(
+                "Please choose a resource mode ('count' or 'details') for a Resource-type subtask."
+            )
+        if new_mode == RESOURCE_MODE_COUNT:
+            if new_count is None:
+                raise ValidationError("Resource count is required when resource mode is 'count'.")
+            if resource is not None:
+                raise ValidationError("Resource details should be omitted when resource mode is 'count'.")
+            final_mode = RESOURCE_MODE_COUNT
+            final_count = new_count
+            target_has_resource_row = False
+        else:
+            had_live_resource = repo.get_live_resource(subtask_id) is not None
+            if not had_live_resource and resource is None:
+                raise ValidationError(
+                    "Please provide the resource details when using resource mode 'details'."
+                )
+            # Reject only if the CALLER explicitly sent resource_count.
+            # A stale value inherited from prior 'count' mode is silently cleared.
+            if resource_count is not None:
+                raise ValidationError("Resource count should be omitted when resource mode is 'details'.")
+            final_mode = RESOURCE_MODE_DETAILS
+            final_count = None
+            target_has_resource_row = True
 
     if resource is not None:
         validate_resource_dates(
@@ -99,11 +141,15 @@ def update_subtask(
     if actual_start_date is not None: updates["actual_start_date"] = actual_start_date
     if actual_end_date is not None: updates["actual_end_date"] = actual_end_date
     if position is not None: updates["position"] = position
+    if final_mode != model.resource_mode or final_count != model.resource_count:
+        updates["resource_mode"] = final_mode
+        updates["resource_count"] = final_count
+
     if updates:
         repo.update(subtask_id, updates=updates, updated_by=current_user_id)
 
     resource_domain: Optional[SubtaskResource] = None
-    if new_type == SUBTASK_TYPE_RESOURCE:
+    if target_has_resource_row:
         if resource is not None:
             resource_domain = repo.upsert_resource(
                 subtask_id=subtask_id, project_id=model.project_id, data=resource,
@@ -111,8 +157,8 @@ def update_subtask(
         else:
             resource_domain = repo.get_live_resource(subtask_id)
     else:
-        if old_type == SUBTASK_TYPE_RESOURCE:
-            repo.soft_delete_live_resource(subtask_id)
+        repo.soft_delete_live_resource(subtask_id)
+        resource_domain = None
 
     db.commit()
     updated = repo.get_by_id(subtask_id)

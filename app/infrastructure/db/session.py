@@ -97,16 +97,25 @@ def init_db() -> None:
                     res = conn.execute(text("PRAGMA table_info('projects')"))
                     project_cols = {r[1] for r in res.fetchall()}
 
+                    # projects.id is now a UUID (String(36)) and there is no
+                    # separate uuid column. Schema changes of this magnitude
+                    # (PK type change, FK type changes) cannot be applied
+                    # in-place on SQLite without a full table rebuild; for dev
+                    # we wipe pmis.db and let create_all() build fresh.
+                    #
+                    # The list below continues to add columns that predate
+                    # *other* migrations (for teammate's versioning/audit
+                    # work). All NEW additions tied to the UUID migration are
+                    # expressed in the SQLAlchemy models themselves.
                     project_column_ddl = [
                         ("actual_end_date",   "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
                         ("is_version",        "ALTER TABLE projects ADD COLUMN is_version BOOLEAN NOT NULL DEFAULT 0"),
-                        ("version_of",        "ALTER TABLE projects ADD COLUMN version_of INTEGER REFERENCES projects(id)"),
-                        ("baseline_id",       "ALTER TABLE projects ADD COLUMN baseline_id INTEGER REFERENCES projects(id)"),
                         ("version_no",        "ALTER TABLE projects ADD COLUMN version_no INTEGER"),
                         ("created_by",        "ALTER TABLE projects ADD COLUMN created_by INTEGER REFERENCES users(id)"),
                         ("updated_by",        "ALTER TABLE projects ADD COLUMN updated_by INTEGER REFERENCES users(id)"),
                         ("deleted_at",        "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
                         ("deleted_by",        "ALTER TABLE projects ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                        ("project_code",      "ALTER TABLE projects ADD COLUMN project_code VARCHAR(30)"),
                     ]
                     for col, ddl in project_column_ddl:
                         if col not in project_cols:
@@ -114,6 +123,15 @@ def init_db() -> None:
                                 conn.execute(text(ddl))
                             except Exception as e:
                                 logging.warning("Failed to add projects.%s: %s", col, e)
+
+                    # Unique index for project_code (safe on re-run).
+                    try:
+                        conn.execute(text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_project_code "
+                            "ON projects(project_code)"
+                        ))
+                    except Exception as e:
+                        logging.warning("Failed to create idx_projects_project_code: %s", e)
 
                     # Partial unique index enforcing "one active version per baseline".
                     # Active = is_version AND status != 'suspended' AND not soft-deleted.
@@ -128,6 +146,53 @@ def init_db() -> None:
                         logging.warning("Failed to create ux_projects_active_version_per_baseline: %s", e)
                 except Exception:
                     pass
+
+                # activities / tasks / subtasks: add resource_mode + resource_count
+                # columns on databases created before these columns existed. One-time
+                # backfill: existing type='resource' rows with a live resource row are
+                # assumed to be 'details' mode.
+                #
+                # Mapping: (main_table, resource_table, fk_column_in_resource_table)
+                for main_table, resource_table, fk_col in (
+                    ("activities", "activity_resources", "activity_id"),
+                    ("tasks",      "task_resources",     "task_id"),
+                    ("subtasks",   "subtask_resources",  "subtask_id"),
+                ):
+                    try:
+                        res = conn.execute(text(f"PRAGMA table_info('{main_table}')"))
+                        cols = {r[1] for r in res.fetchall()}
+                    except Exception:
+                        # Main table does not yet exist (first boot); create_all
+                        # will make it and the columns will be present already.
+                        continue
+
+                    ddl = [
+                        ("resource_mode",  f"ALTER TABLE {main_table} ADD COLUMN resource_mode VARCHAR(10)"),
+                        ("resource_count", f"ALTER TABLE {main_table} ADD COLUMN resource_count INTEGER"),
+                    ]
+                    for col, stmt in ddl:
+                        if col not in cols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add %s.%s: %s", main_table, col, e)
+
+                    # Backfill: any legacy type='resource' row that still has a
+                    # live entry in its resource_table must be 'details' mode.
+                    # Leaves resource_mode=NULL on any non-resource rows (correct).
+                    try:
+                        conn.execute(text(f"""
+                            UPDATE {main_table}
+                               SET resource_mode = 'details'
+                             WHERE type = 'resource'
+                               AND resource_mode IS NULL
+                               AND id IN (
+                                   SELECT {fk_col} FROM {resource_table}
+                                    WHERE deleted_at IS NULL
+                               )
+                        """))
+                    except Exception as e:
+                        logging.warning("Failed to backfill %s.resource_mode: %s", main_table, e)
     except Exception:
         # Non-fatal: do not prevent application start on unexpected errors
         pass

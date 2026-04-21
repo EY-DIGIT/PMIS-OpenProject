@@ -8,7 +8,7 @@ from .....domain.activities.activity_resource import ActivityResource
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
 
 
-def get_activity(db: Session, activity_id: int, include_deleted: bool = False) -> Activity:
+def get_activity(db: Session, activity_id: str, include_deleted: bool = False) -> Activity:
     a = ActivityRepository(db).get_by_id(activity_id, include_deleted=include_deleted)
     if a is None:
         raise NotFoundError("The activity could not be found.")
@@ -16,7 +16,7 @@ def get_activity(db: Session, activity_id: int, include_deleted: bool = False) -
 
 
 def get_activity_with_resource(
-    db: Session, activity_id: int, include_deleted: bool = False,
+    db: Session, activity_id: str, include_deleted: bool = False,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     repo = ActivityRepository(db)
     a = repo.get_by_id(activity_id, include_deleted=include_deleted)

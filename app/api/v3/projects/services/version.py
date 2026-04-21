@@ -3,11 +3,10 @@ Create a new version of a published baseline project.
 
 Transactional:
   1. Validate source is a published baseline and has no active version.
-  2. Insert clone row (is_version=true, version_of=source.id, status='new').
+  2. Insert clone row (is_version=true, version_of=source.id, status='new',
+     fresh uuid + fresh project_code).
   3. Deep-clone the M/A/T/S subtree via the milestones contributor's hook.
   4. Commit.
-
-Identifier pattern: ``{source.identifier}-v{version_no}`` (e.g. prj001-v1).
 """
 from typing import Optional
 
@@ -24,15 +23,15 @@ from .transitions import STATUS_NEW, STATUS_PUBLISHED
 
 def create_version(
     db: Session,
-    source_identifier: str,
+    source_id: str,
     *,
     actor_id: Optional[int],
 ) -> ServiceResult[Project]:
     repo = ProjectRepository(db)
-    source = repo.get_by_identifier(source_identifier)
+    source = repo.get_by_id(source_id)
     if source is None:
         return ServiceResult.fail(
-            error=f"Project with identifier '{source_identifier}' not found",
+            error="Source project not found.",
             error_type="not_found",
         )
 
@@ -68,11 +67,11 @@ def create_version(
         )
 
     version_no = repo.next_version_no(source.id)
-    target_identifier = f"{source.identifier}-v{version_no}"
 
     try:
+        # The version row gets its own fresh uuid + project_code — generated
+        # by the repository (no inputs needed). Data fields cloned from source.
         target = repo.create(
-            identifier=target_identifier,
             name=source.name,
             description=source.description,
             active=source.active,
@@ -109,7 +108,8 @@ def create_version(
             after={
                 **project_snapshot(target),
                 "source_project_id": source.id,
-                "source_identifier": source.identifier,
+                "source_id": source.id,
+                "source_project_code": source.project_code,
             },
         )
 

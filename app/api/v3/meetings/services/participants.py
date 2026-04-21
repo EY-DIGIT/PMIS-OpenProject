@@ -14,7 +14,7 @@ def add_participant(
     db: Session,
     meeting_id: int,
     user_id: int,
-    project_id: int,
+    project_id: str,
 ) -> ServiceResult[MeetingParticipant]:
     """
     Add a participant to a meeting.

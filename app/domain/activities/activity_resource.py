@@ -13,9 +13,9 @@ class ActivityResource:
     1-to-1 with Activity via activity_id (live rows only; a partial unique
     index on activity_id WHERE deleted_at IS NULL enforces this).
     """
-    id: int
-    activity_id: int
-    project_id: int
+    id: str
+    activity_id: str
+    project_id: str
     resource_name: str
     onboard_date: Optional[datetime]
     actual_onboard_date: Optional[datetime]

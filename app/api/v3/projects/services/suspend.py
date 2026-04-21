@@ -17,7 +17,7 @@ from .transitions import STATUS_SUSPENDED, assert_transition_allowed
 
 def suspend_version(
     db: Session,
-    project_id: int,
+    project_id: str,
     *,
     actor_id: Optional[int],
     actor_is_admin: bool,

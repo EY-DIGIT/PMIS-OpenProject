@@ -3,16 +3,21 @@ Project repository for database operations.
 
 Writes (create/update/soft_delete/hard_delete) do NOT commit. Callers own the
 transaction boundary and must call ``db.commit()`` after the full operation
-succeeds — this lets multi-step flows (version create + subtree clone, project
-delete + subtree cascade) run atomically.
+succeeds.
+
+IDs are UUID strings (String(36)). projects.id IS the UUID — there is no
+separate uuid column.
 """
 from typing import Optional, List, Tuple
 from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
 from ..models.project import ProjectModel
 from ....domain.projects.project import Project
+from ....shared.project_code import generate_project_code
 
 
 def _utcnow() -> datetime:
@@ -44,7 +49,7 @@ class ProjectRepository:
     def _to_domain(self, model: ProjectModel) -> Project:
         return Project(
             id=model.id,
-            identifier=model.identifier,
+            project_code=model.project_code,
             name=model.name,
             description=model.description,
             active=model.active,
@@ -70,19 +75,18 @@ class ProjectRepository:
         )
 
     # ------------------------------------------------------------------
-    # writes — no commit; caller owns transaction boundary
+    # writes — no commit except in upsert; caller owns transaction boundary
     # ------------------------------------------------------------------
 
     def create(
         self,
         *,
-        identifier: str,
         name: str,
         description: Optional[str] = None,
         active: bool = True,
         public: bool = False,
         status_explanation: Optional[str] = None,
-        parent_id: Optional[int] = None,
+        parent_id: Optional[str] = None,
         status: str = "new",
         owner: Optional[str] = None,
         category: Optional[str] = None,
@@ -90,13 +94,25 @@ class ProjectRepository:
         end_date: Optional[datetime] = None,
         actual_end_date: Optional[datetime] = None,
         is_version: bool = False,
-        version_of: Optional[int] = None,
-        baseline_id: Optional[int] = None,
+        version_of: Optional[str] = None,
+        baseline_id: Optional[str] = None,
         version_no: Optional[int] = None,
         created_by: Optional[int] = None,
+        # Caller may inject a pre-computed id (e.g. from the URL path of a
+        # PUT upsert call). If omitted, a fresh uuid4 is generated.
+        id: Optional[str] = None,
+        # Caller may inject a pre-computed project_code (rare). If omitted,
+        # a unique one is generated at IST-seconds precision.
+        project_code: Optional[str] = None,
     ) -> Project:
+        if id is None:
+            id = str(uuid4())
+        if project_code is None:
+            project_code = generate_project_code(self.db)
+
         model = ProjectModel(
-            identifier=identifier,
+            id=id,
+            project_code=project_code,
             name=name,
             description=description,
             active=active,
@@ -120,15 +136,16 @@ class ProjectRepository:
         self.db.flush()
         return self._to_domain(model)
 
-    def upsert_by_identifier(
+    def upsert_by_id(
         self,
-        identifier: str,
+        id: str,
+        *,
         name: str,
         description: Optional[str] = None,
         active: bool = True,
         public: bool = False,
         status_explanation: Optional[str] = None,
-        parent_id: Optional[int] = None,
+        parent_id: Optional[str] = None,
         status: str = "new",
         owner: Optional[str] = None,
         category: Optional[str] = None,
@@ -136,24 +153,34 @@ class ProjectRepository:
         end_date: Optional[datetime] = None,
     ) -> Tuple[Project, bool]:
         """
-        Insert a project if no row with this identifier exists, otherwise
-        update the existing row. Atomic via INSERT ... ON CONFLICT (identifier)
-        DO UPDATE (SQLite 3.24+ / Postgres 9.5+).
+        Insert a project if no row with this id exists; otherwise update the
+        existing row. Atomic via INSERT ... ON CONFLICT (id) DO UPDATE.
 
-        identifier and created_at are never overwritten; updated_at is bumped.
+        Generates a project_code on insert; never overwrites it on update.
+        id, project_code, and created_at are never overwritten; updated_at
+        is bumped.
 
         Returns:
             (project, created) — created=True on fresh insert, False on update.
 
-        Unlike the other writes, this method commits on success to preserve
-        the atomicity of the ON CONFLICT semantics that the wizard flow relies
-        on. Callers should not wrap it in their own transaction.
+        Commits on success (unlike other writes) to preserve ON CONFLICT
+        atomicity the wizard flow depends on.
         """
         insert_fn = _dialect_insert(self.db)
         now = _utcnow()
 
+        existing = (
+            self.db.query(ProjectModel.id)
+            .filter(ProjectModel.id == id)
+            .first()
+        )
+        existed_before = existing is not None
+
+        new_project_code = None if existed_before else generate_project_code(self.db)
+
         values = dict(
-            identifier=identifier,
+            id=id,
+            project_code=new_project_code or "__placeholder__",
             name=name,
             description=description,
             active=active,
@@ -170,7 +197,7 @@ class ProjectRepository:
         )
         stmt = insert_fn(ProjectModel).values(**values)
         stmt = stmt.on_conflict_do_update(
-            index_elements=["identifier"],
+            index_elements=["id"],
             set_={
                 "name": stmt.excluded.name,
                 "description": stmt.excluded.description,
@@ -184,16 +211,8 @@ class ProjectRepository:
                 "start_date": stmt.excluded.start_date,
                 "end_date": stmt.excluded.end_date,
                 "updated_at": now,
-                # identifier and created_at intentionally preserved.
+                # id, project_code, created_at intentionally preserved.
             },
-        )
-
-        # Detect insert vs. update portably by probing before the statement.
-        existed_before = (
-            self.db.query(ProjectModel.id)
-            .filter(ProjectModel.identifier == identifier)
-            .first()
-            is not None
         )
 
         self.db.execute(stmt)
@@ -201,14 +220,14 @@ class ProjectRepository:
 
         model = (
             self.db.query(ProjectModel)
-            .filter(ProjectModel.identifier == identifier)
+            .filter(ProjectModel.id == id)
             .first()
         )
         return self._to_domain(model), (not existed_before)
 
     def update(
         self,
-        project_id: int,
+        project_id: str,
         *,
         updated_by: Optional[int] = None,
         include_deleted: bool = False,
@@ -222,7 +241,11 @@ class ProjectRepository:
         if not model:
             return None
 
+        # Immutable fields are never accepted via update().
+        _IMMUTABLE = {"id", "project_code", "created_at", "created_by"}
         for attr, value in fields.items():
+            if attr in _IMMUTABLE:
+                continue
             if value is None:
                 continue
             if hasattr(model, attr):
@@ -236,7 +259,7 @@ class ProjectRepository:
 
     def soft_delete(
         self,
-        project_id: int,
+        project_id: str,
         actor_id: Optional[int],
         when: Optional[datetime] = None,
     ) -> Optional[Project]:
@@ -254,7 +277,7 @@ class ProjectRepository:
             self.db.flush()
         return self._to_domain(model)
 
-    def hard_delete(self, project_id: int) -> bool:
+    def hard_delete(self, project_id: str) -> bool:
         """Remove a row. Reserved for tests or admin cleanup — prefer soft_delete."""
         model = (
             self.db.query(ProjectModel)
@@ -277,14 +300,14 @@ class ProjectRepository:
             q = q.filter(ProjectModel.deleted_at.is_(None))
         return q
 
-    def get_by_id(self, project_id: int, include_deleted: bool = False) -> Optional[Project]:
+    def get_by_id(self, project_id: str, include_deleted: bool = False) -> Optional[Project]:
         model = self._base_query(include_deleted).filter(ProjectModel.id == project_id).first()
         return self._to_domain(model) if model else None
 
-    def get_by_identifier(self, identifier: str, include_deleted: bool = False) -> Optional[Project]:
+    def get_by_project_code(self, project_code: str, include_deleted: bool = False) -> Optional[Project]:
         model = (
             self._base_query(include_deleted)
-            .filter(ProjectModel.identifier == identifier)
+            .filter(ProjectModel.project_code == project_code)
             .first()
         )
         return self._to_domain(model) if model else None
@@ -307,17 +330,7 @@ class ProjectRepository:
         models = q.offset(offset).limit(limit).all()
         return [self._to_domain(m) for m in models], total
 
-    # Existence checks deliberately ignore soft-delete: identifiers should not
-    # be reusable while a deleted row still occupies them.
-    def exists_by_identifier(self, identifier: str) -> bool:
-        return (
-            self.db.query(ProjectModel.id)
-            .filter(ProjectModel.identifier == identifier)
-            .first()
-            is not None
-        )
-
-    def exists_by_id(self, project_id: int) -> bool:
+    def exists_by_id(self, project_id: str) -> bool:
         return (
             self.db.query(ProjectModel.id)
             .filter(ProjectModel.id == project_id)
@@ -329,7 +342,7 @@ class ProjectRepository:
     # version helpers
     # ------------------------------------------------------------------
 
-    def active_version_exists(self, baseline_id: int) -> bool:
+    def active_version_exists(self, baseline_id: str) -> bool:
         """Any version of ``baseline_id`` that is not suspended or deleted."""
         return (
             self.db.query(ProjectModel.id)
@@ -345,7 +358,7 @@ class ProjectRepository:
             is not None
         )
 
-    def next_version_no(self, baseline_id: int) -> int:
+    def next_version_no(self, baseline_id: str) -> int:
         """Next sequential version number for a baseline (1-indexed)."""
         max_no = (
             self.db.query(func.max(ProjectModel.version_no))
@@ -353,30 +366,3 @@ class ProjectRepository:
             .scalar()
         )
         return (max_no or 0) + 1
-
-    # ------------------------------------------------------------------
-    # identifier generation
-    # ------------------------------------------------------------------
-
-    _DEFAULT_IDENTIFIER_PREFIX = "prj"
-
-    def generate_next_identifier(self, prefix: str = _DEFAULT_IDENTIFIER_PREFIX) -> str:
-        """
-        Allocate the next sequential identifier ``{prefix}{n:03d}`` for a new
-        non-version project. Scans existing identifiers to find the highest
-        integer suffix for the prefix and returns prefix + (max + 1).
-        """
-        rows = (
-            self.db.query(ProjectModel.identifier)
-            .filter(ProjectModel.identifier.like(f"{prefix}%"))
-            .all()
-        )
-        max_n = 0
-        prefix_len = len(prefix)
-        for (ident,) in rows:
-            tail = ident[prefix_len:]
-            if tail.isdigit():
-                n = int(tail)
-                if n > max_n:
-                    max_n = n
-        return f"{prefix}{max_n + 1:03d}"

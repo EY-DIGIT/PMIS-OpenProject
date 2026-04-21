@@ -16,7 +16,7 @@ class Meeting:
     """
 
     id: int
-    project_id: int
+    project_id: str
     title: str
     description: Optional[str]
     scheduled_at: datetime

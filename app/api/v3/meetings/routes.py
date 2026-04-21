@@ -19,16 +19,25 @@ from .permissions import (
     MEETINGS_UPDATE,
     MEETINGS_DELETE,
 )
+from ....core.errors import NotFoundError
 from ....core.middleware.rbac import require_permission
+from ....infrastructure.db.repositories.project_repository import ProjectRepository
 from ....infrastructure.db.session import get_db
 
 # Create two routers: one for project-scoped routes, one for standalone meeting routes
 projects_router = APIRouter(prefix="/projects", tags=["meetings"])
 meetings_router = APIRouter(prefix="/meetings", tags=["meetings"])
 
+
+def _resolve_project_id(db: Session, project_uuid: str) -> str:
+    if not ProjectRepository(db).exists_by_id(project_uuid):
+        raise NotFoundError("The project could not be found.")
+    return project_uuid
+
+
 # Project-scoped meeting endpoints
 @projects_router.post(
-    "/{project_id}/meetings",
+    "/{project_uuid}/meetings",
     dependencies=[require_permission(MEETINGS_CREATE)],
     summary="Create meeting",
     description="Create a new meeting in a project",
@@ -36,20 +45,17 @@ meetings_router = APIRouter(prefix="/meetings", tags=["meetings"])
 )
 def create_meeting(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: MeetingCreateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Create a new meeting in a project.
-
-    Requires: MEETINGS_CREATE permission
-    """
+    """Create a new meeting in a project."""
+    project_id = _resolve_project_id(db, project_uuid)
     return MeetingController.create_meeting(request, project_id, data, db)
 
 
 @projects_router.get(
-    "/{project_id}/meetings",
+    "/{project_uuid}/meetings",
     dependencies=[require_permission(MEETINGS_VIEW)],
     summary="List meetings",
     description="List meetings in a project",
@@ -57,16 +63,13 @@ def create_meeting(
 )
 def list_meetings(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    List meetings in a project.
-
-    Requires: MEETINGS_VIEW permission
-    """
+    """List meetings in a project."""
+    project_id = _resolve_project_id(db, project_uuid)
     query = MeetingListQuery(offset=offset, pageSize=pageSize)
     return MeetingController.list_meetings(request, project_id, query, db)
 

@@ -57,8 +57,8 @@ class TestMilestoneCreation:
 class TestActivityCreation:
     """Activities are children of milestones, also with required dates."""
 
-    def _create_milestone(self, client, project_id, headers):
-        resp = client.post(f"/api/v3/projects/{project_id}/work_packages", json={
+    def _create_milestone(self, client, project_uuid, headers):
+        resp = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
             "subject": "Milestone",
             "startDate": _future(10),
             "endDate": _future(90),
@@ -100,15 +100,15 @@ class TestActivityCreation:
 class TestTaskCreation:
     """Tasks are children of activities or other tasks, unlimited nesting."""
 
-    def _create_milestone_and_activity(self, client, project_id, headers):
-        ms = client.post(f"/api/v3/projects/{project_id}/work_packages", json={
+    def _create_milestone_and_activity(self, client, project_uuid, headers):
+        ms = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
             "subject": "Milestone",
             "startDate": _future(10),
             "endDate": _future(90),
         }, headers=headers)
         ms_id = ms.json()["data"]["id"]
 
-        act = client.post(f"/api/v3/projects/{project_id}/work_packages", json={
+        act = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
             "subject": "Activity",
             "parentId": ms_id,
             "startDate": _future(15),

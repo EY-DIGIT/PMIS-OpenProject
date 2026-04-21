@@ -12,7 +12,7 @@ from .....shared.service_result import ServiceResult
 
 def list_project_members(
     db: Session,
-    project_id: int,
+    project_id: str,
     page: int = 1,
     page_size: int = 20,
 ) -> ServiceResult[Tuple[List[Membership], int]]:

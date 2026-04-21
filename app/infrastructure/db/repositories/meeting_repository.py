@@ -45,7 +45,7 @@ class MeetingRepository:
 
     def create(
         self,
-        project_id: int,
+        project_id: str,
         title: str,
         scheduled_at,
         created_by_id: int,
@@ -97,7 +97,7 @@ class MeetingRepository:
         model = self.db.query(MeetingModel).filter(MeetingModel.id == meeting_id).first()
         return self._to_domain(model) if model else None
 
-    def list_by_project(self, project_id: int, offset: int = 0, limit: int = 20) -> Tuple[List[Meeting], int]:
+    def list_by_project(self, project_id: str, offset: int = 0, limit: int = 20) -> Tuple[List[Meeting], int]:
         """
         List meetings by project with pagination.
 
@@ -132,7 +132,7 @@ class MeetingRepository:
             self.db.query(MeetingModel).filter(MeetingModel.id == meeting_id).exists()
         ).scalar()
 
-    def exists_in_project(self, meeting_id: int, project_id: int) -> bool:
+    def exists_in_project(self, meeting_id: int, project_id: str) -> bool:
         """
         Check if meeting exists in project.
 

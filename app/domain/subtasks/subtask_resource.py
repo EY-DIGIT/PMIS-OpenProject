@@ -8,9 +8,9 @@ from typing import Optional
 @dataclass
 class SubtaskResource:
     """1-to-1 with Subtask via subtask_id (live rows only)."""
-    id: int
-    subtask_id: int
-    project_id: int
+    id: str
+    subtask_id: str
+    project_id: str
     resource_name: str
     onboard_date: Optional[datetime]
     actual_onboard_date: Optional[datetime]

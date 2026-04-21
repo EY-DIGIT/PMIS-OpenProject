@@ -7,7 +7,7 @@ from .....core.project_lock import assert_project_editable
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
 
 
-def delete_activity(db: Session, *, activity_id: int, current_user_id: Optional[int]) -> None:
+def delete_activity(db: Session, *, activity_id: str, current_user_id: Optional[int]) -> None:
     repo = ActivityRepository(db)
     model = repo.get_model(activity_id)
     if model is None:

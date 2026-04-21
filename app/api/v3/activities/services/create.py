@@ -10,14 +10,19 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....domain.activities.activity import Activity, ACTIVITY_TYPE_RESOURCE
+from .....domain.activities.activity import (
+    Activity,
+    ACTIVITY_TYPE_RESOURCE,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 from .....domain.activities.activity_resource import ActivityResource
 
 
 def create_activity(
     db: Session,
     *,
-    milestone_id: int,
+    milestone_id: str,
     name: str,
     description: Optional[str],
     type: str,
@@ -26,6 +31,8 @@ def create_activity(
     actual_start_date: Optional[datetime],
     actual_end_date: Optional[datetime],
     position: Optional[int],
+    resource_mode: Optional[str],
+    resource_count: Optional[int],
     resource: Optional[dict],
     current_user_id: Optional[int],
 ) -> Tuple[Activity, Optional[ActivityResource]]:
@@ -56,15 +63,9 @@ def create_activity(
         parent_label="milestone",
     )
 
-    if type == ACTIVITY_TYPE_RESOURCE and resource is None:
-        raise ValidationError(
-            "Resource details are required when the activity type is 'Resource'."
-        )
-    if type != ACTIVITY_TYPE_RESOURCE and resource is not None:
-        raise ValidationError(
-            "Resource details should only be provided when the activity type is 'Resource'."
-        )
-
+    # Pydantic model_validator already enforced the (type, mode, count, resource)
+    # invariants on the create request. Re-check the "if resource block is
+    # present, its dates are sane" rule against the project floor.
     if resource is not None:
         validate_resource_dates(
             onboard=resource.get("onboard_date"),
@@ -76,6 +77,12 @@ def create_activity(
 
     repo = ActivityRepository(db)
     pos = position if position is not None else repo.next_position(milestone_id)
+
+    # Normalize: for non-resource activities, mode + count must be NULL.
+    store_mode = resource_mode if type == ACTIVITY_TYPE_RESOURCE else None
+    store_count = resource_count if (
+        type == ACTIVITY_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
+    ) else None
 
     activity = repo.create(
         project_id=milestone.project_id,
@@ -89,10 +96,13 @@ def create_activity(
         actual_end_date=actual_end_date,
         position=pos,
         created_by=current_user_id,
+        resource_mode=store_mode,
+        resource_count=store_count,
     )
 
     resource_domain = None
-    if resource is not None:
+    # Only create a resource row when we are in details mode.
+    if type == ACTIVITY_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:
         resource_domain = repo.insert_resource(
             activity_id=activity.id,
             project_id=milestone.project_id,
@@ -100,4 +110,6 @@ def create_activity(
         )
 
     db.commit()
-    return activity, resource_domain
+    # Re-read so the returned domain model has the freshly-written mode/count.
+    refreshed = repo.get_by_id(activity.id)
+    return refreshed or activity, resource_domain

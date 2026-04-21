@@ -1,5 +1,7 @@
 """Milestone SQLAlchemy model."""
 from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Index,
 )
@@ -14,8 +16,12 @@ class MilestoneModel(Base):
     """Milestones under a project. No type, no actual_* dates."""
     __tablename__ = "milestones"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    # UUID primary key.
+    id = Column(
+        String(36), primary_key=True, index=True,
+        default=lambda: str(uuid4()),
+    )
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
 
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
@@ -37,4 +43,4 @@ class MilestoneModel(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<MilestoneModel(id={self.id}, project_id={self.project_id}, name='{self.name}')>"
+        return f"<MilestoneModel(id='{self.id}', project_id='{self.project_id}', name='{self.name}')>"

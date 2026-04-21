@@ -11,7 +11,7 @@ from .....shared.service_result import ServiceResult
 
 def list_work_packages_by_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     offset: int = 1,
     limit: int = 20,
     parent_id: int = None,

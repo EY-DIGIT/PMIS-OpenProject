@@ -54,6 +54,8 @@ def format_task_response(
         "actualStartDate": t["actual_start_date"],
         "actualEndDate": t["actual_end_date"],
         "position": t["position"],
+        "resourceMode": t.get("resource_mode"),
+        "resourceCount": t.get("resource_count"),
         "createdAt": t["created_at"],
         "updatedAt": t["updated_at"],
         "createdBy": t["created_by"],
@@ -65,7 +67,7 @@ def format_task_response(
 
 class TaskController:
     @staticmethod
-    def create(request: Request, activity_id: int, data: TaskCreateRequest, db: Session) -> JSONResponse:
+    def create(request: Request, activity_id: str, data: TaskCreateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         rd = data.resource.model_dump() if data.resource else None
         t, r = create_task(
@@ -74,12 +76,14 @@ class TaskController:
             name=data.name, description=data.description, type=data.type,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position, resource=rd, current_user_id=cuid,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
         )
         return BaseController.created(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def list(request: Request, activity_id: int, query: TaskListQuery, db: Session) -> JSONResponse:
+    def list(request: Request, activity_id: str, query: TaskListQuery, db: Session) -> JSONResponse:
         paged = list_tasks(db, activity_id=activity_id, page=query.offset, page_size=query.pageSize, include_deleted=query.includeDeleted)
         items = [format_task_response(t.to_dict(), None) for t in paged.items]
         payload = {
@@ -92,12 +96,12 @@ class TaskController:
         return BaseController.ok(data=payload)
 
     @staticmethod
-    def get(request: Request, task_id: int, db: Session) -> JSONResponse:
+    def get(request: Request, task_id: str, db: Session) -> JSONResponse:
         t, r = get_task_with_resource(db, task_id)
         return BaseController.ok(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def update(request: Request, task_id: int, data: TaskUpdateRequest, db: Session) -> JSONResponse:
+    def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         rd = data.resource.model_dump() if data.resource else None
         t, r = update_task(
@@ -106,18 +110,20 @@ class TaskController:
             name=data.name, description=data.description, type=data.type,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position, resource=rd, current_user_id=cuid,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
         )
         return BaseController.ok(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def delete(request: Request, task_id: int, db: Session) -> JSONResponse:
+    def delete(request: Request, task_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         delete_task(db, task_id=task_id, current_user_id=cuid)
         return BaseController.no_content()
 
     @staticmethod
-    def restore(request: Request, task_id: int, db: Session) -> JSONResponse:
+    def restore(request: Request, task_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         t = restore_task(db, task_id=task_id, current_user_id=cuid)
         return BaseController.ok(data=format_task_response(t.to_dict()))

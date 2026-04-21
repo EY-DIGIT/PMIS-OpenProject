@@ -16,7 +16,7 @@ from .transitions import STATUS_CLOSED, assert_transition_allowed
 
 def close_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     *,
     actor_id: Optional[int],
     actor_is_admin: bool,

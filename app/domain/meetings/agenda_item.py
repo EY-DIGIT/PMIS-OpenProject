@@ -18,7 +18,7 @@ class AgendaItem:
 
     id: int
     meeting_id: int
-    project_id: int
+    project_id: str
     title: str
     description: Optional[str]
     position: int

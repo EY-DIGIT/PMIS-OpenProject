@@ -8,7 +8,7 @@ from .....domain.tasks.task_resource import TaskResource
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 
 
-def get_task(db: Session, task_id: int, include_deleted: bool = False) -> Task:
+def get_task(db: Session, task_id: str, include_deleted: bool = False) -> Task:
     t = TaskRepository(db).get_by_id(task_id, include_deleted=include_deleted)
     if t is None:
         raise NotFoundError("The task could not be found.")
@@ -16,7 +16,7 @@ def get_task(db: Session, task_id: int, include_deleted: bool = False) -> Task:
 
 
 def get_task_with_resource(
-    db: Session, task_id: int, include_deleted: bool = False,
+    db: Session, task_id: str, include_deleted: bool = False,
 ) -> Tuple[Task, Optional[TaskResource]]:
     repo = TaskRepository(db)
     t = repo.get_by_id(task_id, include_deleted=include_deleted)

@@ -16,7 +16,7 @@ class Membership:
     """
 
     id: int
-    project_id: int
+    project_id: str
     user_id: int
     roles: List[str]
     created_at: datetime

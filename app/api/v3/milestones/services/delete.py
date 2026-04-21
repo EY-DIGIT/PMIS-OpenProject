@@ -7,7 +7,7 @@ from .....core.project_lock import assert_project_editable
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 
 
-def delete_milestone(db: Session, *, milestone_id: int, current_user_id: Optional[int]) -> None:
+def delete_milestone(db: Session, *, milestone_id: str, current_user_id: Optional[int]) -> None:
     repo = MilestoneRepository(db)
     model = repo.get_model(milestone_id)
     if model is None:

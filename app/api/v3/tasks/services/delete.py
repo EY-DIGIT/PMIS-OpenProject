@@ -7,7 +7,7 @@ from .....core.project_lock import assert_project_editable
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 
 
-def delete_task(db: Session, *, task_id: int, current_user_id: Optional[int]) -> None:
+def delete_task(db: Session, *, task_id: str, current_user_id: Optional[int]) -> None:
     repo = TaskRepository(db)
     model = repo.get_model(task_id)
     if model is None:

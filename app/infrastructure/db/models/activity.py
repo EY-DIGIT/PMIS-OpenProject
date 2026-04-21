@@ -1,5 +1,7 @@
 """Activity SQLAlchemy model."""
 from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
 )
@@ -14,16 +16,17 @@ class ActivityModel(Base):
     """Activities under a milestone. Has type + optional actual dates."""
     __tablename__ = "activities"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(
+        String(36), primary_key=True, index=True,
+        default=lambda: str(uuid4()),
+    )
     # Denormalized project_id for cheap "everything under project X" queries.
-    # Service layer guarantees it matches milestone.project_id on every write.
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
-    milestone_id = Column(Integer, ForeignKey("milestones.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
+    milestone_id = Column(String(36), ForeignKey("milestones.id"), nullable=False, index=True)
 
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
 
-    # type is enforced in the schema layer + CHECK constraint for belt-and-suspenders.
     type = Column(String(20), nullable=False)
 
     start_date = Column(DateTime, nullable=False)
@@ -32,6 +35,10 @@ class ActivityModel(Base):
     actual_end_date = Column(DateTime, nullable=True)
 
     position = Column(Integer, nullable=False, default=0)
+
+    # Resource-type flavor.
+    resource_mode = Column(String(10), nullable=True)
+    resource_count = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
@@ -44,10 +51,18 @@ class ActivityModel(Base):
             "type IN ('standard', 'resource', 'transactional')",
             name="ck_activities_type",
         ),
+        CheckConstraint(
+            "resource_mode IS NULL OR resource_mode IN ('count', 'details')",
+            name="ck_activities_resource_mode",
+        ),
+        CheckConstraint(
+            "resource_count IS NULL OR resource_count >= 1",
+            name="ck_activities_resource_count_positive",
+        ),
         Index("idx_activities_milestone_live", "milestone_id", "deleted_at"),
         Index("idx_activities_milestone_position", "milestone_id", "position"),
         Index("idx_activities_project_live", "project_id", "deleted_at"),
     )
 
     def __repr__(self) -> str:
-        return f"<ActivityModel(id={self.id}, milestone_id={self.milestone_id}, name='{self.name}', type='{self.type}')>"
+        return f"<ActivityModel(id='{self.id}', milestone_id='{self.milestone_id}', name='{self.name}', type='{self.type}')>"

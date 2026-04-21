@@ -34,6 +34,8 @@ class ActivityRepository:
             actual_start_date=a.actual_start_date,
             actual_end_date=a.actual_end_date,
             position=a.position,
+            resource_mode=a.resource_mode,
+            resource_count=a.resource_count,
             created_at=a.created_at,
             updated_at=a.updated_at,
             created_by=a.created_by,
@@ -63,21 +65,21 @@ class ActivityRepository:
 
     # ---------- reads ----------
 
-    def get_by_id(self, activity_id: int, include_deleted: bool = False) -> Optional[Activity]:
+    def get_by_id(self, activity_id: str, include_deleted: bool = False) -> Optional[Activity]:
         q = self.db.query(ActivityModel).filter(ActivityModel.id == activity_id)
         if not include_deleted:
             q = q.filter(ActivityModel.deleted_at.is_(None))
         row = q.first()
         return self._to_domain(row) if row else None
 
-    def get_model(self, activity_id: int, include_deleted: bool = False) -> Optional[ActivityModel]:
+    def get_model(self, activity_id: str, include_deleted: bool = False) -> Optional[ActivityModel]:
         q = self.db.query(ActivityModel).filter(ActivityModel.id == activity_id)
         if not include_deleted:
             q = q.filter(ActivityModel.deleted_at.is_(None))
         return q.first()
 
     def list_by_milestone(
-        self, milestone_id: int, offset: int = 0, limit: int = 20,
+        self, milestone_id: str, offset: int = 0, limit: int = 20,
         include_deleted: bool = False,
     ) -> Tuple[List[Activity], int]:
         base = self.db.query(ActivityModel).filter(ActivityModel.milestone_id == milestone_id)
@@ -90,7 +92,7 @@ class ActivityRepository:
         )
         return [self._to_domain(r) for r in rows], total
 
-    def next_position(self, milestone_id: int) -> int:
+    def next_position(self, milestone_id: str) -> int:
         cur = (
             self.db.query(func.max(ActivityModel.position))
             .filter(ActivityModel.milestone_id == milestone_id)
@@ -99,7 +101,7 @@ class ActivityRepository:
         )
         return (cur or 0) + 1
 
-    def get_live_resource(self, activity_id: int) -> Optional[ActivityResource]:
+    def get_live_resource(self, activity_id: str) -> Optional[ActivityResource]:
         row = (
             self.db.query(ActivityResourceModel)
             .filter(ActivityResourceModel.activity_id == activity_id)
@@ -112,10 +114,12 @@ class ActivityRepository:
 
     def create(
         self, *,
-        project_id: int, milestone_id: int, name: str, description: Optional[str],
+        project_id: str, milestone_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
         position: int, created_by: Optional[int],
+        resource_mode: Optional[str] = None,
+        resource_count: Optional[int] = None,
     ) -> Activity:
         a = ActivityModel(
             project_id=project_id,
@@ -128,6 +132,8 @@ class ActivityRepository:
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
             position=position,
+            resource_mode=resource_mode,
+            resource_count=resource_count,
             created_by=created_by,
             updated_by=created_by,
         )
@@ -135,7 +141,7 @@ class ActivityRepository:
         self.db.flush()  # get the id without committing -- caller may also create resource in same txn
         return self._to_domain(a)
 
-    def update(self, activity_id: int, *, updates: dict, updated_by: Optional[int]) -> Activity:
+    def update(self, activity_id: str, *, updates: dict, updated_by: Optional[int]) -> Activity:
         a = self.get_model(activity_id)
         if a is None:
             raise LookupError(f"Activity {activity_id} not found")
@@ -149,7 +155,7 @@ class ActivityRepository:
 
     def insert_resource(
         self, *,
-        activity_id: int, project_id: int, data: dict,
+        activity_id: str, project_id: str, data: dict,
     ) -> ActivityResource:
         r = ActivityResourceModel(
             activity_id=activity_id,
@@ -170,7 +176,7 @@ class ActivityRepository:
         return self._resource_to_domain(r)
 
     def upsert_resource(
-        self, *, activity_id: int, project_id: int, data: dict,
+        self, *, activity_id: str, project_id: str, data: dict,
     ) -> ActivityResource:
         """
         Insert a fresh resource row if no live one exists for this activity,
@@ -199,7 +205,7 @@ class ActivityRepository:
         self.db.flush()
         return self._resource_to_domain(existing)
 
-    def soft_delete_live_resource(self, activity_id: int) -> None:
+    def soft_delete_live_resource(self, activity_id: str) -> None:
         now = datetime.now(timezone.utc)
         self.db.execute(
             update(ActivityResourceModel)
@@ -212,7 +218,7 @@ class ActivityRepository:
 
     # ---------- delete + cascade (activity subtree) ----------
 
-    def soft_delete_with_cascade(self, activity_id: int, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, activity_id: str, deleted_by: Optional[int]) -> None:
         now = datetime.now(timezone.utc)
         task_ids = select(TaskModel.id).where(
             TaskModel.activity_id == activity_id,
@@ -249,7 +255,7 @@ class ActivityRepository:
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
         self.db.commit()
 
-    def restore(self, activity_id: int, restored_by: Optional[int]) -> Activity:
+    def restore(self, activity_id: str, restored_by: Optional[int]) -> Activity:
         a = self.get_model(activity_id, include_deleted=True)
         if a is None:
             raise LookupError(f"Activity {activity_id} not found")

@@ -17,7 +17,7 @@ class MeetingAgendaItemModel(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     position = Column(Integer, nullable=False, index=True)

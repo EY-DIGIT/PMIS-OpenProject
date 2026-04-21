@@ -186,9 +186,16 @@ def member_headers(member_token):
 
 @pytest.fixture(scope="function")
 def sample_project(db_session: Session):
-    """Create a sample project in the database."""
+    """Create a sample project in the database.
+
+    `id` is the UUID primary key. `project_code` uses the project_code
+    generator so fixtures match production insert semantics.
+    """
+    from uuid import uuid4
+    from app.shared.project_code import generate_project_code
     project = ProjectModel(
-        identifier="test-project",
+        id=str(uuid4()),
+        project_code=generate_project_code(db_session),
         name="Test Project",
         description="A test project",
         active=True,

@@ -51,7 +51,7 @@ class WorkPackageRepository:
     def create(
         self,
         subject: str,
-        project_id: int,
+        project_id: str,
         description: Optional[str] = None,
         parent_id: Optional[int] = None,
         assignee_id: Optional[int] = None,
@@ -113,7 +113,7 @@ class WorkPackageRepository:
 
     def get_by_project_and_id(
         self,
-        project_id: int,
+        project_id: str,
         work_package_id: int
     ) -> Optional[WorkPackage]:
         """
@@ -136,7 +136,7 @@ class WorkPackageRepository:
 
     def list_by_project(
         self,
-        project_id: int,
+        project_id: str,
         offset: int = 1,
         limit: int = 20,
         parent_id: Optional[int] = None,
@@ -219,7 +219,7 @@ class WorkPackageRepository:
 
     def exists_by_project_and_id(
         self,
-        project_id: int,
+        project_id: str,
         work_package_id: int
     ) -> bool:
         """

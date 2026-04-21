@@ -10,14 +10,19 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....domain.subtasks.subtask import Subtask, SUBTASK_TYPE_RESOURCE
+from .....domain.subtasks.subtask import (
+    Subtask,
+    SUBTASK_TYPE_RESOURCE,
+    RESOURCE_MODE_COUNT,
+    RESOURCE_MODE_DETAILS,
+)
 from .....domain.subtasks.subtask_resource import SubtaskResource
 
 
 def create_subtask(
     db: Session,
     *,
-    task_id: int,
+    task_id: str,
     name: str,
     description: Optional[str],
     type: str,
@@ -26,6 +31,8 @@ def create_subtask(
     actual_start_date: Optional[datetime],
     actual_end_date: Optional[datetime],
     position: Optional[int],
+    resource_mode: Optional[str],
+    resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
@@ -54,15 +61,6 @@ def create_subtask(
         parent_label="task",
     )
 
-    if type == SUBTASK_TYPE_RESOURCE and resource is None:
-        raise ValidationError(
-            "Resource details are required when the subtask type is 'Resource'."
-        )
-    if type != SUBTASK_TYPE_RESOURCE and resource is not None:
-        raise ValidationError(
-            "Resource details should only be provided when the subtask type is 'Resource'."
-        )
-
     if resource is not None:
         validate_resource_dates(
             onboard=resource.get("onboard_date"),
@@ -75,6 +73,11 @@ def create_subtask(
     repo = SubtaskRepository(db)
     pos = position if position is not None else repo.next_position(task_id)
 
+    store_mode = resource_mode if type == SUBTASK_TYPE_RESOURCE else None
+    store_count = resource_count if (
+        type == SUBTASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
+    ) else None
+
     subtask = repo.create(
         project_id=task.project_id,
         task_id=task_id,
@@ -85,11 +88,14 @@ def create_subtask(
         actual_start_date=actual_start_date, actual_end_date=actual_end_date,
         position=pos,
         created_by=current_user_id,
+        resource_mode=store_mode,
+        resource_count=store_count,
     )
     resource_domain = None
-    if resource is not None:
+    if type == SUBTASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:
         resource_domain = repo.insert_resource(
             subtask_id=subtask.id, project_id=task.project_id, data=resource,
         )
     db.commit()
-    return subtask, resource_domain
+    refreshed = repo.get_by_id(subtask.id)
+    return refreshed or subtask, resource_domain

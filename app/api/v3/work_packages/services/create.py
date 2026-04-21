@@ -31,7 +31,7 @@ _DATE_REQUIRED_TYPES = {"milestone", "activity"}
 
 def create_work_package(
     db: Session,
-    project_id: int,
+    project_id: str,
     subject: str,
     description: Optional[str] = None,
     parent_id: Optional[int] = None,

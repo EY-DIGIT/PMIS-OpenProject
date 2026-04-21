@@ -14,7 +14,7 @@ from .audit import ACTION_SOFT_DELETE, project_snapshot, record_audit
 
 def delete_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     *,
     actor_id: Optional[int],
 ) -> ServiceResult[None]:

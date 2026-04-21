@@ -45,7 +45,7 @@ class MeetingAgendaItemRepository:
     def create(
         self,
         meeting_id: int,
-        project_id: int,
+        project_id: str,
         title: str,
         position: int,
         description: Optional[str] = None,

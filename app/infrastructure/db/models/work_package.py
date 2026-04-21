@@ -19,7 +19,7 @@ class WorkPackageModel(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     subject = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("work_packages.id"), nullable=True, index=True)
     type_id = Column(Integer, ForeignKey("work_package_types.id"), nullable=True, index=True)
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)

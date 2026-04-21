@@ -18,7 +18,7 @@ class PagedTasks:
 
 
 def list_tasks(
-    db: Session, *, activity_id: int, page: int, page_size: int, include_deleted: bool,
+    db: Session, *, activity_id: str, page: int, page_size: int, include_deleted: bool,
 ) -> PagedTasks:
     a = (
         db.query(ActivityModel)

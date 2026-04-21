@@ -18,7 +18,7 @@ class WorkPackage:
     id: int
     subject: str
     description: Optional[str]
-    project_id: int
+    project_id: str
     assignee_id: Optional[int]
     status: str
     priority: str

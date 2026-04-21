@@ -7,7 +7,7 @@ from .....core.project_lock import assert_project_editable
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 
 
-def delete_subtask(db: Session, *, subtask_id: int, current_user_id: Optional[int]) -> None:
+def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[int]) -> None:
     repo = SubtaskRepository(db)
     model = repo.get_model(subtask_id)
     if model is None:

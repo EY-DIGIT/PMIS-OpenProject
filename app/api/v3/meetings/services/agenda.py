@@ -14,7 +14,7 @@ from app.shared.utils import normalize_string
 def create_agenda_item(
     db: Session,
     meeting_id: int,
-    project_id: int,
+    project_id: str,
     title: str,
     position: int,
     description: Optional[str] = None,

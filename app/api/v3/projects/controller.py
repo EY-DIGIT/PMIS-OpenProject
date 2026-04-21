@@ -1,7 +1,12 @@
 """
 Project controller - orchestrates requests and responses.
+
+URL path parameter is always ``project_uuid`` (the public handle). The
+controller resolves UUID -> internal integer id via the repository, then
+passes the int to the service layer (which remains id-based for fast FK joins
+and for symmetry with the services/helpers exposed to other modules).
 """
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -9,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
 from ....core.dependencies import get_current_user_id
+from ....core.errors import NotFoundError
 from ....core.response import format_collection_response, format_project_response
+from ....infrastructure.db.repositories.project_repository import ProjectRepository
 
 from .schemas import (
     ProjectCloseRequest,
@@ -62,6 +69,11 @@ def _actor_is_admin(request: Request) -> bool:
     return bool(getattr(request.state, "is_admin", False))
 
 
+def _project_exists(db: Session, project_uuid: str) -> bool:
+    """True if a live project with this id (id IS the UUID) exists."""
+    return ProjectRepository(db).exists_by_id(project_uuid)
+
+
 class ProjectController:
     """Controller for project operations."""
 
@@ -71,7 +83,6 @@ class ProjectController:
         result = create_project(
             db=db,
             actor_id=actor_id,
-            identifier=data.identifier,
             name=data.name,
             description=data.description,
             active=data.active,
@@ -113,8 +124,8 @@ class ProjectController:
         return BaseController.ok(data=formatted)
 
     @staticmethod
-    def get(request: Request, project_id: int, db: Session) -> JSONResponse:
-        result = get_project_by_id(db, project_id)
+    def get(request: Request, project_uuid: str, db: Session) -> JSONResponse:
+        result = get_project_by_id(db, project_uuid)
         if not result.is_success():
             return _error_response(result, default_status=404)
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
@@ -123,10 +134,13 @@ class ProjectController:
     @staticmethod
     def update(
         request: Request,
-        project_id: int,
+        project_uuid: str,
         data: ProjectUpdateRequest,
         db: Session,
     ) -> JSONResponse:
+        if not _project_exists(db, project_uuid):
+            return _error_response(_NotFoundResult(), default_status=404)
+        pid = project_uuid  # project.id IS the UUID
         actor_id = get_current_user_id(request)
         patch: Dict[str, Any] = {
             "name": data.name,
@@ -142,25 +156,31 @@ class ProjectController:
             "end_date": data.end_date,
             "actual_end_date": data.actual_end_date,
         }
-        result = update_project(db, project_id, actor_id=actor_id, patch=patch)
+        result = update_project(db, pid, actor_id=actor_id, patch=patch)
         if not result.is_success():
             return _error_response(result)
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
         return BaseController.ok(data=formatted)
 
     @staticmethod
-    def delete(request: Request, project_id: int, db: Session) -> JSONResponse:
+    def delete(request: Request, project_uuid: str, db: Session) -> JSONResponse:
+        if not _project_exists(db, project_uuid):
+            return _error_response(_NotFoundResult(), default_status=404)
+        pid = project_uuid  # project.id IS the UUID
         actor_id = get_current_user_id(request)
-        result = delete_project(db, project_id, actor_id=actor_id)
+        result = delete_project(db, pid, actor_id=actor_id)
         if not result.is_success():
             return _error_response(result, default_status=404)
         return BaseController.no_content()
 
     @staticmethod
-    def publish(request: Request, project_id: int, db: Session) -> JSONResponse:
+    def publish(request: Request, project_uuid: str, db: Session) -> JSONResponse:
+        if not _project_exists(db, project_uuid):
+            return _error_response(_NotFoundResult(), default_status=404)
+        pid = project_uuid  # project.id IS the UUID
         actor_id = get_current_user_id(request)
         result = publish_project(
-            db, project_id,
+            db, pid,
             actor_id=actor_id,
             actor_is_admin=_actor_is_admin(request),
         )
@@ -172,13 +192,16 @@ class ProjectController:
     @staticmethod
     def close(
         request: Request,
-        project_id: int,
+        project_uuid: str,
         data: ProjectCloseRequest,
         db: Session,
     ) -> JSONResponse:
+        if not _project_exists(db, project_uuid):
+            return _error_response(_NotFoundResult(), default_status=404)
+        pid = project_uuid  # project.id IS the UUID
         actor_id = get_current_user_id(request)
         result = close_project(
-            db, project_id,
+            db, pid,
             actor_id=actor_id,
             actor_is_admin=_actor_is_admin(request),
             reason=data.reason if data is not None else None,
@@ -189,10 +212,13 @@ class ProjectController:
         return BaseController.ok(data=formatted)
 
     @staticmethod
-    def suspend(request: Request, project_id: int, db: Session) -> JSONResponse:
+    def suspend(request: Request, project_uuid: str, db: Session) -> JSONResponse:
+        if not _project_exists(db, project_uuid):
+            return _error_response(_NotFoundResult(), default_status=404)
+        pid = project_uuid  # project.id IS the UUID
         actor_id = get_current_user_id(request)
         result = suspend_version(
-            db, project_id,
+            db, pid,
             actor_id=actor_id,
             actor_is_admin=_actor_is_admin(request),
         )
@@ -202,9 +228,9 @@ class ProjectController:
         return BaseController.ok(data=formatted)
 
     @staticmethod
-    def create_version(request: Request, identifier: str, db: Session) -> JSONResponse:
+    def create_version(request: Request, project_uuid: str, db: Session) -> JSONResponse:
         actor_id = get_current_user_id(request)
-        result = create_version(db, identifier, actor_id=actor_id)
+        result = create_version(db, project_uuid, actor_id=actor_id)
         if not result.is_success():
             return _error_response(result)
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
@@ -213,12 +239,12 @@ class ProjectController:
     @staticmethod
     def upsert(
         request: Request,
-        identifier: str,
+        project_uuid: str,
         data: ProjectUpsertRequest,
         db: Session,
     ) -> JSONResponse:
         """
-        Idempotent create-or-update of a project by identifier (wizard flow).
+        Idempotent create-or-update of a project by UUID (wizard flow).
 
         Returns 201 on fresh insert, 200 on update, 403 on ownership violation,
         404 if parent_id references a missing project.
@@ -228,7 +254,7 @@ class ProjectController:
 
         result = upsert_project(
             db=db,
-            identifier=identifier,
+            id=project_uuid,
             name=data.name,
             current_user_login=current_user_login,
             is_admin=is_admin,
@@ -253,3 +279,13 @@ class ProjectController:
         if created:
             return BaseController.created(data=formatted)
         return BaseController.ok(data=formatted)
+
+
+class _NotFoundResult:
+    """Tiny adapter so _error_response can emit a NotFound without a ServiceResult."""
+    error_type = "not_found"
+    error = "The project could not be found."
+    details = None
+
+    def is_success(self):
+        return False

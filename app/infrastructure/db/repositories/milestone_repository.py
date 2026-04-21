@@ -39,14 +39,14 @@ class MilestoneRepository:
 
     # ---------- reads ----------
 
-    def get_by_id(self, milestone_id: int, include_deleted: bool = False) -> Optional[Milestone]:
+    def get_by_id(self, milestone_id: str, include_deleted: bool = False) -> Optional[Milestone]:
         q = self.db.query(MilestoneModel).filter(MilestoneModel.id == milestone_id)
         if not include_deleted:
             q = q.filter(MilestoneModel.deleted_at.is_(None))
         row = q.first()
         return self._to_domain(row) if row else None
 
-    def get_model(self, milestone_id: int, include_deleted: bool = False) -> Optional[MilestoneModel]:
+    def get_model(self, milestone_id: str, include_deleted: bool = False) -> Optional[MilestoneModel]:
         q = self.db.query(MilestoneModel).filter(MilestoneModel.id == milestone_id)
         if not include_deleted:
             q = q.filter(MilestoneModel.deleted_at.is_(None))
@@ -54,7 +54,7 @@ class MilestoneRepository:
 
     def list_by_project(
         self,
-        project_id: int,
+        project_id: str,
         offset: int = 0,
         limit: int = 20,
         include_deleted: bool = False,
@@ -69,7 +69,7 @@ class MilestoneRepository:
         )
         return [self._to_domain(r) for r in rows], total
 
-    def next_position(self, project_id: int) -> int:
+    def next_position(self, project_id: str) -> int:
         cur = (
             self.db.query(func.max(MilestoneModel.position))
             .filter(MilestoneModel.project_id == project_id)
@@ -82,7 +82,7 @@ class MilestoneRepository:
 
     def create(
         self, *,
-        project_id: int, name: str, description: Optional[str],
+        project_id: str, name: str, description: Optional[str],
         start_date: datetime, end_date: datetime,
         position: int,
         created_by: Optional[int],
@@ -103,7 +103,7 @@ class MilestoneRepository:
         return self._to_domain(m)
 
     def update(
-        self, milestone_id: int, *, updates: dict, updated_by: Optional[int],
+        self, milestone_id: str, *, updates: dict, updated_by: Optional[int],
     ) -> Milestone:
         m = self.get_model(milestone_id)
         if m is None:
@@ -117,7 +117,7 @@ class MilestoneRepository:
 
     # ---------- soft delete + cascade ----------
 
-    def soft_delete_with_cascade(self, milestone_id: int, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, milestone_id: str, deleted_by: Optional[int]) -> None:
         """
         Soft-delete a milestone and every descendant (activities, their
         resources, tasks, their resources, subtasks, their resources).
@@ -201,7 +201,7 @@ class MilestoneRepository:
         )
         self.db.commit()
 
-    def restore(self, milestone_id: int, restored_by: Optional[int]) -> Milestone:
+    def restore(self, milestone_id: str, restored_by: Optional[int]) -> Milestone:
         """
         Restore a single milestone row. Does NOT auto-restore descendants --
         the caller can restore them independently if desired. Soft-deleted

@@ -5,12 +5,20 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....core.errors import NotFoundError
 from ....core.response import format_collection_response
+from ....infrastructure.db.repositories.project_repository import ProjectRepository
 from .schemas import MilestoneCreateRequest, MilestoneUpdateRequest, MilestoneListQuery
 from .services import (
     create_milestone, get_milestone, list_milestones,
     update_milestone, delete_milestone, restore_milestone,
 )
+
+
+def _verify_project_exists(db: Session, project_uuid: str) -> None:
+    """Raises NotFoundError if no live project with this id (id is the UUID)."""
+    if not ProjectRepository(db).exists_by_id(project_uuid):
+        raise NotFoundError("The project could not be found.")
 
 
 def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, Any]:
@@ -37,7 +45,9 @@ def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, A
 
 class MilestoneController:
     @staticmethod
-    def create(request: Request, project_id: int, data: MilestoneCreateRequest, db: Session) -> JSONResponse:
+    def create(request: Request, project_uuid: str, data: MilestoneCreateRequest, db: Session) -> JSONResponse:
+        _verify_project_exists(db, project_uuid)
+        project_id = project_uuid  # project_id IS the UUID
         current_user_id = getattr(request.state, "user_id", None)
         m = create_milestone(
             db,
@@ -53,7 +63,9 @@ class MilestoneController:
         return BaseController.created(data=format_milestone_response(m.to_dict()))
 
     @staticmethod
-    def list(request: Request, project_id: int, query: MilestoneListQuery, db: Session) -> JSONResponse:
+    def list(request: Request, project_uuid: str, query: MilestoneListQuery, db: Session) -> JSONResponse:
+        _verify_project_exists(db, project_uuid)
+        project_id = project_uuid  # project_id IS the UUID
         paged = list_milestones(
             db, project_id=project_id,
             page=query.offset, page_size=query.pageSize,
@@ -62,7 +74,7 @@ class MilestoneController:
         items = [format_milestone_response(m.to_dict()) for m in paged.items]
         payload = {
             "_type": "Collection",
-            "_links": {"self": {"href": f"/api/v3/projects/{project_id}/milestones?offset={paged.page}&pageSize={paged.page_size}"}},
+            "_links": {"self": {"href": f"/api/v3/projects/{project_uuid}/milestones?offset={paged.page}&pageSize={paged.page_size}"}},
             "total": paged.total,
             "count": len(items),
             "pageSize": paged.page_size,
@@ -72,12 +84,12 @@ class MilestoneController:
         return BaseController.ok(data=payload)
 
     @staticmethod
-    def get(request: Request, milestone_id: int, db: Session) -> JSONResponse:
+    def get(request: Request, milestone_id: str, db: Session) -> JSONResponse:
         m = get_milestone(db, milestone_id)
         return BaseController.ok(data=format_milestone_response(m.to_dict()))
 
     @staticmethod
-    def update(request: Request, milestone_id: int, data: MilestoneUpdateRequest, db: Session) -> JSONResponse:
+    def update(request: Request, milestone_id: str, data: MilestoneUpdateRequest, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         m = update_milestone(
             db,
@@ -92,13 +104,13 @@ class MilestoneController:
         return BaseController.ok(data=format_milestone_response(m.to_dict()))
 
     @staticmethod
-    def delete(request: Request, milestone_id: int, db: Session) -> JSONResponse:
+    def delete(request: Request, milestone_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         delete_milestone(db, milestone_id=milestone_id, current_user_id=current_user_id)
         return BaseController.no_content()
 
     @staticmethod
-    def restore(request: Request, milestone_id: int, db: Session) -> JSONResponse:
+    def restore(request: Request, milestone_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         m = restore_milestone(db, milestone_id=milestone_id, current_user_id=current_user_id)
         return BaseController.ok(data=format_milestone_response(m.to_dict()))

@@ -10,10 +10,17 @@ from typing import Optional
 class Project:
     """
     Project domain entity.
+
+    Public identity:
+      - id (UUID string) — the PK, exposed in URLs and response bodies.
+      - project_code     — UIDAI-PRYYMMDDHHMMSS (IST). Human-readable.
+
+    Internal FK references (all UUID strings):
+      - parent_id, version_of, baseline_id — self-FKs into projects.id.
     """
 
-    id: int
-    identifier: str
+    id: str
+    project_code: str
     name: str
     description: Optional[str]
     active: bool
@@ -21,7 +28,7 @@ class Project:
     status_explanation: Optional[str]
     created_at: datetime
     updated_at: datetime
-    parent_id: Optional[int] = None
+    parent_id: Optional[str] = None
     status: str = "new"
     owner: Optional[str] = None
     category: Optional[str] = None
@@ -29,8 +36,8 @@ class Project:
     end_date: Optional[datetime] = None
     actual_end_date: Optional[datetime] = None
     is_version: bool = False
-    version_of: Optional[int] = None
-    baseline_id: Optional[int] = None
+    version_of: Optional[str] = None
+    baseline_id: Optional[str] = None
     version_no: Optional[int] = None
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
@@ -40,7 +47,7 @@ class Project:
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "identifier": self.identifier,
+            "project_code": self.project_code,
             "name": self.name,
             "description": self.description,
             "active": self.active,

@@ -74,7 +74,7 @@ class ProjectMembersController:
     @staticmethod
     def add_member(
         request: Request,
-        project_id: int,
+        project_id: str,
         data: ProjectMemberAddRequest,
         db: Session
     ) -> JSONResponse:
@@ -141,7 +141,7 @@ class ProjectMembersController:
     @staticmethod
     def list_members(
         request: Request,
-        project_id: int,
+        project_id: str,
         query: ProjectMembersListQuery,
         db: Session
     ) -> JSONResponse:

@@ -54,6 +54,8 @@ def format_activity_response(
         "actualStartDate": a["actual_start_date"],
         "actualEndDate": a["actual_end_date"],
         "position": a["position"],
+        "resourceMode": a.get("resource_mode"),
+        "resourceCount": a.get("resource_count"),
         "createdAt": a["created_at"],
         "updatedAt": a["updated_at"],
         "createdBy": a["created_by"],
@@ -65,7 +67,7 @@ def format_activity_response(
 
 class ActivityController:
     @staticmethod
-    def create(request: Request, milestone_id: int, data: ActivityCreateRequest, db: Session) -> JSONResponse:
+    def create(request: Request, milestone_id: str, data: ActivityCreateRequest, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         resource_dict = data.resource.model_dump() if data.resource else None
         activity, resource = create_activity(
@@ -79,6 +81,8 @@ class ActivityController:
             actual_start_date=data.actual_start_date,
             actual_end_date=data.actual_end_date,
             position=data.position,
+            resource_mode=data.resource_mode,
+            resource_count=data.resource_count,
             resource=resource_dict,
             current_user_id=current_user_id,
         )
@@ -88,7 +92,7 @@ class ActivityController:
         ))
 
     @staticmethod
-    def list(request: Request, milestone_id: int, query: ActivityListQuery, db: Session) -> JSONResponse:
+    def list(request: Request, milestone_id: str, query: ActivityListQuery, db: Session) -> JSONResponse:
         paged = list_activities(
             db, milestone_id=milestone_id,
             page=query.offset, page_size=query.pageSize,
@@ -108,14 +112,14 @@ class ActivityController:
         return BaseController.ok(data=payload)
 
     @staticmethod
-    def get(request: Request, activity_id: int, db: Session) -> JSONResponse:
+    def get(request: Request, activity_id: str, db: Session) -> JSONResponse:
         activity, resource = get_activity_with_resource(db, activity_id)
         return BaseController.ok(data=format_activity_response(
             activity.to_dict(), resource.to_dict() if resource else None,
         ))
 
     @staticmethod
-    def update(request: Request, activity_id: int, data: ActivityUpdateRequest, db: Session) -> JSONResponse:
+    def update(request: Request, activity_id: str, data: ActivityUpdateRequest, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         resource_dict = data.resource.model_dump() if data.resource else None
         activity, resource = update_activity(
@@ -129,6 +133,8 @@ class ActivityController:
             actual_start_date=data.actual_start_date,
             actual_end_date=data.actual_end_date,
             position=data.position,
+            resource_mode=data.resource_mode,
+            resource_count=data.resource_count,
             resource=resource_dict,
             current_user_id=current_user_id,
         )
@@ -137,13 +143,13 @@ class ActivityController:
         ))
 
     @staticmethod
-    def delete(request: Request, activity_id: int, db: Session) -> JSONResponse:
+    def delete(request: Request, activity_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         delete_activity(db, activity_id=activity_id, current_user_id=current_user_id)
         return BaseController.no_content()
 
     @staticmethod
-    def restore(request: Request, activity_id: int, db: Session) -> JSONResponse:
+    def restore(request: Request, activity_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         activity = restore_activity(db, activity_id=activity_id, current_user_id=current_user_id)
         return BaseController.ok(data=format_activity_response(activity.to_dict()))

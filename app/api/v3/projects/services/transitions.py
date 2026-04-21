@@ -183,7 +183,7 @@ def assert_transition_allowed(
 
 def transition_to_draft_if_new(
     db: Session,
-    project_id: int,
+    project_id: str,
     actor_id: Optional[int],
 ) -> Optional[Project]:
     """

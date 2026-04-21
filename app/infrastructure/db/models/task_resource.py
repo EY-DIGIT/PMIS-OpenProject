@@ -1,5 +1,7 @@
 """Task Resource SQLAlchemy model (1-to-1 with tasks)."""
 from datetime import datetime, timezone
+from uuid import uuid4
+
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Numeric, Index, text,
 )
@@ -13,9 +15,12 @@ def _utcnow():
 class TaskResourceModel(Base):
     __tablename__ = "task_resources"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    id = Column(
+        String(36), primary_key=True, index=True,
+        default=lambda: str(uuid4()),
+    )
+    task_id = Column(String(36), ForeignKey("tasks.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
 
     resource_name = Column(String(255), nullable=False)
     onboard_date = Column(DateTime, nullable=True)
@@ -44,4 +49,4 @@ class TaskResourceModel(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<TaskResourceModel(id={self.id}, task_id={self.task_id})>"
+        return f"<TaskResourceModel(id='{self.id}', task_id='{self.task_id}')>"

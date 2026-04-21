@@ -16,14 +16,22 @@ from .permissions import (
     WORK_PACKAGES_UPDATE,
     WORK_PACKAGES_DELETE,
 )
+from ....core.errors import NotFoundError
 from ....core.middleware.rbac import require_permission
+from ....infrastructure.db.repositories.project_repository import ProjectRepository
 from ....infrastructure.db.session import get_db
 
 # Router for project-scoped work packages
-projects_router = APIRouter(prefix="/projects/{project_id}/work_packages", tags=["work_packages"])
+projects_router = APIRouter(prefix="/projects/{project_uuid}/work_packages", tags=["work_packages"])
 
 # Router for global work package endpoints
 work_packages_router = APIRouter(prefix="/work_packages", tags=["work_packages"])
+
+
+def _resolve_project_id(db: Session, project_uuid: str) -> str:
+    if not ProjectRepository(db).exists_by_id(project_uuid):
+        raise NotFoundError("The project could not be found.")
+    return project_uuid
 
 
 # Project-scoped endpoints
@@ -36,15 +44,12 @@ work_packages_router = APIRouter(prefix="/work_packages", tags=["work_packages"]
 )
 def create_work_package_in_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: WorkPackageCreateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Create a new work package in a project.
-
-    Requires: WORK_PACKAGES_CREATE permission
-    """
+    """Create a new work package in a project."""
+    project_id = _resolve_project_id(db, project_uuid)
     return WorkPackageController.create_in_project(request, project_id, data, db)
 
 
@@ -56,18 +61,15 @@ def create_work_package_in_project(
 )
 def list_work_packages_in_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     parentId: int = Query(None, description="Filter by parent work package ID"),
     type: str = Query(None, description="Filter by type internal_name (milestone, activity, task)"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    List work packages in a project with pagination.
-
-    Requires: WORK_PACKAGES_VIEW permission
-    """
+    """List work packages in a project with pagination."""
+    project_id = _resolve_project_id(db, project_uuid)
     query = WorkPackageListQuery(offset=offset, pageSize=pageSize, parentId=parentId, type=type)
     return WorkPackageController.list(request, project_id, query, db)
 

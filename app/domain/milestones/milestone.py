@@ -11,8 +11,8 @@ class Milestone:
 
     Milestones have NO type column and NO actual_* dates.
     """
-    id: int
-    project_id: int
+    id: str
+    project_id: str
     name: str
     description: Optional[str]
     start_date: datetime

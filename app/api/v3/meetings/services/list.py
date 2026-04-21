@@ -10,7 +10,7 @@ from app.shared.service_result import ServiceResult
 
 def list_meetings_by_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     offset: int = 0,
     limit: int = 20,
 ) -> ServiceResult[Tuple[List[Meeting], int]]:

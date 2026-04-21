@@ -2,7 +2,7 @@
 Project update service.
 """
 from typing import Any, Dict, Optional
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from .....core.project_lock import assert_project_editable
 from .....domain.projects.project import Project
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.user_repository import UserRepository
+from .....shared.datetime import ensure_aware_utc
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
@@ -24,7 +25,7 @@ def _verify_user_exists(db: Session, username: str) -> bool:
 
 def update_project(
     db: Session,
-    project_id: int,
+    project_id: str,
     *,
     actor_id: Optional[int],
     patch: Dict[str, Any],
@@ -104,18 +105,14 @@ def update_project(
                 error_type="validation_error",
             )
 
-    now_utc = datetime.now(timezone.utc)
-    for date_field in ("start_date", "end_date", "actual_end_date"):
-        value = supplied.get(date_field)
-        if value is not None and date_field != "actual_end_date":
-            if value <= now_utc:
-                return ServiceResult.fail(
-                    error=f"{date_field} must be in the future",
-                    error_type="validation_error",
-                )
-
-    effective_start = supplied.get("start_date", project.start_date)
-    effective_end = supplied.get("end_date", project.end_date)
+    # "Must be in the future" is enforced by the Pydantic schema for the
+    # supplied fields; skip the duplicate check to avoid naive/aware clashes.
+    effective_start = ensure_aware_utc(
+        supplied.get("start_date", project.start_date)
+    )
+    effective_end = ensure_aware_utc(
+        supplied.get("end_date", project.end_date)
+    )
     if (
         effective_start is not None
         and effective_end is not None

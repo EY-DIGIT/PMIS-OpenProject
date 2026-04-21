@@ -1,5 +1,8 @@
 """
 Project routes - URL definitions with permission bindings.
+
+All URL path parameters use ``project_uuid`` (the public handle). The
+controller resolves UUID -> internal id.
 """
 from typing import Any, Dict, Optional
 
@@ -44,24 +47,26 @@ def create_project(
 
 
 @router.put(
-    "/{identifier}",
+    "/{project_uuid}",
     dependencies=[require_permission(PROJECTS_CREATE)],
-    summary="Create or update project by identifier (idempotent)",
+    summary="Create or update project by uuid (idempotent)",
     description=(
-        "Idempotent create-or-update of a project keyed by identifier. "
-        "Used by multi-step creation wizards — re-submitting the same "
-        "identifier updates the existing row rather than creating a duplicate. "
-        "Returns 201 on first call, 200 on subsequent calls; on the update "
-        "path, caller must own the project (or be admin)."
+        "Idempotent create-or-update of a project keyed by uuid. Used by "
+        "multi-step creation wizards — re-submitting the same uuid updates "
+        "the existing row rather than creating a duplicate. Returns 201 on "
+        "first call, 200 on subsequent calls; on the update path, caller "
+        "must own the project (or be admin). The frontend generates the uuid "
+        "via crypto.randomUUID() once per wizard session. The server "
+        "auto-generates projectCode on insert and preserves it on update."
     ),
 )
-def upsert_project_by_identifier(
+def upsert_project_by_uuid(
     request: Request,
-    identifier: str,
+    project_uuid: str,
     data: ProjectUpsertRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.upsert(request, identifier, data, db)
+    return ProjectController.upsert(request, project_uuid, data, db)
 
 
 @router.get(
@@ -82,94 +87,94 @@ def list_projects(
 
 
 @router.get(
-    "/{project_id}",
+    "/{project_uuid}",
     dependencies=[require_permission(PROJECTS_READ)],
     summary="Get project",
 )
 def get_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.get(request, project_id, db)
+    return ProjectController.get(request, project_uuid, db)
 
 
 @router.patch(
-    "/{project_id}",
+    "/{project_uuid}",
     dependencies=[require_permission(PROJECTS_UPDATE)],
     summary="Update project",
 )
 def update_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: ProjectUpdateRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.update(request, project_id, data, db)
+    return ProjectController.update(request, project_uuid, data, db)
 
 
 @router.delete(
-    "/{project_id}",
+    "/{project_uuid}",
     dependencies=[require_permission(PROJECTS_DELETE_ALL)],
     summary="Soft-delete project",
 )
 def delete_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.delete(request, project_id, db)
+    return ProjectController.delete(request, project_uuid, db)
 
 
 @router.post(
-    "/{project_id}/publish",
+    "/{project_uuid}/publish",
     dependencies=[require_permission(PROJECTS_PUBLISH)],
     summary="Publish project",
 )
 def publish_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.publish(request, project_id, db)
+    return ProjectController.publish(request, project_uuid, db)
 
 
 @router.post(
-    "/{project_id}/close",
+    "/{project_uuid}/close",
     dependencies=[require_permission(PROJECTS_CLOSE)],
     summary="Close project",
 )
 def close_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: Optional[ProjectCloseRequest] = Body(None),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.close(request, project_id, data, db)
+    return ProjectController.close(request, project_uuid, data, db)
 
 
 @router.post(
-    "/{project_id}/suspend",
+    "/{project_uuid}/suspend",
     dependencies=[require_permission(PROJECTS_UPDATE)],
     summary="Suspend version project",
 )
 def suspend_project(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.suspend(request, project_id, db)
+    return ProjectController.suspend(request, project_uuid, db)
 
 
 @router.post(
-    "/{identifier}/versions",
+    "/{project_uuid}/versions",
     dependencies=[require_permission(PROJECTS_CREATE)],
     summary="Create new version of a published project",
     status_code=201,
 )
 def create_project_version(
     request: Request,
-    identifier: str,
+    project_uuid: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.create_version(request, identifier, db)
+    return ProjectController.create_version(request, project_uuid, db)

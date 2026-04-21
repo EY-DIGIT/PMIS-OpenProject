@@ -15,18 +15,28 @@ ACTIVITY_TYPES = (
 )
 
 
+# Resource-mode vocabulary (used only when type='resource').
+RESOURCE_MODE_COUNT = "count"
+RESOURCE_MODE_DETAILS = "details"
+RESOURCE_MODES = (RESOURCE_MODE_COUNT, RESOURCE_MODE_DETAILS)
+
+
 @dataclass
 class Activity:
     """
     Activity domain entity.
 
     Activities carry a type (standard/resource/transactional) and optional
-    actual dates. When type == 'resource', a matching ActivityResource row
-    (1-to-1 on activity_id) carries the resource-specific fields.
+    actual dates. When type == 'resource', resource_mode tells us HOW the
+    resource is expressed:
+      * mode = 'count'   -> resource_count is set; NO ActivityResource row
+      * mode = 'details' -> resource_count is NULL; one live ActivityResource
+                            row (keyed by activity_id) carries the 9 fields
+    When type != 'resource', both resource_mode and resource_count are NULL.
     """
-    id: int
-    project_id: int
-    milestone_id: int
+    id: str
+    project_id: str
+    milestone_id: str
     name: str
     description: Optional[str]
     type: str
@@ -40,6 +50,8 @@ class Activity:
     created_by: Optional[int] = None
     updated_by: Optional[int] = None
     deleted_at: Optional[datetime] = None
+    resource_mode: Optional[str] = None
+    resource_count: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +66,8 @@ class Activity:
             "actual_start_date": self.actual_start_date.isoformat() if self.actual_start_date else None,
             "actual_end_date": self.actual_end_date.isoformat() if self.actual_end_date else None,
             "position": self.position,
+            "resource_mode": self.resource_mode,
+            "resource_count": self.resource_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

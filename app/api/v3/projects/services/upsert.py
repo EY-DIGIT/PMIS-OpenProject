@@ -1,13 +1,20 @@
 """
 Project upsert service.
 
-Idempotent create-or-update by identifier. Used by the project creation
-wizard so that re-submitting Step 1 (e.g. after clicking Back) updates the
-same row instead of creating duplicates.
+Idempotent create-or-update by **id** (which is itself a UUID). Used by the
+project creation wizard so that re-submitting Step 1 (e.g. after clicking
+Back) updates the same row instead of creating duplicates.
+
+Frontend generates a fresh UUID at wizard start (e.g. ``crypto.randomUUID()``)
+and sends ``PUT /api/v3/projects/{uuid}`` on every Save & Next click. First
+call -> INSERT with that id. Later calls -> UPDATE.
 """
 from typing import Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime
+from uuid import UUID
+
 from sqlalchemy.orm import Session
+
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....domain.projects.project import Project
@@ -19,9 +26,17 @@ def _verify_user_exists(db: Session, username: str) -> bool:
     return UserRepository(db).get_by_login(username) is not None
 
 
+def _looks_like_uuid(s: str) -> bool:
+    try:
+        UUID(s)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def upsert_project(
     db: Session,
-    identifier: str,
+    id: str,
     name: str,
     current_user_login: Optional[str],
     is_admin: bool,
@@ -29,37 +44,21 @@ def upsert_project(
     active: bool = True,
     public: bool = False,
     status_explanation: Optional[str] = None,
-    parent_id: Optional[int] = None,
+    parent_id: Optional[str] = None,
     status: str = "new",
     owner: Optional[str] = None,
     category: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> ServiceResult[Tuple[Project, bool]]:
-    """
-    Create or update a project by its identifier.
+    """Create or update a project by its id (UUID string)."""
+    if not _looks_like_uuid(id):
+        return ServiceResult.fail(
+            error="Invalid UUID format in URL.",
+            error_type="validation_error",
+        )
 
-    Ownership rule: if a row with this identifier already exists, the update
-    is only permitted when the caller is the project's owner OR is an admin.
-    This prevents an attacker who guesses an identifier from overwriting
-    another user's project.
-
-    Returns ServiceResult with (project, created) where created=True for a
-    fresh insert, False for an update of an existing row.
-    """
-    identifier = normalize_string(identifier).lower()
     name = normalize_string(name)
-
-    if not identifier or len(identifier) > 255:
-        return ServiceResult.fail(
-            error="Invalid identifier. Must be 1-255 characters.",
-            error_type="validation_error",
-        )
-    if not all(c.isalnum() or c in "-_" for c in identifier):
-        return ServiceResult.fail(
-            error="Invalid identifier format. Only alphanumeric, hyphens, and underscores allowed.",
-            error_type="validation_error",
-        )
     if not name or len(name) > 255:
         return ServiceResult.fail(
             error="Invalid name. Must be 1-255 characters.",
@@ -89,13 +88,13 @@ def upsert_project(
     repository = ProjectRepository(db)
 
     # Ownership gate on the update path.
-    existing = repository.get_by_identifier(identifier)
+    existing = repository.get_by_id(id)
     if existing is not None and not is_admin:
         if existing.owner is None or existing.owner != current_user_login:
             return ServiceResult.fail(
                 error=(
-                    f"Project with identifier '{identifier}' exists and is owned "
-                    "by another user. You cannot modify it."
+                    "This project already exists and is owned by another user. "
+                    "You cannot modify it."
                 ),
                 error_type="forbidden",
             )
@@ -107,8 +106,8 @@ def upsert_project(
         )
 
     try:
-        project, created = repository.upsert_by_identifier(
-            identifier=identifier,
+        project, created = repository.upsert_by_id(
+            id=id,
             name=name,
             description=description,
             active=active,

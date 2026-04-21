@@ -20,7 +20,7 @@ from ..infrastructure.db.models.project import ProjectModel
 from .errors import AuthorizationError, NotFoundError
 
 
-def assert_project_editable(db: Session, project_id: int) -> None:
+def assert_project_editable(db: Session, project_id: str) -> None:
     """
     Raise if the project cannot accept writes.
 

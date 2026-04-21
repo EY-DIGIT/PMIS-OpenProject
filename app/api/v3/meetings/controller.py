@@ -47,7 +47,7 @@ class MeetingController:
     @staticmethod
     def create_meeting(
         request: Request,
-        project_id: int,
+        project_id: str,
         data: MeetingCreateRequest,
         db: Session
     ) -> JSONResponse:
@@ -123,7 +123,7 @@ class MeetingController:
     @staticmethod
     def list_meetings(
         request: Request,
-        project_id: int,
+        project_id: str,
         query: MeetingListQuery,
         db: Session
     ) -> JSONResponse:
@@ -243,7 +243,7 @@ class MeetingController:
     def add_participant(
         request: Request,
         meeting_id: int,
-        project_id: int,
+        project_id: str,
         data: ParticipantAddRequest,
         db: Session
     ) -> JSONResponse:
@@ -369,7 +369,7 @@ class MeetingController:
     def create_agenda_item(
         request: Request,
         meeting_id: int,
-        project_id: int,
+        project_id: str,
         data: AgendaItemCreateRequest,
         db: Session
     ) -> JSONResponse:

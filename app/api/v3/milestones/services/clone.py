@@ -33,8 +33,8 @@ from .....infrastructure.db.models.subtask_resource import SubtaskResourceModel
 def clone_tree_for_version(
     db: Session,
     *,
-    source_project_id: int,
-    target_project_id: int,
+    source_project_id: str,
+    target_project_id: str,
     created_by: Optional[int] = None,
 ) -> Dict[str, int]:
     """
@@ -103,6 +103,8 @@ def clone_tree_for_version(
             actual_start_date=None,
             actual_end_date=None,
             position=src.position,
+            resource_mode=src.resource_mode,
+            resource_count=src.resource_count,
             created_at=now,
             updated_at=now,
             created_by=created_by,
@@ -169,6 +171,8 @@ def clone_tree_for_version(
             actual_start_date=None,
             actual_end_date=None,
             position=src.position,
+            resource_mode=src.resource_mode,
+            resource_count=src.resource_count,
             created_at=now,
             updated_at=now,
             created_by=created_by,
@@ -235,6 +239,8 @@ def clone_tree_for_version(
             actual_start_date=None,
             actual_end_date=None,
             position=src.position,
+            resource_mode=src.resource_mode,
+            resource_count=src.resource_count,
             created_at=now,
             updated_at=now,
             created_by=created_by,

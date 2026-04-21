@@ -15,7 +15,7 @@ from .....domain.milestones.milestone import Milestone
 def create_milestone(
     db: Session,
     *,
-    project_id: int,
+    project_id: str,
     name: str,
     description: Optional[str],
     start_date: datetime,

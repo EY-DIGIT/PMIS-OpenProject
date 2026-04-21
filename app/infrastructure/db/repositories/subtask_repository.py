@@ -28,6 +28,8 @@ class SubtaskRepository:
             actual_start_date=s.actual_start_date,
             actual_end_date=s.actual_end_date,
             position=s.position,
+            resource_mode=s.resource_mode,
+            resource_count=s.resource_count,
             created_at=s.created_at,
             updated_at=s.updated_at,
             created_by=s.created_by,
@@ -57,21 +59,21 @@ class SubtaskRepository:
 
     # ---------- reads ----------
 
-    def get_by_id(self, subtask_id: int, include_deleted: bool = False) -> Optional[Subtask]:
+    def get_by_id(self, subtask_id: str, include_deleted: bool = False) -> Optional[Subtask]:
         q = self.db.query(SubtaskModel).filter(SubtaskModel.id == subtask_id)
         if not include_deleted:
             q = q.filter(SubtaskModel.deleted_at.is_(None))
         row = q.first()
         return self._to_domain(row) if row else None
 
-    def get_model(self, subtask_id: int, include_deleted: bool = False) -> Optional[SubtaskModel]:
+    def get_model(self, subtask_id: str, include_deleted: bool = False) -> Optional[SubtaskModel]:
         q = self.db.query(SubtaskModel).filter(SubtaskModel.id == subtask_id)
         if not include_deleted:
             q = q.filter(SubtaskModel.deleted_at.is_(None))
         return q.first()
 
     def list_by_task(
-        self, task_id: int, offset: int = 0, limit: int = 20,
+        self, task_id: str, offset: int = 0, limit: int = 20,
         include_deleted: bool = False,
     ) -> Tuple[List[Subtask], int]:
         base = self.db.query(SubtaskModel).filter(SubtaskModel.task_id == task_id)
@@ -84,7 +86,7 @@ class SubtaskRepository:
         )
         return [self._to_domain(r) for r in rows], total
 
-    def next_position(self, task_id: int) -> int:
+    def next_position(self, task_id: str) -> int:
         cur = (
             self.db.query(func.max(SubtaskModel.position))
             .filter(SubtaskModel.task_id == task_id)
@@ -93,7 +95,7 @@ class SubtaskRepository:
         )
         return (cur or 0) + 1
 
-    def get_live_resource(self, subtask_id: int) -> Optional[SubtaskResource]:
+    def get_live_resource(self, subtask_id: str) -> Optional[SubtaskResource]:
         row = (
             self.db.query(SubtaskResourceModel)
             .filter(SubtaskResourceModel.subtask_id == subtask_id)
@@ -106,10 +108,12 @@ class SubtaskRepository:
 
     def create(
         self, *,
-        project_id: int, task_id: int, name: str, description: Optional[str],
+        project_id: str, task_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
         position: int, created_by: Optional[int],
+        resource_mode: Optional[str] = None,
+        resource_count: Optional[int] = None,
     ) -> Subtask:
         s = SubtaskModel(
             project_id=project_id,
@@ -122,6 +126,8 @@ class SubtaskRepository:
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
             position=position,
+            resource_mode=resource_mode,
+            resource_count=resource_count,
             created_by=created_by,
             updated_by=created_by,
         )
@@ -129,7 +135,7 @@ class SubtaskRepository:
         self.db.flush()
         return self._to_domain(s)
 
-    def update(self, subtask_id: int, *, updates: dict, updated_by: Optional[int]) -> Subtask:
+    def update(self, subtask_id: str, *, updates: dict, updated_by: Optional[int]) -> Subtask:
         s = self.get_model(subtask_id)
         if s is None:
             raise LookupError(f"Subtask {subtask_id} not found")
@@ -141,7 +147,7 @@ class SubtaskRepository:
 
     # ---------- resource sub-entity ----------
 
-    def insert_resource(self, *, subtask_id: int, project_id: int, data: dict) -> SubtaskResource:
+    def insert_resource(self, *, subtask_id: str, project_id: str, data: dict) -> SubtaskResource:
         r = SubtaskResourceModel(
             subtask_id=subtask_id,
             project_id=project_id,
@@ -160,7 +166,7 @@ class SubtaskRepository:
         self.db.flush()
         return self._resource_to_domain(r)
 
-    def upsert_resource(self, *, subtask_id: int, project_id: int, data: dict) -> SubtaskResource:
+    def upsert_resource(self, *, subtask_id: str, project_id: str, data: dict) -> SubtaskResource:
         existing = (
             self.db.query(SubtaskResourceModel)
             .filter(
@@ -182,7 +188,7 @@ class SubtaskRepository:
         self.db.flush()
         return self._resource_to_domain(existing)
 
-    def soft_delete_live_resource(self, subtask_id: int) -> None:
+    def soft_delete_live_resource(self, subtask_id: str) -> None:
         now = datetime.now(timezone.utc)
         self.db.execute(
             update(SubtaskResourceModel)
@@ -195,7 +201,7 @@ class SubtaskRepository:
 
     # ---------- delete (subtask is a leaf) ----------
 
-    def soft_delete(self, subtask_id: int, deleted_by: Optional[int]) -> None:
+    def soft_delete(self, subtask_id: str, deleted_by: Optional[int]) -> None:
         now = datetime.now(timezone.utc)
         self.db.execute(update(SubtaskResourceModel).where(
             SubtaskResourceModel.subtask_id == subtask_id,
@@ -207,7 +213,7 @@ class SubtaskRepository:
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
         self.db.commit()
 
-    def restore(self, subtask_id: int, restored_by: Optional[int]) -> Subtask:
+    def restore(self, subtask_id: str, restored_by: Optional[int]) -> Subtask:
         s = self.get_model(subtask_id, include_deleted=True)
         if s is None:
             raise LookupError(f"Subtask {subtask_id} not found")

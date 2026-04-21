@@ -16,7 +16,7 @@ class MeetingModel(Base):
     __tablename__ = "meetings"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     scheduled_at = Column(DateTime, nullable=False, index=True)

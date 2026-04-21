@@ -35,7 +35,7 @@ def get_work_package_by_id(
 
 def get_work_package_by_project_and_id(
     db: Session,
-    project_id: int,
+    project_id: str,
     work_package_id: int,
 ) -> ServiceResult[WorkPackage]:
     """

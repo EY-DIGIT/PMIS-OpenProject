@@ -21,7 +21,7 @@ tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
     dependencies=[require_permission(TASKS_CREATE)],
     summary="Create task under activity", status_code=201,
 )
-def create(request: Request, activity_id: int, data: TaskCreateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def create(request: Request, activity_id: str, data: TaskCreateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return TaskController.create(request, activity_id, data, db)
 
 
@@ -31,7 +31,7 @@ def create(request: Request, activity_id: int, data: TaskCreateRequest, db: Sess
     summary="List tasks under activity",
 )
 def list_(
-    request: Request, activity_id: int,
+    request: Request, activity_id: str,
     offset: int = Query(1, ge=1), pageSize: int = Query(20, ge=1, le=100),
     includeDeleted: bool = Query(False),
     db: Session = Depends(get_db),
@@ -48,7 +48,7 @@ def list_(
     dependencies=[require_permission(TASKS_READ)],
     summary="Get task by id",
 )
-def get(request: Request, task_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def get(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return TaskController.get(request, task_id, db)
 
 
@@ -57,7 +57,7 @@ def get(request: Request, task_id: int, db: Session = Depends(get_db)) -> Dict[s
     dependencies=[require_permission(TASKS_UPDATE)],
     summary="Update task (handles type transitions + resource upsert)",
 )
-def update(request: Request, task_id: int, data: TaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return TaskController.update(request, task_id, data, db)
 
 
@@ -66,7 +66,7 @@ def update(request: Request, task_id: int, data: TaskUpdateRequest, db: Session 
     dependencies=[require_permission(TASKS_DELETE)],
     summary="Soft-delete task (cascades to subtasks)",
 )
-def delete(request: Request, task_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def delete(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return TaskController.delete(request, task_id, db)
 
 
@@ -75,5 +75,5 @@ def delete(request: Request, task_id: int, db: Session = Depends(get_db)) -> Dic
     dependencies=[require_permission(TASKS_RESTORE)],
     summary="Restore a soft-deleted task (admin)",
 )
-def restore(request: Request, task_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def restore(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return TaskController.restore(request, task_id, db)

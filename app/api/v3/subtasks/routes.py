@@ -21,7 +21,7 @@ subtasks_router = APIRouter(prefix="/subtasks", tags=["subtasks"])
     dependencies=[require_permission(SUBTASKS_CREATE)],
     summary="Create subtask under task", status_code=201,
 )
-def create(request: Request, task_id: int, data: SubtaskCreateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def create(request: Request, task_id: str, data: SubtaskCreateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return SubtaskController.create(request, task_id, data, db)
 
 
@@ -31,7 +31,7 @@ def create(request: Request, task_id: int, data: SubtaskCreateRequest, db: Sessi
     summary="List subtasks under task",
 )
 def list_(
-    request: Request, task_id: int,
+    request: Request, task_id: str,
     offset: int = Query(1, ge=1), pageSize: int = Query(20, ge=1, le=100),
     includeDeleted: bool = Query(False),
     db: Session = Depends(get_db),
@@ -48,7 +48,7 @@ def list_(
     dependencies=[require_permission(SUBTASKS_READ)],
     summary="Get subtask by id",
 )
-def get(request: Request, subtask_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def get(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return SubtaskController.get(request, subtask_id, db)
 
 
@@ -57,7 +57,7 @@ def get(request: Request, subtask_id: int, db: Session = Depends(get_db)) -> Dic
     dependencies=[require_permission(SUBTASKS_UPDATE)],
     summary="Update subtask (handles type transitions + resource upsert)",
 )
-def update(request: Request, subtask_id: int, data: SubtaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def update(request: Request, subtask_id: str, data: SubtaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return SubtaskController.update(request, subtask_id, data, db)
 
 
@@ -66,7 +66,7 @@ def update(request: Request, subtask_id: int, data: SubtaskUpdateRequest, db: Se
     dependencies=[require_permission(SUBTASKS_DELETE)],
     summary="Soft-delete subtask",
 )
-def delete(request: Request, subtask_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def delete(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return SubtaskController.delete(request, subtask_id, db)
 
 
@@ -75,5 +75,5 @@ def delete(request: Request, subtask_id: int, db: Session = Depends(get_db)) -> 
     dependencies=[require_permission(SUBTASKS_RESTORE)],
     summary="Restore a soft-deleted subtask (admin)",
 )
-def restore(request: Request, subtask_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def restore(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return SubtaskController.restore(request, subtask_id, db)

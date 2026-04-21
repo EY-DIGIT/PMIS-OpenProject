@@ -54,6 +54,8 @@ def format_subtask_response(
         "actualStartDate": s["actual_start_date"],
         "actualEndDate": s["actual_end_date"],
         "position": s["position"],
+        "resourceMode": s.get("resource_mode"),
+        "resourceCount": s.get("resource_count"),
         "createdAt": s["created_at"],
         "updatedAt": s["updated_at"],
         "createdBy": s["created_by"],
@@ -65,7 +67,7 @@ def format_subtask_response(
 
 class SubtaskController:
     @staticmethod
-    def create(request: Request, task_id: int, data: SubtaskCreateRequest, db: Session) -> JSONResponse:
+    def create(request: Request, task_id: str, data: SubtaskCreateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         rd = data.resource.model_dump() if data.resource else None
         s, r = create_subtask(
@@ -74,12 +76,14 @@ class SubtaskController:
             name=data.name, description=data.description, type=data.type,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position, resource=rd, current_user_id=cuid,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
         )
         return BaseController.created(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def list(request: Request, task_id: int, query: SubtaskListQuery, db: Session) -> JSONResponse:
+    def list(request: Request, task_id: str, query: SubtaskListQuery, db: Session) -> JSONResponse:
         paged = list_subtasks(db, task_id=task_id, page=query.offset, page_size=query.pageSize, include_deleted=query.includeDeleted)
         items = [format_subtask_response(s.to_dict(), None) for s in paged.items]
         payload = {
@@ -92,12 +96,12 @@ class SubtaskController:
         return BaseController.ok(data=payload)
 
     @staticmethod
-    def get(request: Request, subtask_id: int, db: Session) -> JSONResponse:
+    def get(request: Request, subtask_id: str, db: Session) -> JSONResponse:
         s, r = get_subtask_with_resource(db, subtask_id)
         return BaseController.ok(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def update(request: Request, subtask_id: int, data: SubtaskUpdateRequest, db: Session) -> JSONResponse:
+    def update(request: Request, subtask_id: str, data: SubtaskUpdateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         rd = data.resource.model_dump() if data.resource else None
         s, r = update_subtask(
@@ -106,18 +110,20 @@ class SubtaskController:
             name=data.name, description=data.description, type=data.type,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position, resource=rd, current_user_id=cuid,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
         )
         return BaseController.ok(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
 
     @staticmethod
-    def delete(request: Request, subtask_id: int, db: Session) -> JSONResponse:
+    def delete(request: Request, subtask_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         delete_subtask(db, subtask_id=subtask_id, current_user_id=cuid)
         return BaseController.no_content()
 
     @staticmethod
-    def restore(request: Request, subtask_id: int, db: Session) -> JSONResponse:
+    def restore(request: Request, subtask_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         s = restore_subtask(db, subtask_id=subtask_id, current_user_id=cuid)
         return BaseController.ok(data=format_subtask_response(s.to_dict()))

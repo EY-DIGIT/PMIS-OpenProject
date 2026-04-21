@@ -18,7 +18,7 @@ class PagedSubtasks:
 
 
 def list_subtasks(
-    db: Session, *, task_id: int, page: int, page_size: int, include_deleted: bool,
+    db: Session, *, task_id: str, page: int, page_size: int, include_deleted: bool,
 ) -> PagedSubtasks:
     t = (
         db.query(TaskModel)

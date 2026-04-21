@@ -26,35 +26,35 @@ milestones_router = APIRouter(prefix="/milestones", tags=["milestones"])
 
 
 @milestones_project_router.post(
-    "/{project_id}/milestones",
+    "/{project_uuid}/milestones",
     dependencies=[require_permission(MILESTONES_CREATE)],
     summary="Create milestone under project",
     status_code=201,
 )
 def create(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     data: MilestoneCreateRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return MilestoneController.create(request, project_id, data, db)
+    return MilestoneController.create(request, project_uuid, data, db)
 
 
 @milestones_project_router.get(
-    "/{project_id}/milestones",
+    "/{project_uuid}/milestones",
     dependencies=[require_permission(MILESTONES_READ)],
     summary="List milestones under project",
 )
 def list_(
     request: Request,
-    project_id: int,
+    project_uuid: str,
     offset: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100),
     includeDeleted: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return MilestoneController.list(
-        request, project_id,
+        request, project_uuid,
         MilestoneListQuery(offset=offset, pageSize=pageSize, includeDeleted=includeDeleted),
         db,
     )
@@ -67,7 +67,7 @@ def list_(
 )
 def get(
     request: Request,
-    milestone_id: int,
+    milestone_id: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return MilestoneController.get(request, milestone_id, db)
@@ -80,7 +80,7 @@ def get(
 )
 def update(
     request: Request,
-    milestone_id: int,
+    milestone_id: str,
     data: MilestoneUpdateRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -94,7 +94,7 @@ def update(
 )
 def delete(
     request: Request,
-    milestone_id: int,
+    milestone_id: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return MilestoneController.delete(request, milestone_id, db)
@@ -107,7 +107,7 @@ def delete(
 )
 def restore(
     request: Request,
-    milestone_id: int,
+    milestone_id: str,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return MilestoneController.restore(request, milestone_id, db)

@@ -32,7 +32,7 @@ class ProjectAuditLogRepository:
 
     def add(
         self,
-        project_id: int,
+        project_id: str,
         actor_id: Optional[int],
         action: str,
         before: Optional[Dict[str, Any]] = None,
@@ -50,7 +50,7 @@ class ProjectAuditLogRepository:
         return entry
 
     def list_for_project(
-        self, project_id: int, offset: int = 0, limit: int = 50
+        self, project_id: str, offset: int = 0, limit: int = 50
     ) -> Tuple[List[ProjectAuditLog], int]:
         q = self.db.query(ProjectAuditLogModel).filter(
             ProjectAuditLogModel.project_id == project_id

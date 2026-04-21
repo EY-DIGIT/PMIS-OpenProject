@@ -144,18 +144,21 @@ def format_project_response(
         HAL+JSON formatted response
     """
     project_id = project_data.get("id")
-    identifier = project_data.get("identifier")
+    project_code = project_data.get("project_code")
+
+    # URLs use id (UUID string — the public handle).
+    self_href = f"{base_url}/projects/{project_id}" if project_id else None
 
     response = {
         "_type": "Project",
         "_links": {
             "self": {
-                "href": f"{base_url}/projects/{project_id}",
+                "href": self_href,
                 "title": project_data.get("name")
             }
         },
         "id": project_id,
-        "identifier": identifier,
+        "projectCode": project_code,
         "name": project_data.get("name"),
         "description": project_data.get("description"),
         "active": project_data.get("active", True),
@@ -169,25 +172,26 @@ def format_project_response(
         "endDate": project_data.get("end_date"),
         "actualEndDate": project_data.get("actual_end_date"),
         "isVersion": project_data.get("is_version", False),
-        "versionOf": project_data.get("version_of"),
-        "baselineId": project_data.get("baseline_id"),
+        "versionOf": project_data.get("version_of"),    # UUID of parent version
+        "baselineId": project_data.get("baseline_id"),  # UUID of baseline
         "versionNo": project_data.get("version_no"),
+        "parentId": project_data.get("parent_id"),
         "createdBy": project_data.get("created_by"),
         "updatedBy": project_data.get("updated_by"),
         "createdAt": project_data.get("created_at"),
         "updatedAt": project_data.get("updated_at"),
     }
 
-    # Add parent link if parent_id is present
-    if project_data.get("parent_id"):
+    # Parent / baseline links, derived from the UUID refs we emit above.
+    parent_id = project_data.get("parent_id")
+    if parent_id:
         response["_links"]["parent"] = {
-            "href": f"{base_url}/projects/{project_data.get('parent_id')}"
+            "href": f"{base_url}/projects/{parent_id}"
         }
-
-    # Link to the baseline this version was cloned from
-    if project_data.get("baseline_id"):
+    baseline_id = project_data.get("baseline_id")
+    if baseline_id:
         response["_links"]["baseline"] = {
-            "href": f"{base_url}/projects/{project_data.get('baseline_id')}"
+            "href": f"{base_url}/projects/{baseline_id}"
         }
 
     return response

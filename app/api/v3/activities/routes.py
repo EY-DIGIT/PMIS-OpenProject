@@ -24,7 +24,7 @@ activities_router = APIRouter(prefix="/activities", tags=["activities"])
     status_code=201,
 )
 def create(
-    request: Request, milestone_id: int,
+    request: Request, milestone_id: str,
     data: ActivityCreateRequest, db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return ActivityController.create(request, milestone_id, data, db)
@@ -36,7 +36,7 @@ def create(
     summary="List activities under milestone",
 )
 def list_(
-    request: Request, milestone_id: int,
+    request: Request, milestone_id: str,
     offset: int = Query(1, ge=1), pageSize: int = Query(20, ge=1, le=100),
     includeDeleted: bool = Query(False),
     db: Session = Depends(get_db),
@@ -53,7 +53,7 @@ def list_(
     dependencies=[require_permission(ACTIVITIES_READ)],
     summary="Get activity by id",
 )
-def get(request: Request, activity_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def get(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return ActivityController.get(request, activity_id, db)
 
 
@@ -63,7 +63,7 @@ def get(request: Request, activity_id: int, db: Session = Depends(get_db)) -> Di
     summary="Update activity (handles type transitions + resource upsert)",
 )
 def update(
-    request: Request, activity_id: int,
+    request: Request, activity_id: str,
     data: ActivityUpdateRequest, db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return ActivityController.update(request, activity_id, data, db)
@@ -74,7 +74,7 @@ def update(
     dependencies=[require_permission(ACTIVITIES_DELETE)],
     summary="Soft-delete activity (cascades)",
 )
-def delete(request: Request, activity_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def delete(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return ActivityController.delete(request, activity_id, db)
 
 
@@ -83,5 +83,5 @@ def delete(request: Request, activity_id: int, db: Session = Depends(get_db)) ->
     dependencies=[require_permission(ACTIVITIES_RESTORE)],
     summary="Restore a soft-deleted activity (admin)",
 )
-def restore(request: Request, activity_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+def restore(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return ActivityController.restore(request, activity_id, db)

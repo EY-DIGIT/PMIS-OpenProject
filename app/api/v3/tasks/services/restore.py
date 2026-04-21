@@ -9,7 +9,7 @@ from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....domain.tasks.task import Task
 
 
-def restore_task(db: Session, *, task_id: int, current_user_id: Optional[int]) -> Task:
+def restore_task(db: Session, *, task_id: str, current_user_id: Optional[int]) -> Task:
     repo = TaskRepository(db)
     model = repo.get_model(task_id, include_deleted=True)
     if model is None:

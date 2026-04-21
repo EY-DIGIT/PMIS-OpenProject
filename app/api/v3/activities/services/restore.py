@@ -9,7 +9,7 @@ from .....infrastructure.db.repositories.activity_repository import ActivityRepo
 from .....domain.activities.activity import Activity
 
 
-def restore_activity(db: Session, *, activity_id: int, current_user_id: Optional[int]) -> Activity:
+def restore_activity(db: Session, *, activity_id: str, current_user_id: Optional[int]) -> Activity:
     repo = ActivityRepository(db)
     model = repo.get_model(activity_id, include_deleted=True)
     if model is None:

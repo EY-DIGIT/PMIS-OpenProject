@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 def create_meeting(
     db: Session,
-    project_id: int,
+    project_id: str,
     title: str,
     scheduled_at: datetime,
     created_by_id: int,

@@ -19,7 +19,7 @@ class PagedMilestones:
 
 
 def list_milestones(
-    db: Session, *, project_id: int, page: int, page_size: int, include_deleted: bool,
+    db: Session, *, project_id: str, page: int, page_size: int, include_deleted: bool,
 ) -> PagedMilestones:
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if project is None:
