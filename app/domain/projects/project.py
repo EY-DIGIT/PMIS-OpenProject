@@ -10,9 +10,6 @@ from typing import Optional
 class Project:
     """
     Project domain entity.
-
-    This represents the business model of a project, separate from database concerns.
-    Follows OpenProject semantics.
     """
 
     id: int
@@ -25,20 +22,22 @@ class Project:
     created_at: datetime
     updated_at: datetime
     parent_id: Optional[int] = None
-    # New fields for enhanced project management
-    status: str = "new"  # Configure allowed values in app/core/constants.py
-    owner: Optional[str] = None  # Username of the project owner
-    category: Optional[str] = None  # Configure allowed values in app/core/constants.py
-    start_date: Optional[datetime] = None  # Must be in the future
-    end_date: Optional[datetime] = None  # Must be in the future and after start_date
+    status: str = "new"
+    owner: Optional[str] = None
+    category: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    actual_end_date: Optional[datetime] = None
+    is_version: bool = False
+    version_of: Optional[int] = None
+    baseline_id: Optional[int] = None
+    version_no: Optional[int] = None
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[int] = None
 
     def to_dict(self) -> dict:
-        """
-        Convert project to dictionary.
-
-        Returns:
-            Dictionary representation of project
-        """
         return {
             "id": self.id,
             "identifier": self.identifier,
@@ -52,34 +51,28 @@ class Project:
             "category": self.category,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
+            "actual_end_date": self.actual_end_date.isoformat() if self.actual_end_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "parent_id": self.parent_id,
+            "is_version": self.is_version,
+            "version_of": self.version_of,
+            "baseline_id": self.baseline_id,
+            "version_no": self.version_no,
+            "created_by": self.created_by,
+            "updated_by": self.updated_by,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "deleted_by": self.deleted_by,
         }
 
     def is_active(self) -> bool:
-        """
-        Check if project is active.
-
-        Returns:
-            True if project is active
-        """
         return self.active
 
     def is_public(self) -> bool:
-        """
-        Check if project is public.
-
-        Returns:
-            True if project is public
-        """
         return self.public
 
     def has_parent(self) -> bool:
-        """
-        Check if project has a parent.
-
-        Returns:
-            True if project has a parent
-        """
         return self.parent_id is not None
+
+    def is_soft_deleted(self) -> bool:
+        return self.deleted_at is not None

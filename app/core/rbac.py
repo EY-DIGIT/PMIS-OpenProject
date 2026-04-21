@@ -32,7 +32,9 @@ class Permission(str, Enum):
     PROJECTS_UPDATE_ALL = "projects:update_all"
     PROJECTS_DELETE = "projects:delete"
     PROJECTS_DELETE_ALL = "projects:delete_all"
-    
+    PROJECTS_PUBLISH = "projects:publish"
+    PROJECTS_CLOSE = "projects:close"
+
     # Project Members permissions
     PROJECT_MEMBERS_READ = "project_members:read"
     PROJECT_MEMBERS_ADD = "project_members:add"
@@ -106,6 +108,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECTS_UPDATE_ALL,
         Permission.PROJECTS_DELETE,
         Permission.PROJECTS_DELETE_ALL,
+        Permission.PROJECTS_PUBLISH,
+        Permission.PROJECTS_CLOSE,
         Permission.PROJECT_MEMBERS_READ,
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,

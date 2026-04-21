@@ -23,10 +23,96 @@ class TestCreateProject:
         resp = client.post("/api/v3/projects", json={
             "identifier": "proj-new",
             "name": "New Fields Project",
-            "status": "in_progress",
+            "status": "new",
             "category": "MSAP",
         }, headers=admin_headers)
         assert resp.status_code == 201
+
+    def test_create_project_server_generates_identifier(self, client, admin_user, admin_headers):
+        resp = client.post("/api/v3/projects", json={
+            "name": "Auto ID Project",
+        }, headers=admin_headers)
+        assert resp.status_code == 201
+        data = resp.json()["data"]
+        assert data["identifier"].startswith("prj")
+        assert data["isVersion"] is False
+
+
+class TestPublishProject:
+    """POST /api/v3/projects/{id}/publish"""
+
+    def test_publish_new_project(self, client, admin_user, admin_headers, sample_project):
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "published"
+
+    def test_publish_is_idempotent_rejected(self, client, admin_user, admin_headers, sample_project):
+        first = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        assert first.status_code == 200
+        second = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        assert second.status_code == 409
+
+    def test_publish_locks_patch(self, client, admin_user, admin_headers, sample_project):
+        client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        resp = client.patch(f"/api/v3/projects/{sample_project.id}", json={
+            "name": "Should Not Apply",
+        }, headers=admin_headers)
+        assert resp.status_code == 409
+
+
+class TestCloseProject:
+    """POST /api/v3/projects/{id}/close"""
+
+    def test_close_project(self, client, admin_user, admin_headers, sample_project):
+        resp = client.post(
+            f"/api/v3/projects/{sample_project.id}/close",
+            json={"reason": "no longer needed"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["status"] == "closed"
+
+
+class TestCreateVersion:
+    """POST /api/v3/projects/{identifier}/versions"""
+
+    def test_create_version_from_published_baseline(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        resp = client.post(
+            f"/api/v3/projects/{sample_project.identifier}/versions",
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201
+        data = resp.json()["data"]
+        assert data["isVersion"] is True
+        assert data["versionNo"] == 1
+        assert data["baselineId"] == sample_project.id
+
+    def test_create_version_rejects_unpublished(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        resp = client.post(
+            f"/api/v3/projects/{sample_project.identifier}/versions",
+            headers=admin_headers,
+        )
+        assert resp.status_code == 409
+
+    def test_one_active_version_per_baseline(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
+        first = client.post(
+            f"/api/v3/projects/{sample_project.identifier}/versions",
+            headers=admin_headers,
+        )
+        assert first.status_code == 201
+        second = client.post(
+            f"/api/v3/projects/{sample_project.identifier}/versions",
+            headers=admin_headers,
+        )
+        assert second.status_code == 409
 
     def test_create_project_duplicate_identifier(self, client, admin_user, admin_headers, sample_project):
         resp = client.post("/api/v3/projects", json={

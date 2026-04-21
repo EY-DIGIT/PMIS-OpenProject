@@ -49,8 +49,8 @@ def init_db() -> None:
     # Import models here to avoid circular imports
     # This ensures models are registered with Base before table creation
     from .models import (  # noqa: F401
-        UserModel, ProjectModel, RoleModel, ProjectMemberModel,
-        WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
+        UserModel, ProjectModel, ProjectAuditLogModel, RoleModel, ProjectMemberModel,
+        WorkPackageModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
         MeetingAgendaItemModel,
         MilestoneModel, ActivityModel, ActivityResourceModel,
         TaskModel, TaskResourceModel, SubtaskModel, SubtaskResourceModel,
@@ -89,6 +89,44 @@ def init_db() -> None:
                             logging.warning("Failed to add column refresh_token_expires_at: %s", e)
                 except Exception:
                     # If PRAGMA fails for any reason, do not prevent app startup
+                    pass
+
+                # projects: add new columns for versioning, audit, and soft-delete
+                # on databases that were created before these columns existed.
+                try:
+                    res = conn.execute(text("PRAGMA table_info('projects')"))
+                    project_cols = {r[1] for r in res.fetchall()}
+
+                    project_column_ddl = [
+                        ("actual_end_date",   "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
+                        ("is_version",        "ALTER TABLE projects ADD COLUMN is_version BOOLEAN NOT NULL DEFAULT 0"),
+                        ("version_of",        "ALTER TABLE projects ADD COLUMN version_of INTEGER REFERENCES projects(id)"),
+                        ("baseline_id",       "ALTER TABLE projects ADD COLUMN baseline_id INTEGER REFERENCES projects(id)"),
+                        ("version_no",        "ALTER TABLE projects ADD COLUMN version_no INTEGER"),
+                        ("created_by",        "ALTER TABLE projects ADD COLUMN created_by INTEGER REFERENCES users(id)"),
+                        ("updated_by",        "ALTER TABLE projects ADD COLUMN updated_by INTEGER REFERENCES users(id)"),
+                        ("deleted_at",        "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
+                        ("deleted_by",        "ALTER TABLE projects ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                    ]
+                    for col, ddl in project_column_ddl:
+                        if col not in project_cols:
+                            try:
+                                conn.execute(text(ddl))
+                            except Exception as e:
+                                logging.warning("Failed to add projects.%s: %s", col, e)
+
+                    # Partial unique index enforcing "one active version per baseline".
+                    # Active = is_version AND status != 'suspended' AND not soft-deleted.
+                    try:
+                        conn.execute(text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS "
+                            "ux_projects_active_version_per_baseline "
+                            "ON projects(version_of) "
+                            "WHERE is_version = 1 AND status != 'suspended' AND deleted_at IS NULL"
+                        ))
+                    except Exception as e:
+                        logging.warning("Failed to create ux_projects_active_version_per_baseline: %s", e)
+                except Exception:
                     pass
     except Exception:
         # Non-fatal: do not prevent application start on unexpected errors

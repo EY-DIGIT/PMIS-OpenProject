@@ -1,6 +1,7 @@
 """Database models package."""
 from .user import UserModel
 from .project import ProjectModel
+from .project_audit_log import ProjectAuditLogModel
 from .project_member import ProjectMemberModel
 from .role import RoleModel
 from .work_package import WorkPackageModel
@@ -17,7 +18,8 @@ from .subtask import SubtaskModel
 from .subtask_resource import SubtaskResourceModel
 
 __all__ = [
-    "UserModel", "ProjectModel", "ProjectMemberModel", "RoleModel",
+    "UserModel", "ProjectModel", "ProjectAuditLogModel",
+    "ProjectMemberModel", "RoleModel",
     "WorkPackageModel", "WorkPackageTypeModel", "MeetingModel",
     "MeetingParticipantModel", "MeetingAgendaItemModel",
     "MilestoneModel", "ActivityModel", "ActivityResourceModel",

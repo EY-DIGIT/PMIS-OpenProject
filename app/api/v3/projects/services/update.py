@@ -1,167 +1,166 @@
 """
 Project update service.
 """
-from typing import Optional
+from typing import Any, Dict, Optional
 from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
+
+from .....core.errors import AuthorizationError, DomainError, NotFoundError, ValidationError
+from .....core.project_lock import assert_project_editable
+from .....domain.projects.project import Project
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.user_repository import UserRepository
-from .....domain.projects.project import Project
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
+from .audit import ACTION_UPDATE, project_snapshot, record_audit
+from .transitions import editable_fields_for
 
-def verify_user_exists(db: Session, username: str) -> bool:
-    """
-    Verify if a user exists in the system by username.
-    
-    Args:
-        db: Database session
-        username: Username to verify
-        
-    Returns:
-        True if user exists, False otherwise
-    """
-    user_repo = UserRepository(db)
-    user = user_repo.get_by_login(username)
-    return user is not None
+
+def _verify_user_exists(db: Session, username: str) -> bool:
+    return UserRepository(db).get_by_login(username) is not None
 
 
 def update_project(
     db: Session,
     project_id: int,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    active: Optional[bool] = None,
-    public: Optional[bool] = None,
-    status_explanation: Optional[str] = None,
-    parent_id: Optional[int] = None,
-    status: Optional[str] = None,
-    owner: Optional[str] = None,
-    category: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    *,
+    actor_id: Optional[int],
+    patch: Dict[str, Any],
 ) -> ServiceResult[Project]:
     """
-    Update a project.
+    Apply a field patch to a project.
 
-    Args:
-        db: Database session
-        project_id: Project ID
-        name: New project name
-        description: New project description
-        active: New active status
-        public: New public status
-        status_explanation: New status explanation
-        parent_id: New parent project ID
-        status: New project status
-        owner: New project owner username
-        category: New project category
-        start_date: New project start date
-        end_date: New project end date
-
-    Returns:
-        ServiceResult with updated project or error
+    ``patch`` is a dict of snake_case field names (the controller translates
+    from the request schema). Fields outside the editable whitelist for the
+    project's current state are rejected with 422 invalid_field.
     """
-    repository = ProjectRepository(db)
-
-    # Check if project exists
-    project = repository.get_by_id(project_id)
-    if not project:
+    repo = ProjectRepository(db)
+    project = repo.get_by_id(project_id)
+    if project is None:
         return ServiceResult.fail(
             error=f"Project with ID {project_id} not found",
-            error_type="not_found"
+            error_type="not_found",
         )
 
-    # Validate name if provided
-    if name is not None:
-        name = normalize_string(name)
-        if not name or len(name) > 255:
+    # Lock: published baselines (and, once M/A/T/S contributor extends this,
+    # their subtrees) are not editable. Upstream's assert_project_editable
+    # raises NotFoundError for soft-deleted / missing rows and
+    # AuthorizationError for a published baseline.
+    try:
+        assert_project_editable(db, project_id)
+    except NotFoundError as e:
+        return ServiceResult.fail(error=e.message, error_type="not_found")
+    except AuthorizationError as e:
+        return ServiceResult.fail(
+            error=e.message,
+            error_type="project_locked",
+            details={"errorIdentifier": "project_locked"},
+        )
+    except DomainError as e:
+        return ServiceResult.fail(error=e.message, error_type="validation_error")
+
+    # Drop keys whose value is None — None means "unchanged" in a PATCH.
+    supplied = {k: v for k, v in patch.items() if v is not None}
+
+    allowed = editable_fields_for(project)
+    rejected = sorted(set(supplied) - allowed)
+    if rejected:
+        return ServiceResult.fail(
+            error=(
+                f"Fields not editable in current project state: "
+                f"{', '.join(rejected)}"
+            ),
+            error_type="invalid_field",
+            details={
+                "errorIdentifier": "invalid_field",
+                "rejected": rejected,
+                "allowed": sorted(allowed),
+                "project_status": project.status,
+                "is_version": project.is_version,
+            },
+        )
+
+    if "name" in supplied:
+        supplied["name"] = normalize_string(supplied["name"])
+        if not supplied["name"] or len(supplied["name"]) > 255:
             return ServiceResult.fail(
                 error="Invalid name. Must be 1-255 characters.",
-                error_type="validation_error"
+                error_type="validation_error",
             )
 
-    # Validate description if provided
-    if description is not None and len(description) > 5000:
-        return ServiceResult.fail(
-            error="Description too long. Maximum 5000 characters.",
-            error_type="validation_error"
-        )
-
-    # Validate status explanation if provided
-    if status_explanation is not None and len(status_explanation) > 5000:
-        return ServiceResult.fail(
-            error="Status explanation too long. Maximum 5000 characters.",
-            error_type="validation_error"
-        )
-
-    # Validate parent project if specified
-    if parent_id is not None and parent_id != project.parent_id:
-        if not repository.exists_by_id(parent_id):
+    if "description" in supplied and supplied["description"] is not None:
+        if len(supplied["description"]) > 5000:
             return ServiceResult.fail(
-                error=f"Parent project with ID {parent_id} does not exist",
-                error_type="not_found"
+                error="Description too long. Maximum 5000 characters.",
+                error_type="validation_error",
             )
 
-    # Validate dates: must be in the future
-    if start_date is not None and start_date <= datetime.now(timezone.utc):
-        return ServiceResult.fail(
-            error="start_date must be in the future",
-            error_type="validation_error"
-        )
+    if "status_explanation" in supplied and supplied["status_explanation"] is not None:
+        if len(supplied["status_explanation"]) > 5000:
+            return ServiceResult.fail(
+                error="Status explanation too long. Maximum 5000 characters.",
+                error_type="validation_error",
+            )
 
-    if end_date is not None and end_date <= datetime.now(timezone.utc):
-        return ServiceResult.fail(
-            error="end_date must be in the future",
-            error_type="validation_error"
-        )
+    now_utc = datetime.now(timezone.utc)
+    for date_field in ("start_date", "end_date", "actual_end_date"):
+        value = supplied.get(date_field)
+        if value is not None and date_field != "actual_end_date":
+            if value <= now_utc:
+                return ServiceResult.fail(
+                    error=f"{date_field} must be in the future",
+                    error_type="validation_error",
+                )
 
-    # Validate end_date is after start_date
-    # Use existing dates if new ones not provided
-    effective_start = start_date if start_date is not None else project.start_date
-    effective_end = end_date if end_date is not None else project.end_date
-    
-    if effective_start is not None and effective_end is not None and effective_end <= effective_start:
+    effective_start = supplied.get("start_date", project.start_date)
+    effective_end = supplied.get("end_date", project.end_date)
+    if (
+        effective_start is not None
+        and effective_end is not None
+        and effective_end <= effective_start
+    ):
         return ServiceResult.fail(
             error="end_date must be after start_date",
-            error_type="validation_error"
+            error_type="validation_error",
         )
 
-    # Validate owner: must be a valid username in the system
-    if owner is not None and not verify_user_exists(db, owner):
+    if "owner" in supplied and not _verify_user_exists(db, supplied["owner"]):
         return ServiceResult.fail(
-            error=f"Owner user with username '{owner}' does not exist",
-            error_type="validation_error"
+            error=f"Owner user '{supplied['owner']}' does not exist",
+            error_type="validation_error",
         )
 
-    # Update project
+    before = project_snapshot(project)
+
     try:
-        updated = repository.update(
+        updated = repo.update(
             project_id=project_id,
-            name=name,
-            description=description,
-            active=active,
-            public=public,
-            status_explanation=status_explanation,
-            parent_id=parent_id,
-            status=status,
-            owner=owner,
-            category=category,
-            start_date=start_date,
-            end_date=end_date,
+            updated_by=actor_id,
+            **supplied,
         )
-
-        if not updated:
+        if updated is None:
             return ServiceResult.fail(
                 error=f"Project with ID {project_id} not found",
-                error_type="not_found"
+                error_type="not_found",
             )
 
+        record_audit(
+            db,
+            project_id=project_id,
+            actor_id=actor_id,
+            action=ACTION_UPDATE,
+            before=before,
+            after=project_snapshot(updated),
+        )
+
+        db.commit()
         return ServiceResult.ok(updated)
 
     except Exception as e:
+        db.rollback()
         return ServiceResult.fail(
             error=f"Failed to update project: {str(e)}",
-            error_type="internal_error"
+            error_type="internal_error",
         )

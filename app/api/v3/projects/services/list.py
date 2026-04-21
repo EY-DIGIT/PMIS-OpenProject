@@ -42,9 +42,9 @@ def list_projects(
     repository = ProjectRepository(db)
     offset = calculate_offset(page, page_size)
 
-    # Build query with filters
+    # Build query with filters (exclude soft-deleted rows)
     try:
-        query = db.query(ProjectModel)
+        query = db.query(ProjectModel).filter(ProjectModel.deleted_at.is_(None))
 
         if active is not None:
             query = query.filter(ProjectModel.active == active)

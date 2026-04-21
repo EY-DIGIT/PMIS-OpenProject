@@ -1,12 +1,22 @@
 """
 Project repository for database operations.
+
+Writes (create/update/soft_delete/hard_delete) do NOT commit. Callers own the
+transaction boundary and must call ``db.commit()`` after the full operation
+succeeds — this lets multi-step flows (version create + subtree clone, project
+delete + subtree cascade) run atomically.
 """
-from datetime import datetime, timezone
 from typing import Optional, List, Tuple
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from ...db.models.project import ProjectModel
+from sqlalchemy import func, and_
+
+from ..models.project import ProjectModel
 from ....domain.projects.project import Project
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _dialect_insert(db: Session):
@@ -29,24 +39,9 @@ class ProjectRepository:
     """Repository for Project database operations."""
 
     def __init__(self, db: Session):
-        """
-        Initialize repository.
-
-        Args:
-            db: Database session
-        """
         self.db = db
 
     def _to_domain(self, model: ProjectModel) -> Project:
-        """
-        Convert database model to domain model.
-
-        Args:
-            model: Database model
-
-        Returns:
-            Domain model
-        """
         return Project(
             id=model.id,
             identifier=model.identifier,
@@ -63,10 +58,24 @@ class ProjectRepository:
             category=model.category,
             start_date=model.start_date,
             end_date=model.end_date,
+            actual_end_date=model.actual_end_date,
+            is_version=bool(model.is_version),
+            version_of=model.version_of,
+            baseline_id=model.baseline_id,
+            version_no=model.version_no,
+            created_by=model.created_by,
+            updated_by=model.updated_by,
+            deleted_at=model.deleted_at,
+            deleted_by=model.deleted_by,
         )
+
+    # ------------------------------------------------------------------
+    # writes — no commit; caller owns transaction boundary
+    # ------------------------------------------------------------------
 
     def create(
         self,
+        *,
         identifier: str,
         name: str,
         description: Optional[str] = None,
@@ -77,30 +86,16 @@ class ProjectRepository:
         status: str = "new",
         owner: Optional[str] = None,
         category: Optional[str] = None,
-        start_date: Optional[object] = None,
-        end_date: Optional[object] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        actual_end_date: Optional[datetime] = None,
+        is_version: bool = False,
+        version_of: Optional[int] = None,
+        baseline_id: Optional[int] = None,
+        version_no: Optional[int] = None,
+        created_by: Optional[int] = None,
     ) -> Project:
-        """
-        Create a new project.
-
-        Args:
-            identifier: Project identifier (unique)
-            name: Project name
-            description: Project description
-            active: Whether project is active
-            public: Whether project is public
-            status_explanation: Project status explanation
-            parent_id: Parent project ID
-            status: Project status (see PROJECT_STATUS_CHOICES in schemas.py)
-            owner: Project owner username
-            category: Project category (see PROJECT_CATEGORY_CHOICES in schemas.py)
-            start_date: Project start date
-            end_date: Project end date
-
-        Returns:
-            Created project domain model
-        """
-        project_model = ProjectModel(
+        model = ProjectModel(
             identifier=identifier,
             name=name,
             description=description,
@@ -113,13 +108,17 @@ class ProjectRepository:
             category=category,
             start_date=start_date,
             end_date=end_date,
+            actual_end_date=actual_end_date,
+            is_version=is_version,
+            version_of=version_of,
+            baseline_id=baseline_id,
+            version_no=version_no,
+            created_by=created_by,
+            updated_by=created_by,
         )
-
-        self.db.add(project_model)
-        self.db.commit()
-        self.db.refresh(project_model)
-
-        return self._to_domain(project_model)
+        self.db.add(model)
+        self.db.flush()
+        return self._to_domain(model)
 
     def upsert_by_identifier(
         self,
@@ -133,24 +132,25 @@ class ProjectRepository:
         status: str = "new",
         owner: Optional[str] = None,
         category: Optional[str] = None,
-        start_date: Optional[object] = None,
-        end_date: Optional[object] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Tuple[Project, bool]:
         """
         Insert a project if no row with this identifier exists, otherwise
-        update the existing row. Atomic at the database level using
-        INSERT ... ON CONFLICT (identifier) DO UPDATE (SQLite 3.24+ / Postgres 9.5+).
+        update the existing row. Atomic via INSERT ... ON CONFLICT (identifier)
+        DO UPDATE (SQLite 3.24+ / Postgres 9.5+).
 
-        The identifier and created_at columns are never overwritten on the
-        update path; updated_at is set to the current UTC time.
+        identifier and created_at are never overwritten; updated_at is bumped.
 
         Returns:
-            Tuple of (project domain model, created flag). created=True when
-            the row was freshly inserted, False when an existing row was
-            updated.
+            (project, created) — created=True on fresh insert, False on update.
+
+        Unlike the other writes, this method commits on success to preserve
+        the atomicity of the ON CONFLICT semantics that the wizard flow relies
+        on. Callers should not wrap it in their own transaction.
         """
         insert_fn = _dialect_insert(self.db)
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
 
         values = dict(
             identifier=identifier,
@@ -184,13 +184,11 @@ class ProjectRepository:
                 "start_date": stmt.excluded.start_date,
                 "end_date": stmt.excluded.end_date,
                 "updated_at": now,
-                # NOTE: identifier and created_at intentionally preserved.
+                # identifier and created_at intentionally preserved.
             },
         )
 
-        # Detect insert vs. update portably: check existence before executing.
-        # (ON CONFLICT itself is atomic; this extra query is only used to
-        # label the outcome for the API response.)
+        # Detect insert vs. update portably by probing before the statement.
         existed_before = (
             self.db.query(ProjectModel.id)
             .filter(ProjectModel.identifier == identifier)
@@ -208,186 +206,177 @@ class ProjectRepository:
         )
         return self._to_domain(model), (not existed_before)
 
-    def get_by_id(self, project_id: int) -> Optional[Project]:
-        """
-        Get project by ID.
-
-        Args:
-            project_id: Project ID
-
-        Returns:
-            Project if found, None otherwise
-        """
-        model = self.db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
-        return self._to_domain(model) if model else None
-
-    def get_by_identifier(self, identifier: str) -> Optional[Project]:
-        """
-        Get project by identifier.
-
-        Args:
-            identifier: Project identifier
-
-        Returns:
-            Project if found, None otherwise
-        """
-        model = self.db.query(ProjectModel).filter(ProjectModel.identifier == identifier).first()
-        return self._to_domain(model) if model else None
-
-    def list_all(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
-        """
-        List all projects with pagination.
-
-        Args:
-            offset: Number of items to skip
-            limit: Maximum number of items to return
-
-        Returns:
-            Tuple of (list of projects, total count)
-        """
-        total = self.db.query(func.count(ProjectModel.id)).scalar()
-        models = self.db.query(ProjectModel).offset(offset).limit(limit).all()
-        projects = [self._to_domain(m) for m in models]
-        return projects, total
-
-    def list_active(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
-        """
-        List active projects with pagination.
-
-        Args:
-            offset: Number of items to skip
-            limit: Maximum number of items to return
-
-        Returns:
-            Tuple of (list of active projects, total count)
-        """
-        total = self.db.query(func.count(ProjectModel.id)).filter(ProjectModel.active == True).scalar()
-        models = self.db.query(ProjectModel).filter(ProjectModel.active == True).offset(offset).limit(limit).all()
-        projects = [self._to_domain(m) for m in models]
-        return projects, total
-
-    def list_public(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
-        """
-        List public projects with pagination.
-
-        Args:
-            offset: Number of items to skip
-            limit: Maximum number of items to return
-
-        Returns:
-            Tuple of (list of public projects, total count)
-        """
-        total = self.db.query(func.count(ProjectModel.id)).filter(ProjectModel.public == True).scalar()
-        models = self.db.query(ProjectModel).filter(ProjectModel.public == True).offset(offset).limit(limit).all()
-        projects = [self._to_domain(m) for m in models]
-        return projects, total
-
-    def exists_by_identifier(self, identifier: str) -> bool:
-        """
-        Check if project with identifier exists.
-
-        Args:
-            identifier: Project identifier
-
-        Returns:
-            True if exists, False otherwise
-        """
-        return self.db.query(ProjectModel).filter(ProjectModel.identifier == identifier).first() is not None
-
-    def exists_by_id(self, project_id: int) -> bool:
-        """
-        Check if project with ID exists.
-
-        Args:
-            project_id: Project ID
-
-        Returns:
-            True if exists, False otherwise
-        """
-        return self.db.query(ProjectModel).filter(ProjectModel.id == project_id).first() is not None
-
     def update(
         self,
         project_id: int,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        active: Optional[bool] = None,
-        public: Optional[bool] = None,
-        status_explanation: Optional[str] = None,
-        parent_id: Optional[int] = None,
-        status: Optional[str] = None,
-        owner: Optional[str] = None,
-        category: Optional[str] = None,
-        start_date: Optional[object] = None,
-        end_date: Optional[object] = None,
+        *,
+        updated_by: Optional[int] = None,
+        include_deleted: bool = False,
+        **fields,
     ) -> Optional[Project]:
-        """
-        Update a project.
-
-        Args:
-            project_id: Project ID
-            name: New name
-            description: New description
-            active: New active status
-            public: New public status
-            status_explanation: New status explanation
-            parent_id: New parent project ID
-            status: New status
-            owner: New owner username
-            category: New category
-            start_date: New start date
-            end_date: New end date
-
-        Returns:
-            Updated project if found, None otherwise
-        """
-        model = self.db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+        """Apply a field patch. Only known model attributes are applied."""
+        q = self.db.query(ProjectModel).filter(ProjectModel.id == project_id)
+        if not include_deleted:
+            q = q.filter(ProjectModel.deleted_at.is_(None))
+        model = q.first()
         if not model:
             return None
 
-        if name is not None:
-            model.name = name
-        if description is not None:
-            model.description = description
-        if active is not None:
-            model.active = active
-        if public is not None:
-            model.public = public
-        if status_explanation is not None:
-            model.status_explanation = status_explanation
-        if parent_id is not None:
-            model.parent_id = parent_id
-        if status is not None:
-            model.status = status
-        if owner is not None:
-            model.owner = owner
-        if category is not None:
-            model.category = category
-        if start_date is not None:
-            model.start_date = start_date
-        if end_date is not None:
-            model.end_date = end_date
+        for attr, value in fields.items():
+            if value is None:
+                continue
+            if hasattr(model, attr):
+                setattr(model, attr, value)
 
-        self.db.commit()
-        self.db.refresh(model)
+        if updated_by is not None:
+            model.updated_by = updated_by
 
+        self.db.flush()
         return self._to_domain(model)
 
-    def delete(self, project_id: int) -> bool:
-        """
-        Delete a project.
+    def soft_delete(
+        self,
+        project_id: int,
+        actor_id: Optional[int],
+        when: Optional[datetime] = None,
+    ) -> Optional[Project]:
+        """Mark a project deleted. Idempotent on already-deleted rows."""
+        model = (
+            self.db.query(ProjectModel)
+            .filter(ProjectModel.id == project_id)
+            .first()
+        )
+        if not model:
+            return None
+        if model.deleted_at is None:
+            model.deleted_at = when or _utcnow()
+            model.deleted_by = actor_id
+            self.db.flush()
+        return self._to_domain(model)
 
-        Args:
-            project_id: Project ID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        model = self.db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+    def hard_delete(self, project_id: int) -> bool:
+        """Remove a row. Reserved for tests or admin cleanup — prefer soft_delete."""
+        model = (
+            self.db.query(ProjectModel)
+            .filter(ProjectModel.id == project_id)
+            .first()
+        )
         if not model:
             return False
-
         self.db.delete(model)
-        self.db.commit()
-
+        self.db.flush()
         return True
+
+    # ------------------------------------------------------------------
+    # reads — filter soft-deleted by default
+    # ------------------------------------------------------------------
+
+    def _base_query(self, include_deleted: bool = False):
+        q = self.db.query(ProjectModel)
+        if not include_deleted:
+            q = q.filter(ProjectModel.deleted_at.is_(None))
+        return q
+
+    def get_by_id(self, project_id: int, include_deleted: bool = False) -> Optional[Project]:
+        model = self._base_query(include_deleted).filter(ProjectModel.id == project_id).first()
+        return self._to_domain(model) if model else None
+
+    def get_by_identifier(self, identifier: str, include_deleted: bool = False) -> Optional[Project]:
+        model = (
+            self._base_query(include_deleted)
+            .filter(ProjectModel.identifier == identifier)
+            .first()
+        )
+        return self._to_domain(model) if model else None
+
+    def list_all(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
+        q = self._base_query()
+        total = q.with_entities(func.count(ProjectModel.id)).scalar()
+        models = q.offset(offset).limit(limit).all()
+        return [self._to_domain(m) for m in models], total
+
+    def list_active(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
+        q = self._base_query().filter(ProjectModel.active == True)  # noqa: E712
+        total = q.with_entities(func.count(ProjectModel.id)).scalar()
+        models = q.offset(offset).limit(limit).all()
+        return [self._to_domain(m) for m in models], total
+
+    def list_public(self, offset: int = 0, limit: int = 20) -> Tuple[List[Project], int]:
+        q = self._base_query().filter(ProjectModel.public == True)  # noqa: E712
+        total = q.with_entities(func.count(ProjectModel.id)).scalar()
+        models = q.offset(offset).limit(limit).all()
+        return [self._to_domain(m) for m in models], total
+
+    # Existence checks deliberately ignore soft-delete: identifiers should not
+    # be reusable while a deleted row still occupies them.
+    def exists_by_identifier(self, identifier: str) -> bool:
+        return (
+            self.db.query(ProjectModel.id)
+            .filter(ProjectModel.identifier == identifier)
+            .first()
+            is not None
+        )
+
+    def exists_by_id(self, project_id: int) -> bool:
+        return (
+            self.db.query(ProjectModel.id)
+            .filter(ProjectModel.id == project_id)
+            .first()
+            is not None
+        )
+
+    # ------------------------------------------------------------------
+    # version helpers
+    # ------------------------------------------------------------------
+
+    def active_version_exists(self, baseline_id: int) -> bool:
+        """Any version of ``baseline_id`` that is not suspended or deleted."""
+        return (
+            self.db.query(ProjectModel.id)
+            .filter(
+                and_(
+                    ProjectModel.version_of == baseline_id,
+                    ProjectModel.is_version == True,  # noqa: E712
+                    ProjectModel.status != "suspended",
+                    ProjectModel.deleted_at.is_(None),
+                )
+            )
+            .first()
+            is not None
+        )
+
+    def next_version_no(self, baseline_id: int) -> int:
+        """Next sequential version number for a baseline (1-indexed)."""
+        max_no = (
+            self.db.query(func.max(ProjectModel.version_no))
+            .filter(ProjectModel.version_of == baseline_id)
+            .scalar()
+        )
+        return (max_no or 0) + 1
+
+    # ------------------------------------------------------------------
+    # identifier generation
+    # ------------------------------------------------------------------
+
+    _DEFAULT_IDENTIFIER_PREFIX = "prj"
+
+    def generate_next_identifier(self, prefix: str = _DEFAULT_IDENTIFIER_PREFIX) -> str:
+        """
+        Allocate the next sequential identifier ``{prefix}{n:03d}`` for a new
+        non-version project. Scans existing identifiers to find the highest
+        integer suffix for the prefix and returns prefix + (max + 1).
+        """
+        rows = (
+            self.db.query(ProjectModel.identifier)
+            .filter(ProjectModel.identifier.like(f"{prefix}%"))
+            .all()
+        )
+        max_n = 0
+        prefix_len = len(prefix)
+        for (ident,) in rows:
+            tail = ident[prefix_len:]
+            if tail.isdigit():
+                n = int(tail)
+                if n > max_n:
+                    max_n = n
+        return f"{prefix}{max_n + 1:03d}"

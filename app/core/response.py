@@ -160,12 +160,20 @@ def format_project_response(
         "description": project_data.get("description"),
         "active": project_data.get("active", True),
         "public": project_data.get("public", False),
+        "isPublic": project_data.get("public", False),
         "statusExplanation": project_data.get("status_explanation"),
         "status": project_data.get("status"),
         "owner": project_data.get("owner"),
         "category": project_data.get("category"),
         "startDate": project_data.get("start_date"),
         "endDate": project_data.get("end_date"),
+        "actualEndDate": project_data.get("actual_end_date"),
+        "isVersion": project_data.get("is_version", False),
+        "versionOf": project_data.get("version_of"),
+        "baselineId": project_data.get("baseline_id"),
+        "versionNo": project_data.get("version_no"),
+        "createdBy": project_data.get("created_by"),
+        "updatedBy": project_data.get("updated_by"),
         "createdAt": project_data.get("created_at"),
         "updatedAt": project_data.get("updated_at"),
     }
@@ -174,6 +182,12 @@ def format_project_response(
     if project_data.get("parent_id"):
         response["_links"]["parent"] = {
             "href": f"{base_url}/projects/{project_data.get('parent_id')}"
+        }
+
+    # Link to the baseline this version was cloned from
+    if project_data.get("baseline_id"):
+        response["_links"]["baseline"] = {
+            "href": f"{base_url}/projects/{project_data.get('baseline_id')}"
         }
 
     return response

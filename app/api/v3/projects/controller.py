@@ -1,54 +1,76 @@
 """
 Project controller - orchestrates requests and responses.
 """
+from typing import Any, Dict
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from .schemas import (
-    ProjectCreateRequest,
-    ProjectUpdateRequest,
-    ProjectUpsertRequest,
-    ProjectListQuery
-)
-from .services import (
-    create_project,
-    get_project_by_id,
-    list_projects,
-    update_project,
-    delete_project,
-    upsert_project,
-)
-from ....core.response import (
-    format_project_response,
-    format_collection_response,
-)
+
 from ....core.base_controller import BaseController
 from ....core.dependencies import get_current_user_id
+from ....core.response import format_collection_response, format_project_response
+
+from .schemas import (
+    ProjectCloseRequest,
+    ProjectCreateRequest,
+    ProjectListQuery,
+    ProjectUpdateRequest,
+    ProjectUpsertRequest,
+)
+from .services import (
+    close_project,
+    create_project,
+    create_version,
+    delete_project,
+    get_project_by_id,
+    list_projects,
+    publish_project,
+    suspend_version,
+    update_project,
+    upsert_project,
+)
+
+
+_HTTP_BY_ERROR_TYPE = {
+    "validation_error": 422,
+    "invalid_field": 422,
+    "invalid_transition": 409,
+    "invalid_source": 409,
+    "active_version_exists": 409,
+    "already_exists": 409,
+    "project_locked": 409,
+    "forbidden": 403,
+    "not_found": 404,
+    "internal_error": 500,
+}
+
+
+def _error_response(result, *, default_status: int = 400) -> JSONResponse:
+    payload: Dict[str, Any] = {
+        "_type": "Error",
+        "errorIdentifier": result.error_type,
+        "message": result.error,
+    }
+    if result.details:
+        payload["_embedded"] = {"details": result.details}
+    status = _HTTP_BY_ERROR_TYPE.get(result.error_type, default_status)
+    return BaseController.error(payload, status=status)
+
+
+def _actor_is_admin(request: Request) -> bool:
+    return bool(getattr(request.state, "is_admin", False))
 
 
 class ProjectController:
     """Controller for project operations."""
 
     @staticmethod
-    def create(
-        request: Request,
-        data: ProjectCreateRequest,
-        db: Session
-    ) -> JSONResponse:
-        """
-        Create a new project.
-
-        Args:
-            request: FastAPI request
-            data: Project creation data
-            db: Database session
-
-        Returns:
-            JSONResponse with created project
-        """
-        # Call service
+    def create(request: Request, data: ProjectCreateRequest, db: Session) -> JSONResponse:
+        actor_id = get_current_user_id(request)
         result = create_project(
             db=db,
+            actor_id=actor_id,
             identifier=data.identifier,
             name=data.name,
             description=data.description,
@@ -62,26 +84,130 @@ class ProjectController:
             start_date=data.start_date,
             end_date=data.end_date,
         )
-
         if not result.is_success():
-            status = 400
-            if result.error_type == "already_exists":
-                status = 409
-            elif result.error_type == "not_found":
-                status = 404
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.created(data=formatted)
 
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error
-            }
+    @staticmethod
+    def list(request: Request, query: ProjectListQuery, db: Session) -> JSONResponse:
+        result = list_projects(
+            db=db,
+            page=query.offset,
+            page_size=query.pageSize,
+            active=query.active,
+            public=query.public,
+        )
+        if not result.is_success():
+            return _error_response(result, default_status=500)
+        paginated = result.data
+        project_dicts = [p.to_dict() for p in paginated.items]
+        formatted = format_collection_response(
+            items=project_dicts,
+            total=paginated.total,
+            page=paginated.page,
+            page_size=paginated.page_size,
+            base_url="/api/v3",
+            collection_type="projects",
+        )
+        return BaseController.ok(data=formatted)
 
-            return BaseController.error(error_payload, status=status)
+    @staticmethod
+    def get(request: Request, project_id: int, db: Session) -> JSONResponse:
+        result = get_project_by_id(db, project_id)
+        if not result.is_success():
+            return _error_response(result, default_status=404)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
 
-        # Format response
-        project_dict = result.data.to_dict()
-        formatted = format_project_response(project_dict, "/api/v3")
+    @staticmethod
+    def update(
+        request: Request,
+        project_id: int,
+        data: ProjectUpdateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        patch: Dict[str, Any] = {
+            "name": data.name,
+            "description": data.description,
+            "active": data.active,
+            "public": data.public,
+            "status_explanation": data.statusExplanation,
+            "parent_id": data.parentId,
+            "status": data.status,
+            "owner": data.owner,
+            "category": data.category,
+            "start_date": data.start_date,
+            "end_date": data.end_date,
+            "actual_end_date": data.actual_end_date,
+        }
+        result = update_project(db, project_id, actor_id=actor_id, patch=patch)
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
 
+    @staticmethod
+    def delete(request: Request, project_id: int, db: Session) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        result = delete_project(db, project_id, actor_id=actor_id)
+        if not result.is_success():
+            return _error_response(result, default_status=404)
+        return BaseController.no_content()
+
+    @staticmethod
+    def publish(request: Request, project_id: int, db: Session) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        result = publish_project(
+            db, project_id,
+            actor_id=actor_id,
+            actor_is_admin=_actor_is_admin(request),
+        )
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
+
+    @staticmethod
+    def close(
+        request: Request,
+        project_id: int,
+        data: ProjectCloseRequest,
+        db: Session,
+    ) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        result = close_project(
+            db, project_id,
+            actor_id=actor_id,
+            actor_is_admin=_actor_is_admin(request),
+            reason=data.reason if data is not None else None,
+        )
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
+
+    @staticmethod
+    def suspend(request: Request, project_id: int, db: Session) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        result = suspend_version(
+            db, project_id,
+            actor_id=actor_id,
+            actor_is_admin=_actor_is_admin(request),
+        )
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
+
+    @staticmethod
+    def create_version(request: Request, identifier: str, db: Session) -> JSONResponse:
+        actor_id = get_current_user_id(request)
+        result = create_version(db, identifier, actor_id=actor_id)
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
         return BaseController.created(data=formatted)
 
     @staticmethod
@@ -92,17 +218,13 @@ class ProjectController:
         db: Session,
     ) -> JSONResponse:
         """
-        Idempotent create-or-update of a project by identifier.
+        Idempotent create-or-update of a project by identifier (wizard flow).
 
-        Use case: the project creation wizard. Re-submitting Step 1 (e.g. after
-        pressing Back) reuses the existing row instead of creating a duplicate.
-
-        Returns 201 Created on insert, 200 OK on update, 403 on ownership
-        violation, 404 if parent_id references a missing project, 422/400 on
-        validation errors.
+        Returns 201 on fresh insert, 200 on update, 403 on ownership violation,
+        404 if parent_id references a missing project.
         """
         current_user_login = getattr(request.state, "user_login", None)
-        is_admin = getattr(request.state, "is_admin", False)
+        is_admin = _actor_is_admin(request)
 
         result = upsert_project(
             db=db,
@@ -121,201 +243,13 @@ class ProjectController:
             start_date=data.start_date,
             end_date=data.end_date,
         )
-
         if not result.is_success():
-            status = 400
-            if result.error_type == "not_found":
-                status = 404
-            elif result.error_type == "forbidden":
-                status = 403
-            elif result.error_type == "internal_error":
-                status = 500
-
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error,
-            }
-            return BaseController.error(error_payload, status=status)
+            return _error_response(result)
 
         project, created = result.data
-        project_dict = project.to_dict()
-        formatted = format_project_response(project_dict, "/api/v3")
-
-        # Surface the insert-vs-update signal in the response envelope so the
-        # frontend wizard can distinguish the first save from subsequent ones.
+        formatted = format_project_response(project.to_dict(), "/api/v3")
+        # Surface insert-vs-update for the wizard frontend.
         formatted["_created"] = created
-
         if created:
             return BaseController.created(data=formatted)
         return BaseController.ok(data=formatted)
-
-    @staticmethod
-    def list(
-        request: Request,
-        query: ProjectListQuery,
-        db: Session
-    ) -> JSONResponse:
-        """
-        List projects with pagination.
-
-        Args:
-            request: FastAPI request
-            query: Query parameters
-            db: Database session
-
-        Returns:
-            JSONResponse with paginated projects
-        """
-        # Call service
-        result = list_projects(
-            db=db,
-            page=query.offset,
-            page_size=query.pageSize,
-            active=query.active,
-            public=query.public,
-        )
-
-        if not result.is_success():
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error
-            }
-
-            return BaseController.error(error_payload, status=500)
-
-        # Format response
-        paginated = result.data
-        project_dicts = [p.to_dict() for p in paginated.items]
-        formatted = format_collection_response(
-            items=project_dicts,
-            total=paginated.total,
-            page=paginated.page,
-            page_size=paginated.page_size,
-            base_url="/api/v3",
-            collection_type="projects"
-        )
-
-        return BaseController.ok(data=formatted)
-
-    @staticmethod
-    def get(
-        request: Request,
-        project_id: int,
-        db: Session
-    ) -> JSONResponse:
-        """
-        Get project by ID.
-
-        Args:
-            request: FastAPI request
-            project_id: Project ID
-            db: Database session
-
-        Returns:
-            JSONResponse with project
-        """
-        # Call service
-        result = get_project_by_id(db, project_id)
-
-        if not result.is_success():
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error
-            }
-
-            return BaseController.error(error_payload, status=404)
-
-        # Format response
-        project_dict = result.data.to_dict()
-        formatted = format_project_response(project_dict, "/api/v3")
-
-        return BaseController.ok(data=formatted)
-
-    @staticmethod
-    def update(
-        request: Request,
-        project_id: int,
-        data: ProjectUpdateRequest,
-        db: Session
-    ) -> JSONResponse:
-        """
-        Update project details.
-
-        Args:
-            request: FastAPI request
-            project_id: Project ID
-            data: Project update data
-            db: Database session
-
-        Returns:
-            JSONResponse with updated project
-        """
-        # Call service
-        result = update_project(
-            db=db,
-            project_id=project_id,
-            name=data.name,
-            description=data.description,
-            active=data.active,
-            public=data.public,
-            status_explanation=data.statusExplanation,
-            parent_id=data.parentId,
-            status=data.status,
-            owner=data.owner,
-            category=data.category,
-            start_date=data.start_date,
-            end_date=data.end_date,
-        )
-
-        if not result.is_success():
-            status = 400
-            if result.error_type == "not_found":
-                status = 404
-
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error
-            }
-
-            return BaseController.error(error_payload, status=status)
-
-        # Format response
-        project_dict = result.data.to_dict()
-        formatted = format_project_response(project_dict, "/api/v3")
-
-        return BaseController.ok(data=formatted)
-
-    @staticmethod
-    def delete(
-        request: Request,
-        project_id: int,
-        db: Session
-    ) -> JSONResponse:
-        """
-        Delete project by ID.
-
-        Args:
-            request: FastAPI request
-            project_id: Project ID
-            db: Database session
-
-        Returns:
-            JSONResponse with success
-        """
-        # Call service
-        result = delete_project(db, project_id)
-
-        if not result.is_success():
-            error_payload = {
-                "_type": "Error",
-                "errorIdentifier": result.error_type,
-                "message": result.error
-            }
-
-            return BaseController.error(error_payload, status=404)
-
-        return BaseController.no_content()
