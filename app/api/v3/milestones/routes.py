@@ -26,7 +26,7 @@ milestones_router = APIRouter(prefix="/milestones", tags=["milestones"])
 
 
 @milestones_project_router.post(
-    "/{project_uuid}/milestones",
+    "/{project_uuid}/milestones/create",
     dependencies=[require_permission(MILESTONES_CREATE)],
     summary="Create milestone under project",
     status_code=201,

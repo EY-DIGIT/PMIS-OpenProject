@@ -37,7 +37,7 @@ def _resolve_project_id(db: Session, project_uuid: str) -> str:
 
 # Project-scoped meeting endpoints
 @projects_router.post(
-    "/{project_uuid}/meetings",
+    "/{project_uuid}/meetings/create",
     dependencies=[require_permission(MEETINGS_CREATE)],
     summary="Create meeting",
     description="Create a new meeting in a project",
@@ -139,7 +139,7 @@ def delete_meeting(
 
 # Meeting participants endpoints
 @meetings_router.post(
-    "/{meeting_id}/participants",
+    "/{meeting_id}/participants/create",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Add participant",
     description="Add a participant to a meeting",
@@ -203,7 +203,7 @@ def remove_participant(
 
 # Meeting agenda endpoints
 @meetings_router.post(
-    "/{meeting_id}/agenda_items",
+    "/{meeting_id}/agenda_items/create",
     dependencies=[require_permission(MEETINGS_UPDATE)],
     summary="Create agenda item",
     description="Create an agenda item for a meeting",

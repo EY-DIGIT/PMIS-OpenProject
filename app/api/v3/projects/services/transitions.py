@@ -71,9 +71,11 @@ EDITABLE_FIELDS_BASELINE_UNPUBLISHED: Set[str] = {
     "status_explanation",
 }
 
-# A published baseline is immutable by edit. Transitions (close, delete)
-# happen through dedicated endpoints, not through PATCH.
-EDITABLE_FIELDS_BASELINE_PUBLISHED: Set[str] = set()
+# Published baselines remain editable on the same fields as unpublished
+# baselines. Baseline edits are propagated to active versions via the
+# baseline_version_sync cascade for M/A writes; project-level edits are
+# scoped to the baseline itself.
+EDITABLE_FIELDS_BASELINE_PUBLISHED: Set[str] = EDITABLE_FIELDS_BASELINE_UNPUBLISHED
 
 # Versions allow editing a small subset; published versions remain editable
 # on these fields (owner / public / actual_end_date) per the mockup.

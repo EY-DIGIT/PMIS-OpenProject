@@ -15,7 +15,7 @@ class TestMilestoneCreation:
     """Milestones are top-level work packages (no parent) with required dates."""
 
     def test_create_milestone_with_dates(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Phase 1",
             "startDate": _future(10),
             "endDate": _future(90),
@@ -28,13 +28,13 @@ class TestMilestoneCreation:
 
     def test_milestone_requires_dates(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         """Top-level WP without dates should fail (milestone needs dates)."""
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "No Dates Milestone",
         }, headers=admin_headers)
         assert resp.status_code == 400, resp.text
 
     def test_milestone_end_before_start_rejected(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Bad Dates",
             "startDate": _future(90),
             "endDate": _future(10),
@@ -44,7 +44,7 @@ class TestMilestoneCreation:
     def test_wrong_type_at_depth_0_rejected(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         """Explicitly passing a 'task' type for a top-level WP should fail."""
         task_type = next(t for t in builtin_wp_types if t.internal_name == "task")
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Should fail",
             "typeId": task_type.id,
             "startDate": _future(10),
@@ -58,7 +58,7 @@ class TestActivityCreation:
     """Activities are children of milestones, also with required dates."""
 
     def _create_milestone(self, client, project_uuid, headers):
-        resp = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{project_uuid}/work_packages/create", json={
             "subject": "Milestone",
             "startDate": _future(10),
             "endDate": _future(90),
@@ -68,7 +68,7 @@ class TestActivityCreation:
 
     def test_create_activity_under_milestone(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         ms_id = self._create_milestone(client, sample_project.id, admin_headers)
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Design Phase",
             "parentId": ms_id,
             "startDate": _future(15),
@@ -78,7 +78,7 @@ class TestActivityCreation:
 
     def test_activity_requires_dates(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         ms_id = self._create_milestone(client, sample_project.id, admin_headers)
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "No Date Activity",
             "parentId": ms_id,
         }, headers=admin_headers)
@@ -87,7 +87,7 @@ class TestActivityCreation:
     def test_activity_dates_must_fit_in_milestone(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         ms_id = self._create_milestone(client, sample_project.id, admin_headers)
         # Activity end_date exceeds milestone end_date
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Out of range",
             "parentId": ms_id,
             "startDate": _future(15),
@@ -101,14 +101,14 @@ class TestTaskCreation:
     """Tasks are children of activities or other tasks, unlimited nesting."""
 
     def _create_milestone_and_activity(self, client, project_uuid, headers):
-        ms = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
+        ms = client.post(f"/api/v3/projects/{project_uuid}/work_packages/create", json={
             "subject": "Milestone",
             "startDate": _future(10),
             "endDate": _future(90),
         }, headers=headers)
         ms_id = ms.json()["data"]["id"]
 
-        act = client.post(f"/api/v3/projects/{project_uuid}/work_packages", json={
+        act = client.post(f"/api/v3/projects/{project_uuid}/work_packages/create", json={
             "subject": "Activity",
             "parentId": ms_id,
             "startDate": _future(15),
@@ -119,7 +119,7 @@ class TestTaskCreation:
 
     def test_create_task_under_activity(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         _, act_id = self._create_milestone_and_activity(client, sample_project.id, admin_headers)
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Task 1",
             "parentId": act_id,
         }, headers=admin_headers)
@@ -127,7 +127,7 @@ class TestTaskCreation:
 
     def test_task_does_not_require_dates(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         _, act_id = self._create_milestone_and_activity(client, sample_project.id, admin_headers)
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Task no dates",
             "parentId": act_id,
         }, headers=admin_headers)
@@ -138,7 +138,7 @@ class TestTaskCreation:
         _, act_id = self._create_milestone_and_activity(client, sample_project.id, admin_headers)
         parent_id = act_id
         for i in range(4):
-            resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+            resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
                 "subject": f"Nested Task Level {i+1}",
                 "parentId": parent_id,
             }, headers=admin_headers)
@@ -151,23 +151,23 @@ class TestChildrenEndpoint:
 
     def test_get_children_tree(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         # Build: Milestone -> Activity -> Task -> SubTask
-        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "MS", "startDate": _future(10), "endDate": _future(90),
         }, headers=admin_headers)
         ms_id = ms.json()["data"]["id"]
 
-        act = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        act = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "ACT", "parentId": ms_id,
             "startDate": _future(15), "endDate": _future(60),
         }, headers=admin_headers)
         act_id = act.json()["data"]["id"]
 
-        t1 = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        t1 = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Task1", "parentId": act_id,
         }, headers=admin_headers)
         t1_id = t1.json()["data"]["id"]
 
-        client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "SubTask1", "parentId": t1_id,
         }, headers=admin_headers)
 
@@ -192,7 +192,7 @@ class TestChildrenEndpoint:
 
     def test_get_children_empty(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         """A leaf node has no children."""
-        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Leaf", "startDate": _future(10), "endDate": _future(90),
         }, headers=admin_headers)
         ms_id = ms.json()["data"]["id"]
@@ -211,12 +211,12 @@ class TestTypeFilter:
 
     def test_filter_milestones_only(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
         # Create milestone + activity
-        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        ms = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "MS Filter Test", "startDate": _future(10), "endDate": _future(90),
         }, headers=admin_headers)
         ms_id = ms.json()["data"]["id"]
 
-        client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "ACT Filter Test", "parentId": ms_id,
             "startDate": _future(15), "endDate": _future(60),
         }, headers=admin_headers)

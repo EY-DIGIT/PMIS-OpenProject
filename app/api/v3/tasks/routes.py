@@ -17,7 +17,7 @@ tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @tasks_activity_router.post(
-    "/{activity_id}/tasks",
+    "/{activity_id}/tasks/create",
     dependencies=[require_permission(TASKS_CREATE)],
     summary="Create task under activity", status_code=201,
 )

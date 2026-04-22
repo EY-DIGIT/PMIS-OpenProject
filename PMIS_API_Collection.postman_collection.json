@@ -115,9 +115,9 @@
               "raw": "{\n  \"login\": \"john_doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"admin\": false\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/users",
+              "raw": "{{baseUrl}}/api/v3/users/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "users"]
+              "path": ["api", "v3", "users", "create"]
             },
             "description": "Create a new user (admin only)"
           },
@@ -253,9 +253,9 @@
               "raw": "{\n  \"name\": \"Freshly Minted Ltd\",\n  \"description\": \"Demo vendor\",\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/vendors",
+              "raw": "{{baseUrl}}/api/v3/vendors/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "vendors"]
+              "path": ["api", "v3", "vendors", "create"]
             },
             "description": "Create a vendor (admin). Vendor names are unique."
           },
@@ -317,9 +317,9 @@
               "raw": "{\n  \"code\": \"mou\",\n  \"name\": \"Memorandum of Understanding\",\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/resource_types",
+              "raw": "{{baseUrl}}/api/v3/resource_types/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "resource_types"]
+              "path": ["api", "v3", "resource_types", "create"]
             },
             "description": "Create a resource type (admin). Codes are unique, lowercase."
           },
@@ -344,9 +344,9 @@
               "raw": "{\n  \"name\": \"New Project\",\n  \"description\": \"Project description\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"owner\": \"admin\",\n  \"category\": \"MSIP\",\n  \"startDate\": \"2026-05-01T09:00:00Z\",\n  \"endDate\": \"2026-12-31T17:00:00Z\",\n  \"vendorIds\": []\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects",
+              "raw": "{{baseUrl}}/api/v3/projects/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects"]
+              "path": ["api", "v3", "projects", "create"]
             },
             "description": "Create a project. Server generates id (UUID) + projectCode. category must be one of MSIP, MSAP, BSP, others. If 'others', supply categoryOther (see next request). vendorIds is an optional list of vendor UUIDs (fetch via GET /vendors)."
           },
@@ -365,9 +365,9 @@
               "raw": "{\n  \"name\": \"Others Category Project\",\n  \"description\": \"Demo of category=others with free-text label\",\n  \"owner\": \"admin\",\n  \"category\": \"others\",\n  \"categoryOther\": \"Inception Phase\",\n  \"vendorIds\": [\"{{vendorId}}\"],\n  \"startDate\": \"2026-05-01T09:00:00Z\",\n  \"endDate\": \"2026-12-31T17:00:00Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects",
+              "raw": "{{baseUrl}}/api/v3/projects/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects"]
+              "path": ["api", "v3", "projects", "create"]
             },
             "description": "Create a project with category='others'. categoryOther is REQUIRED and non-empty when category='others'; it must be omitted for any other category."
           },
@@ -530,9 +530,9 @@
               {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/versions",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/versions/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "{{projectUuid}}", "versions"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "versions", "create"]
             },
             "description": "Clone a published baseline into a fresh version. Source must have isVersion=false AND status='published'. Response includes new id, new projectCode, isVersion=true, baselineId=source. Only ONE active (non-suspended, non-deleted) version per baseline is allowed."
           },
@@ -597,11 +597,11 @@
               "raw": "{\n  \"name\": \"M1 — API foundation\",\n  \"description\": \"Auth, projects, M/A/T/S CRUD\",\n  \"startDate\": \"2026-05-05T09:00:00Z\",\n  \"endDate\": \"2026-08-31T17:00:00Z\",\n  \"status\": \"not_completed\",\n  \"depends\": [],\n  \"vendorIds\": []\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/milestones",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/milestones/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "{{projectUuid}}", "milestones"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "milestones", "create"]
             },
-            "description": "Create a milestone. startDate must be >= project.startDate. vendorIds must be a subset of the project's vendor list."
+            "description": "Create a milestone on the BASELINE project only. Versions reject milestone writes — baseline edits propagate automatically. startDate must be >= project.startDate. vendorIds must be a subset of the project's vendor list."
           },
           "response": []
         },
@@ -714,9 +714,9 @@
               "raw": "{\n  \"name\": \"A1 — Design REST schemas\",\n  \"description\": \"\",\n  \"type\": \"standard\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"status\": \"not_completed\",\n  \"dependency\": []\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities", "create"]
             },
             "description": "Create a standard activity. status defaults to 'not_completed'. dependency is a pass-through list (no referential integrity yet). status + dependency are ONLY valid when type='standard'."
           },
@@ -735,9 +735,9 @@
               "raw": "{\n  \"name\": \"A2 — Add transactions\",\n  \"type\": \"transactional\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities", "create"]
             },
             "description": "Transactional activity. status / dependency / resource* fields must all be absent."
           },
@@ -756,9 +756,9 @@
               "raw": "{\n  \"name\": \"A3 — Need N engineers\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"count\",\n  \"resourceCount\": 3\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities", "create"]
             },
             "description": "Resource activity in 'count' mode. Just a headcount — no inline resource block."
           },
@@ -777,9 +777,9 @@
               "raw": "{\n  \"name\": \"A4 — Onboard Designer\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Alice Kumar\",\n    \"onboardDate\": \"2026-05-11T09:00:00Z\",\n    \"offboardDate\": \"2026-07-25T17:00:00Z\",\n    \"jobRole\": \"Backend Engineer\",\n    \"experienceYears\": 5,\n    \"typeOfResourceId\": \"{{resourceTypeId}}\",\n    \"division\": \"tmd1\"\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities", "create"]
             },
             "description": "Resource activity, details mode. typeOfResourceId is REQUIRED and must reference an active row in /resource_types. division is one of tmd1, tmd2, others. Here: tmd1."
           },
@@ -798,9 +798,9 @@
               "raw": "{\n  \"name\": \"A5 — Special Projects engineer\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Bob Pereira\",\n    \"jobRole\": \"Integration Lead\",\n    \"experienceYears\": 8,\n    \"typeOfResourceId\": \"{{resourceTypeId}}\",\n    \"division\": \"others\",\n    \"divisionOther\": \"Beta Program\"\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities", "create"]
             },
             "description": "Resource activity with division='others'. divisionOther is REQUIRED and non-empty. For any non-'others' division, divisionOther must be omitted."
           },
@@ -915,11 +915,11 @@
               "raw": "{\n  \"name\": \"T1 — Implement /versions endpoint\",\n  \"type\": \"standard\",\n  \"startDate\": \"2026-05-15T09:00:00Z\",\n  \"endDate\": \"2026-07-20T17:00:00Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}/tasks",
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}/tasks/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "activities", "{{activityId}}", "tasks"]
+              "path": ["api", "v3", "activities", "{{activityId}}", "tasks", "create"]
             },
-            "description": "Create a task under an activity. Dates must fit within the parent activity's window."
+            "description": "Create a task under an activity. Tasks can ONLY be added to a VERSION project — baselines reject task writes. Dates must fit within the parent activity's window."
           },
           "response": []
         },
@@ -1032,11 +1032,11 @@
               "raw": "{\n  \"name\": \"ST1 — Wire clone_tree_for_version\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-18T09:00:00Z\",\n  \"endDate\": \"2026-06-30T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Alice Kumar\",\n    \"jobRole\": \"Backend Engineer\",\n    \"experienceYears\": 4\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}/subtasks",
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}/subtasks/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "tasks", "{{taskId}}", "subtasks"]
+              "path": ["api", "v3", "tasks", "{{taskId}}", "subtasks", "create"]
             },
-            "description": "Create a subtask under a task. Note: typeOfResourceId + division are currently scoped to activities' resources, not subtasks' (the subtasks module exposes the same ResourcePayload shape but the extra classification columns live only on activity_resources)."
+            "description": "Create a subtask under a task. Subtasks can ONLY be added to a VERSION project — baselines reject subtask writes. Note: typeOfResourceId + division are currently scoped to activities' resources, not subtasks' (the subtasks module exposes the same ResourcePayload shape but the extra classification columns live only on activity_resources)."
           },
           "response": []
         },
@@ -1148,9 +1148,9 @@
               "raw": "{\n  \"user_id\": 2,\n  \"roles\": [\"member\"]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/memberships",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/memberships/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "{{projectUuid}}", "memberships"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "memberships", "create"]
             },
             "description": "Add a user to a project"
           },
@@ -1231,9 +1231,9 @@
               "raw": "{\n  \"name\": \"Custom Role\",\n  \"permissions\": [\"read\", \"write\"],\n  \"builtin\": false\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/roles",
+              "raw": "{{baseUrl}}/api/v3/roles/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "roles"]
+              "path": ["api", "v3", "roles", "create"]
             },
             "description": "Create a new role (admin only)"
           },
@@ -1330,9 +1330,9 @@
               "raw": "{\n  \"subject\": \"New Work Package\",\n  \"description\": \"Work package description\",\n  \"type\": \"Task\",\n  \"status\": \"New\",\n  \"priority\": \"Normal\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/work_packages",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/work_packages/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "{{projectUuid}}", "work_packages"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "work_packages", "create"]
             },
             "description": "Create a work package under a project"
           },
@@ -1483,9 +1483,9 @@
               "raw": "{\n  \"name\": \"Feature\",\n  \"internal_name\": \"feature\",\n  \"is_builtin\": false,\n  \"is_active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/work_package_types",
+              "raw": "{{baseUrl}}/api/v3/work_package_types/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "work_package_types"]
+              "path": ["api", "v3", "work_package_types", "create"]
             },
             "description": "Create a work package type (admin)"
           },
@@ -1546,9 +1546,9 @@
               "raw": "{\n  \"title\": \"Team Meeting\",\n  \"description\": \"Weekly team sync\",\n  \"start_date\": \"2026-05-15T10:00:00Z\",\n  \"end_date\": \"2026-05-15T11:00:00Z\",\n  \"location\": \"Conference Room A\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/meetings",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/meetings/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "{{projectUuid}}", "meetings"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "meetings", "create"]
             },
             "description": "Create a meeting under a project"
           },
@@ -1645,9 +1645,9 @@
               "raw": "{\n  \"user_id\": 2\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/participants",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/participants/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "{{meetingId}}", "participants"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "participants", "create"]
             },
             "description": "Add a participant to a meeting"
           },
@@ -1703,9 +1703,9 @@
               "raw": "{\n  \"title\": \"Agenda Item 1\",\n  \"description\": \"Item description\",\n  \"duration\": 15,\n  \"order\": 1\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/agenda_items",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/agenda_items/create",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "{{meetingId}}", "agenda_items"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "agenda_items", "create"]
             },
             "description": "Create an agenda item under a meeting"
           },

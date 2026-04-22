@@ -65,7 +65,7 @@ def _create_project(client, headers, *, name="Demo", category=None, category_oth
         body["categoryOther"] = category_other
     if vendor_ids is not None:
         body["vendorIds"] = vendor_ids
-    return client.post("/api/v3/projects", json=body, headers=headers)
+    return client.post("/api/v3/projects/create", json=body, headers=headers)
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ class TestVendorsAndProjectVendors:
 
     def test_admin_can_create_vendor(self, client, admin_headers):
         resp = client.post(
-            "/api/v3/vendors",
+            "/api/v3/vendors/create",
             json={"name": "Freshly Minted", "description": "demo"},
             headers=admin_headers,
         )
@@ -163,7 +163,7 @@ class TestMilestoneFields:
     def test_default_status_is_not_completed(self, client, admin_headers, db_session):
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(),
             headers=admin_headers,
         )
@@ -173,7 +173,7 @@ class TestMilestoneFields:
     def test_status_accepted(self, client, admin_headers, db_session):
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(status="completed"),
             headers=admin_headers,
         )
@@ -183,7 +183,7 @@ class TestMilestoneFields:
     def test_status_invalid_rejected(self, client, admin_headers, db_session):
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(status="bogus"),
             headers=admin_headers,
         )
@@ -192,7 +192,7 @@ class TestMilestoneFields:
     def test_depends_passthrough(self, client, admin_headers, db_session):
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(depends=[str(uuid4()), str(uuid4())]),
             headers=admin_headers,
         )
@@ -206,7 +206,7 @@ class TestMilestoneFields:
             client, admin_headers, db_session, vendor_ids=[v1],
         )
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(vendorIds=[v1, v2]),
             headers=admin_headers,
         )
@@ -219,7 +219,7 @@ class TestMilestoneFields:
             client, admin_headers, db_session, vendor_ids=[v1, v2],
         )
         resp = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json=self._milestone_body(vendorIds=[v1]),
             headers=admin_headers,
         )
@@ -237,7 +237,7 @@ class TestStandardActivityFields:
         assert r.status_code == 201
         pid = r.json()["data"]["id"]
         mr = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json={"name": "M1", "startDate": _future_iso(3), "endDate": _future_iso(30)},
             headers=admin_headers,
         )
@@ -257,7 +257,7 @@ class TestStandardActivityFields:
     def test_standard_default_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._activity_body(),
             headers=admin_headers,
         )
@@ -267,7 +267,7 @@ class TestStandardActivityFields:
     def test_standard_accepts_status_and_dependency(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._activity_body(status="completed", dependency=[str(uuid4())]),
             headers=admin_headers,
         )
@@ -279,7 +279,7 @@ class TestStandardActivityFields:
     def test_transactional_rejects_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._activity_body(type="transactional", status="completed"),
             headers=admin_headers,
         )
@@ -288,7 +288,7 @@ class TestStandardActivityFields:
     def test_standard_rejects_invalid_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._activity_body(status="nope"),
             headers=admin_headers,
         )
@@ -304,7 +304,7 @@ class TestResourceActivityFields:
         r = _create_project(client, admin_headers)
         pid = r.json()["data"]["id"]
         mr = client.post(
-            f"/api/v3/projects/{pid}/milestones",
+            f"/api/v3/projects/{pid}/milestones/create",
             json={"name": "M1", "startDate": _future_iso(3), "endDate": _future_iso(30)},
             headers=admin_headers,
         )
@@ -331,7 +331,7 @@ class TestResourceActivityFields:
         mid = self._milestone(client, admin_headers)
         # type_of_resource_id omitted
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(),
             headers=admin_headers,
         )
@@ -343,7 +343,7 @@ class TestResourceActivityFields:
     def test_resource_type_id_must_exist(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(type_of_resource_id=str(uuid4())),
             headers=admin_headers,
         )
@@ -353,7 +353,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(type_of_resource_id=rfp_id, division="tmd2"),
             headers=admin_headers,
         )
@@ -367,7 +367,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(type_of_resource_id=rfp_id, division="others"),
             headers=admin_headers,
         )
@@ -377,7 +377,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(
                 type_of_resource_id=rfp_id, division="others", division_other="Special Projects",
             ),
@@ -392,7 +392,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities",
+            f"/api/v3/milestones/{mid}/activities/create",
             json=self._resource_activity(
                 type_of_resource_id=rfp_id, division="tmd1", division_other="stray",
             ),
@@ -415,7 +415,7 @@ class TestResourceTypesEndpoint:
 
     def test_admin_can_create_resource_type(self, client, admin_headers, db_session):
         resp = client.post(
-            "/api/v3/resource_types",
+            "/api/v3/resource_types/create",
             json={"code": "mou", "name": "Memorandum of Understanding"},
             headers=admin_headers,
         )

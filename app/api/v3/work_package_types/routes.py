@@ -31,7 +31,7 @@ def get_type(request: Request, type_id: int, db: Session = Depends(get_db)) -> D
     return WorkPackageTypeController.get(request, type_id, db)
 
 
-@router.post("", dependencies=[require_permission(WORK_PACKAGE_TYPES_MANAGE)], summary="Create work package type", status_code=201)
+@router.post("/create", dependencies=[require_permission(WORK_PACKAGE_TYPES_MANAGE)], summary="Create work package type", status_code=201)
 def create_type(request: Request, data: WorkPackageTypeCreateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return WorkPackageTypeController.create(request, data, db)
 

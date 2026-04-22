@@ -33,7 +33,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.post(
-    "",
+    "/create",
     dependencies=[require_permission(PROJECTS_CREATE)],
     summary="Create project",
     status_code=201,
@@ -186,7 +186,7 @@ def suspend_project(
 
 
 @router.post(
-    "/{project_uuid}/versions",
+    "/{project_uuid}/versions/create",
     dependencies=[require_permission(PROJECTS_CREATE)],
     summary="Create new version of a published project",
     status_code=201,

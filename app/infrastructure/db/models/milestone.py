@@ -40,6 +40,14 @@ class MilestoneModel(Base):
     # the API unchanged — no referential integrity is enforced.
     depends = Column(JSON, nullable=True)
 
+    # Lineage pointer: when a version project is created from a baseline,
+    # each cloned milestone records the id of its source baseline milestone
+    # here. Baseline milestones have cloned_from_id=NULL. Used by the
+    # baseline-to-versions propagation cascade.
+    cloned_from_id = Column(
+        String(36), ForeignKey("milestones.id"), nullable=True, index=True,
+    )
+
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)

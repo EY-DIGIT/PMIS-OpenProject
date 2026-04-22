@@ -23,7 +23,7 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 
 @router.post(
-    "",
+    "/create",
     dependencies=[require_permission(ROLES_CREATE)],
     summary="Create role",
     description="Create a new role",

@@ -9,11 +9,11 @@ import pytest
 
 
 class TestCreateProject:
-    """POST /api/v3/projects"""
+    """POST /api/v3/projects/create"""
 
     def test_create_project(self, client, admin_user, admin_headers):
         resp = client.post(
-            "/api/v3/projects",
+            "/api/v3/projects/create",
             json={
                 "name": "Project One",
                 "description": "First project",
@@ -32,7 +32,7 @@ class TestCreateProject:
 
     def test_create_project_with_new_fields(self, client, admin_user, admin_headers):
         resp = client.post(
-            "/api/v3/projects",
+            "/api/v3/projects/create",
             json={
                 "name": "New Fields Project",
                 "status": "new",
@@ -116,14 +116,16 @@ class TestPublishProject:
         second = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         assert second.status_code == 409
 
-    def test_publish_locks_patch(self, client, admin_user, admin_headers, sample_project):
+    def test_publish_keeps_baseline_patchable(self, client, admin_user, admin_headers, sample_project):
+        """Baselines remain editable after publish — changes propagate to active versions."""
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         resp = client.patch(
             f"/api/v3/projects/{sample_project.id}",
-            json={"name": "Should Not Apply"},
+            json={"name": "Renamed After Publish"},
             headers=admin_headers,
         )
-        assert resp.status_code == 409
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["name"] == "Renamed After Publish"
 
 
 class TestCloseProject:
@@ -140,14 +142,14 @@ class TestCloseProject:
 
 
 class TestCreateVersion:
-    """POST /api/v3/projects/{uuid}/versions"""
+    """POST /api/v3/projects/{uuid}/versions/create"""
 
     def test_create_version_from_published_baseline(
         self, client, admin_user, admin_headers, sample_project
     ):
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         resp = client.post(
-            f"/api/v3/projects/{sample_project.id}/versions",
+            f"/api/v3/projects/{sample_project.id}/versions/create",
             headers=admin_headers,
         )
         assert resp.status_code == 201
@@ -162,7 +164,7 @@ class TestCreateVersion:
         self, client, admin_user, admin_headers, sample_project
     ):
         resp = client.post(
-            f"/api/v3/projects/{sample_project.id}/versions",
+            f"/api/v3/projects/{sample_project.id}/versions/create",
             headers=admin_headers,
         )
         assert resp.status_code == 409
@@ -172,12 +174,12 @@ class TestCreateVersion:
     ):
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         first = client.post(
-            f"/api/v3/projects/{sample_project.id}/versions",
+            f"/api/v3/projects/{sample_project.id}/versions/create",
             headers=admin_headers,
         )
         assert first.status_code == 201
         second = client.post(
-            f"/api/v3/projects/{sample_project.id}/versions",
+            f"/api/v3/projects/{sample_project.id}/versions/create",
             headers=admin_headers,
         )
         assert second.status_code == 409
@@ -230,7 +232,7 @@ class TestDeleteCascadesToVersions:
         assert r.status_code == 200, r.text
 
     def _new_version(self, client, headers, baseline_id):
-        r = client.post(f"/api/v3/projects/{baseline_id}/versions", headers=headers)
+        r = client.post(f"/api/v3/projects/{baseline_id}/versions/create", headers=headers)
         assert r.status_code == 201, r.text
         return r.json()["data"]["id"]
 

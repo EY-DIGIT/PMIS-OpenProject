@@ -6,7 +6,7 @@ class TestCreateUser:
     """POST /api/v3/users"""
 
     def test_create_user_success(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "newuser",
             "email": "new@example.com",
             "password": "password123",
@@ -22,43 +22,43 @@ class TestCreateUser:
         assert "id" in data
 
     def test_create_user_duplicate_login(self, client, admin_user, admin_headers):
-        client.post("/api/v3/users", json={
+        client.post("/api/v3/users/create", json={
             "login": "dup", "email": "a@a.com", "password": "password123",
         }, headers=admin_headers)
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "dup", "email": "b@b.com", "password": "password123",
         }, headers=admin_headers)
         assert resp.status_code == 409
 
     def test_create_user_duplicate_email(self, client, admin_user, admin_headers):
-        client.post("/api/v3/users", json={
+        client.post("/api/v3/users/create", json={
             "login": "user1", "email": "same@example.com", "password": "password123",
         }, headers=admin_headers)
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "user2", "email": "same@example.com", "password": "password123",
         }, headers=admin_headers)
         assert resp.status_code == 409
 
     def test_create_user_invalid_email(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "badmail", "email": "not-an-email", "password": "password123",
         }, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_user_short_password(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "shortpw", "email": "s@s.com", "password": "short",
         }, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_user_short_login(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users", json={
+        resp = client.post("/api/v3/users/create", json={
             "login": "ab", "email": "ab@ab.com", "password": "password123",
         }, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_user_missing_required(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users", json={"login": "only"}, headers=admin_headers)
+        resp = client.post("/api/v3/users/create", json={"login": "only"}, headers=admin_headers)
         assert resp.status_code == 422
 
 

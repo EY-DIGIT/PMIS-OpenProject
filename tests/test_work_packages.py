@@ -13,7 +13,7 @@ def _future(days=30):
 
 def _create_milestone(client, project_id, headers, subject="Test Milestone"):
     """Helper to create a top-level milestone."""
-    resp = client.post(f"/api/v3/projects/{project_id}/work_packages", json={
+    resp = client.post(f"/api/v3/projects/{project_id}/work_packages/create", json={
         "subject": subject,
         "startDate": _future(10),
         "endDate": _future(90),
@@ -36,7 +36,7 @@ class TestCreateWorkPackage:
         assert data["startDate"] is not None
 
     def test_create_wp_invalid_status(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Bad status",
             "startDate": _future(10),
             "endDate": _future(90),
@@ -45,7 +45,7 @@ class TestCreateWorkPackage:
         assert resp.status_code == 422
 
     def test_create_wp_invalid_priority(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "subject": "Bad priority",
             "startDate": _future(10),
             "endDate": _future(90),
@@ -54,14 +54,14 @@ class TestCreateWorkPackage:
         assert resp.status_code == 422
 
     def test_create_wp_missing_subject(self, client, admin_user, admin_headers, sample_project, builtin_wp_types):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/work_packages/create", json={
             "startDate": _future(10),
             "endDate": _future(90),
         }, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_wp_nonexistent_project(self, client, admin_user, admin_headers, builtin_wp_types):
-        resp = client.post("/api/v3/projects/99999/work_packages", json={
+        resp = client.post("/api/v3/projects/99999/work_packages/create", json={
             "subject": "Orphan",
             "startDate": _future(10),
             "endDate": _future(90),

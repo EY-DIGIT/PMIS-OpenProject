@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
@@ -44,7 +44,7 @@ def create_subtask(
     )
     if task is None:
         raise NotFoundError("The task could not be found.")
-    assert_project_editable(db, task.project_id)
+    assert_task_subtask_writable(db, task.project_id)
 
     project = db.query(ProjectModel).filter(ProjectModel.id == task.project_id).first()
     if project is None or project.start_date is None:

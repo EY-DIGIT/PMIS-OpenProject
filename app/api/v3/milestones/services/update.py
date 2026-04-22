@@ -5,7 +5,7 @@ from typing import Any, List, Optional
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_milestone_activity_writable
 from .....domain.milestones.milestone import (
     MILESTONE_STATUS_CHOICES,
     Milestone,
@@ -14,6 +14,15 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
+from ...projects.services.audit import record_audit
+from ...projects.services.baseline_version_sync import (
+    ACTION_MILESTONE_UPDATE,
+    propagate_milestone_update,
+)
+
+
+def _iso(v):
+    return v.isoformat() if hasattr(v, "isoformat") else v
 
 
 def update_milestone(
@@ -36,7 +45,7 @@ def update_milestone(
         raise NotFoundError("The milestone could not be found.")
 
     # Lock check against the owning project.
-    assert_project_editable(db, model.project_id)
+    assert_milestone_activity_writable(db, model.project_id)
 
     project = db.query(ProjectModel).filter(ProjectModel.id == model.project_id).first()
     if project is None or project.start_date is None:
@@ -106,6 +115,8 @@ def update_milestone(
     if not updates and not will_replace_vendors:
         return repo._to_domain(model)
 
+    before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}
+
     if updates:
         updated = repo.update(milestone_id, updates=updates, updated_by=current_user_id)
     else:
@@ -117,5 +128,22 @@ def update_milestone(
         vendor_repo.set_milestone_vendors(milestone_id, resolved_vendor_ids)
         db.commit()
         updated.vendors = vendor_repo.list_milestone_vendors(milestone_id)
+
+    if updates:
+        record_audit(
+            db,
+            project_id=model.project_id,
+            actor_id=current_user_id,
+            action=ACTION_MILESTONE_UPDATE,
+            before={"milestone_id": milestone_id, **before_snapshot},
+            after={k: _iso(v) for k, v in updates.items()},
+        )
+        db.commit()
+        propagate_milestone_update(
+            db,
+            baseline_milestone_id=milestone_id,
+            updates=updates,
+            actor_id=current_user_id,
+        )
 
     return updated

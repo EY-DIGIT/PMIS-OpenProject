@@ -202,14 +202,23 @@ def init_db() -> None:
                     res = conn.execute(text("PRAGMA table_info('milestones')"))
                     mcols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
-                        ("status",  "ALTER TABLE milestones ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'not_completed'"),
-                        ("depends", "ALTER TABLE milestones ADD COLUMN depends TEXT"),
+                        ("status",         "ALTER TABLE milestones ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'not_completed'"),
+                        ("depends",        "ALTER TABLE milestones ADD COLUMN depends TEXT"),
+                        # Lineage pointer for baseline → version propagation.
+                        ("cloned_from_id", "ALTER TABLE milestones ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES milestones(id)"),
                     ):
                         if col not in mcols:
                             try:
                                 conn.execute(text(stmt))
                             except Exception as e:
                                 logging.warning("Failed to add milestones.%s: %s", col, e)
+                    try:
+                        conn.execute(text(
+                            "CREATE INDEX IF NOT EXISTS ix_milestones_cloned_from_id "
+                            "ON milestones(cloned_from_id)"
+                        ))
+                    except Exception as e:
+                        logging.warning("Failed to create ix_milestones_cloned_from_id: %s", e)
                 except Exception:
                     pass
 
@@ -218,14 +227,23 @@ def init_db() -> None:
                     res = conn.execute(text("PRAGMA table_info('activities')"))
                     acols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
-                        ("status",     "ALTER TABLE activities ADD COLUMN status VARCHAR(32)"),
-                        ("dependency", "ALTER TABLE activities ADD COLUMN dependency TEXT"),
+                        ("status",         "ALTER TABLE activities ADD COLUMN status VARCHAR(32)"),
+                        ("dependency",     "ALTER TABLE activities ADD COLUMN dependency TEXT"),
+                        # Lineage pointer for baseline → version propagation.
+                        ("cloned_from_id", "ALTER TABLE activities ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES activities(id)"),
                     ):
                         if col not in acols:
                             try:
                                 conn.execute(text(stmt))
                             except Exception as e:
                                 logging.warning("Failed to add activities.%s: %s", col, e)
+                    try:
+                        conn.execute(text(
+                            "CREATE INDEX IF NOT EXISTS ix_activities_cloned_from_id "
+                            "ON activities(cloned_from_id)"
+                        ))
+                    except Exception as e:
+                        logging.warning("Failed to create ix_activities_cloned_from_id: %s", e)
                 except Exception:
                     pass
 

@@ -58,7 +58,7 @@ def list_resource_types(request: Request, db: Session = Depends(get_db)) -> JSON
 
 
 @router.post(
-    "",
+    "/create",
     dependencies=[require_permission(Permission.RESOURCE_TYPES_MANAGE)],
     summary="Create a resource type (admin)",
     status_code=201,

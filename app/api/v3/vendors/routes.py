@@ -52,7 +52,7 @@ def list_vendors(request: Request, db: Session = Depends(get_db)) -> JSONRespons
 
 
 @router.post(
-    "",
+    "/create",
     dependencies=[require_permission(Permission.VENDORS_MANAGE)],
     summary="Create a vendor (admin)",
     status_code=201,

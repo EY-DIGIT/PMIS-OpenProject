@@ -77,7 +77,7 @@ def get_current_user(
 
 
 @router.post(
-    "",
+    "/create",
     dependencies=[require_permission(USERS_CREATE)],
     summary="Create user",
     description="Create a new user",

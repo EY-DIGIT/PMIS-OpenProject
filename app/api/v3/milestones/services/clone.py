@@ -72,6 +72,9 @@ def clone_tree_for_version(
             # have new ids, so the reference list is meaningless. Drop it on
             # clone to avoid carrying stale ids across.
             depends=None,
+            # Lineage — points back to the baseline row we cloned from, so
+            # later baseline edits can locate this copy and propagate.
+            cloned_from_id=src.id,
             created_at=now,
             updated_at=now,
             created_by=created_by,
@@ -116,6 +119,8 @@ def clone_tree_for_version(
             # that no longer exist after the clone).
             status="not_completed" if src.type == "standard" else None,
             dependency=None,
+            # Lineage — points back to the baseline activity row.
+            cloned_from_id=src.id,
             created_at=now,
             updated_at=now,
             created_by=created_by,

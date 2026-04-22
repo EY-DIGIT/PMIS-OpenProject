@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
@@ -44,7 +44,7 @@ def update_subtask(
     if model is None:
         raise NotFoundError("The subtask could not be found.")
 
-    assert_project_editable(db, model.project_id)
+    assert_task_subtask_writable(db, model.project_id)
 
     parent = (
         db.query(TaskModel)

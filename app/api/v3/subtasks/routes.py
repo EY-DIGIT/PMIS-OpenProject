@@ -17,7 +17,7 @@ subtasks_router = APIRouter(prefix="/subtasks", tags=["subtasks"])
 
 
 @subtasks_task_router.post(
-    "/{task_id}/subtasks",
+    "/{task_id}/subtasks/create",
     dependencies=[require_permission(SUBTASKS_CREATE)],
     summary="Create subtask under task", status_code=201,
 )

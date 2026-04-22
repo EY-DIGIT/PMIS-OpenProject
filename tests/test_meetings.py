@@ -12,7 +12,7 @@ class TestCreateMeeting:
     """POST /api/v3/projects/{project_id}/meetings"""
 
     def test_create_meeting(self, client, admin_user, admin_headers, sample_project):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Sprint Planning",
             "description": "Plan the next sprint",
             "scheduled_at": future_dt(),
@@ -25,20 +25,20 @@ class TestCreateMeeting:
         assert data["_type"] == "Meeting"
 
     def test_create_meeting_minimal(self, client, admin_user, admin_headers, sample_project):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Quick Sync",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
         assert resp.status_code == 201
 
     def test_create_meeting_missing_title(self, client, admin_user, admin_headers, sample_project):
-        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        resp = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_meeting_invalid_project(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/projects/99999/meetings", json={
+        resp = client.post("/api/v3/projects/99999/meetings/create", json={
             "title": "Orphan Meeting",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
@@ -49,7 +49,7 @@ class TestListMeetings:
     """GET /api/v3/projects/{project_id}/meetings"""
 
     def test_list_meetings(self, client, admin_user, admin_headers, sample_project):
-        client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Meeting 1",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
@@ -66,7 +66,7 @@ class TestGetMeeting:
     """GET /api/v3/meetings/{id}"""
 
     def test_get_meeting(self, client, admin_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Get This",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
@@ -80,7 +80,7 @@ class TestUpdateMeeting:
     """PATCH /api/v3/meetings/{id}"""
 
     def test_update_meeting(self, client, admin_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Update Me",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
@@ -97,7 +97,7 @@ class TestDeleteMeeting:
     """DELETE /api/v3/meetings/{id}"""
 
     def test_delete_meeting(self, client, admin_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Delete Me",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
@@ -116,14 +116,14 @@ class TestMeetingParticipants:
 
     @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
     def test_add_and_list_participant(self, client, admin_user, member_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Participant Test",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
         meeting_id = create.json()["data"]["id"]
 
         # Add participant
-        add_resp = client.post(f"/api/v3/meetings/{meeting_id}/participants", json={
+        add_resp = client.post(f"/api/v3/meetings/{meeting_id}/participants/create", json={
             "user_id": member_user.id,
         }, headers=admin_headers)
         assert add_resp.status_code == 201
@@ -135,12 +135,12 @@ class TestMeetingParticipants:
 
     @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
     def test_remove_participant(self, client, admin_user, member_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Remove Test",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
         meeting_id = create.json()["data"]["id"]
-        client.post(f"/api/v3/meetings/{meeting_id}/participants", json={
+        client.post(f"/api/v3/meetings/{meeting_id}/participants/create", json={
             "user_id": member_user.id,
         }, headers=admin_headers)
         resp = client.delete(
@@ -155,14 +155,14 @@ class TestAgendaItems:
 
     @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
     def test_create_and_list_agenda_item(self, client, admin_user, admin_headers, sample_project):
-        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings", json={
+        create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Agenda Test",
             "scheduled_at": future_dt(),
         }, headers=admin_headers)
         meeting_id = create.json()["data"]["id"]
 
         # Create agenda item
-        item_resp = client.post(f"/api/v3/meetings/{meeting_id}/agenda_items", json={
+        item_resp = client.post(f"/api/v3/meetings/{meeting_id}/agenda_items/create", json={
             "title": "Budget Review",
             "position": 1,
         }, headers=admin_headers)

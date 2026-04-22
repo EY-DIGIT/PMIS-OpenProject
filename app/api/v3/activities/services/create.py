@@ -5,7 +5,12 @@ from typing import Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_milestone_activity_writable
+from ...projects.services.audit import record_audit
+from ...projects.services.baseline_version_sync import (
+    ACTION_ACTIVITY_CREATE,
+    propagate_activity_create,
+)
 from .....domain.activities.activity import (
     ACTIVITY_STATUS_CHOICES,
     ACTIVITY_STATUS_DEFAULT,
@@ -52,7 +57,7 @@ def create_activity(
     )
     if milestone is None:
         raise NotFoundError("The milestone could not be found.")
-    assert_project_editable(db, milestone.project_id)
+    assert_milestone_activity_writable(db, milestone.project_id)
 
     project = db.query(ProjectModel).filter(ProjectModel.id == milestone.project_id).first()
     if project is None or project.start_date is None:
@@ -137,7 +142,24 @@ def create_activity(
             data=resource,
         )
 
+    record_audit(
+        db,
+        project_id=milestone.project_id,
+        actor_id=current_user_id,
+        action=ACTION_ACTIVITY_CREATE,
+        before=None,
+        after={
+            "activity_id": activity.id,
+            "milestone_id": milestone_id,
+            "name": activity.name,
+            "type": activity.type,
+            "start_date": activity.start_date.isoformat() if activity.start_date else None,
+            "end_date": activity.end_date.isoformat() if activity.end_date else None,
+            "position": activity.position,
+        },
+    )
     db.commit()
+    propagate_activity_create(db, baseline_activity_id=activity.id, actor_id=current_user_id)
     # Re-read so the returned domain model has the freshly-written mode/count.
     refreshed = repo.get_by_id(activity.id)
     return refreshed or activity, resource_domain

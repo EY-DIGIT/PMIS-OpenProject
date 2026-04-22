@@ -36,7 +36,7 @@ def _resolve_project_id(db: Session, project_uuid: str) -> str:
 
 # Project-scoped endpoints
 @projects_router.post(
-    "",
+    "/create",
     dependencies=[require_permission(WORK_PACKAGES_CREATE)],
     summary="Create work package",
     description="Create a new work package in a project",

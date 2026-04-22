@@ -49,6 +49,14 @@ class ActivityModel(Base):
     # on. Reserved — no logic inspects it yet.
     dependency = Column(JSON, nullable=True)
 
+    # Lineage pointer: when a version project is created from a baseline,
+    # each cloned activity records the id of its source baseline activity
+    # here. Baseline activities have cloned_from_id=NULL. Used by the
+    # baseline-to-versions propagation cascade.
+    cloned_from_id = Column(
+        String(36), ForeignKey("activities.id"), nullable=True, index=True,
+    )
+
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)

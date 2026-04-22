@@ -18,7 +18,7 @@ activities_router = APIRouter(prefix="/activities", tags=["activities"])
 
 
 @activities_milestone_router.post(
-    "/{milestone_id}/activities",
+    "/{milestone_id}/activities/create",
     dependencies=[require_permission(ACTIVITIES_CREATE)],
     summary="Create activity under milestone",
     status_code=201,

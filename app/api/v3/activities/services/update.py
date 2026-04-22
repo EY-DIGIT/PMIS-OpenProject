@@ -24,7 +24,16 @@ from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_milestone_activity_writable
+from ...projects.services.audit import record_audit
+from ...projects.services.baseline_version_sync import (
+    ACTION_ACTIVITY_UPDATE,
+    propagate_activity_update,
+)
+
+
+def _iso(v):
+    return v.isoformat() if hasattr(v, "isoformat") else v
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
@@ -73,7 +82,7 @@ def update_activity(
     if model is None:
         raise NotFoundError("The activity could not be found.")
 
-    assert_project_editable(db, model.project_id)
+    assert_milestone_activity_writable(db, model.project_id)
 
     milestone = (
         db.query(MilestoneModel)
@@ -250,6 +259,8 @@ def update_activity(
         if model.dependency is not None:
             updates["dependency"] = None
 
+    before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}
+
     if updates:
         repo.update(activity_id, updates=updates, updated_by=current_user_id)
 
@@ -270,7 +281,26 @@ def update_activity(
         repo.soft_delete_live_resource(activity_id)
         resource_domain = None
 
+    if updates:
+        record_audit(
+            db,
+            project_id=model.project_id,
+            actor_id=current_user_id,
+            action=ACTION_ACTIVITY_UPDATE,
+            before={"activity_id": activity_id, **before_snapshot},
+            after={k: _iso(v) for k, v in updates.items()},
+        )
+
     db.commit()
+
+    if updates:
+        propagate_activity_update(
+            db,
+            baseline_activity_id=activity_id,
+            updates=updates,
+            actor_id=current_user_id,
+        )
+
     updated = repo.get_by_id(activity_id)
     assert updated is not None
     return updated, resource_domain

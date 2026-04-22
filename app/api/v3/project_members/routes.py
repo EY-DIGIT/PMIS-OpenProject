@@ -33,7 +33,7 @@ def _resolve_project_id(db: Session, project_uuid: str) -> str:
 
 
 @projects_router.post(
-    "/{project_uuid}/memberships",
+    "/{project_uuid}/memberships/create",
     dependencies=[require_permission(PROJECT_MEMBERS_ADD)],
     summary="Add project member",
     description="Add a user to a project",

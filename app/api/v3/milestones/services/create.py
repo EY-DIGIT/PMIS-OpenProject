@@ -5,7 +5,7 @@ from typing import Any, List, Optional
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
-from .....core.project_lock import assert_project_editable
+from .....core.project_lock import assert_milestone_activity_writable
 from .....domain.milestones.milestone import (
     MILESTONE_STATUS_CHOICES,
     MILESTONE_STATUS_DEFAULT,
@@ -15,6 +15,11 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
+from ...projects.services.audit import record_audit
+from ...projects.services.baseline_version_sync import (
+    ACTION_MILESTONE_CREATE,
+    propagate_milestone_create,
+)
 
 
 def create_milestone(
@@ -41,7 +46,7 @@ def create_milestone(
       - If ``vendor_ids`` given, each must also appear in the project's vendors.
       - ``status`` must be in MILESTONE_STATUS_CHOICES (default 'not_completed').
     """
-    assert_project_editable(db, project_id)
+    assert_milestone_activity_writable(db, project_id)
 
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if project is None:
@@ -112,5 +117,24 @@ def create_milestone(
         vendor_repo.set_milestone_vendors(m.id, resolved_vendor_ids)
         db.commit()
         m.vendors = vendor_repo.list_milestone_vendors(m.id)
+
+    # Audit the baseline create and fan out to active versions.
+    record_audit(
+        db,
+        project_id=project_id,
+        actor_id=current_user_id,
+        action=ACTION_MILESTONE_CREATE,
+        before=None,
+        after={
+            "milestone_id": m.id,
+            "name": m.name,
+            "start_date": m.start_date.isoformat() if m.start_date else None,
+            "end_date": m.end_date.isoformat() if m.end_date else None,
+            "position": m.position,
+            "status": resolved_status,
+        },
+    )
+    db.commit()
+    propagate_milestone_create(db, baseline_milestone_id=m.id, actor_id=current_user_id)
 
     return m

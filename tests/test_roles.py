@@ -6,7 +6,7 @@ class TestCreateRole:
     """POST /api/v3/roles"""
 
     def test_create_role(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/roles", json={
+        resp = client.post("/api/v3/roles/create", json={
             "name": "Editor",
             "permissions": ["projects:read", "projects:update"],
             "builtin": False,
@@ -17,16 +17,16 @@ class TestCreateRole:
         assert data["_type"] == "Role"
 
     def test_create_duplicate_role(self, client, admin_user, admin_headers):
-        client.post("/api/v3/roles", json={
+        client.post("/api/v3/roles/create", json={
             "name": "DupRole", "permissions": [], "builtin": False,
         }, headers=admin_headers)
-        resp = client.post("/api/v3/roles", json={
+        resp = client.post("/api/v3/roles/create", json={
             "name": "DupRole", "permissions": [], "builtin": False,
         }, headers=admin_headers)
         assert resp.status_code == 409
 
     def test_create_role_forbidden_without_auth(self, client, admin_user):
-        resp = client.post("/api/v3/roles", json={
+        resp = client.post("/api/v3/roles/create", json={
             "name": "NoAuth", "permissions": [],
         })
         assert resp.status_code == 401
@@ -36,7 +36,7 @@ class TestListRoles:
     """GET /api/v3/roles"""
 
     def test_list_roles(self, client, admin_user, admin_headers):
-        client.post("/api/v3/roles", json={
+        client.post("/api/v3/roles/create", json={
             "name": "ListTest", "permissions": [], "builtin": False,
         }, headers=admin_headers)
         resp = client.get("/api/v3/roles?offset=1&pageSize=20", headers=admin_headers)
@@ -50,7 +50,7 @@ class TestGetRole:
     """GET /api/v3/roles/{id}"""
 
     def test_get_role(self, client, admin_user, admin_headers):
-        create = client.post("/api/v3/roles", json={
+        create = client.post("/api/v3/roles/create", json={
             "name": "GetMe", "permissions": [], "builtin": False,
         }, headers=admin_headers)
         role_id = create.json()["data"]["id"]
@@ -63,7 +63,7 @@ class TestUpdateRole:
     """PATCH /api/v3/roles/{id}"""
 
     def test_update_role(self, client, admin_user, admin_headers):
-        create = client.post("/api/v3/roles", json={
+        create = client.post("/api/v3/roles/create", json={
             "name": "UpdateMe", "permissions": [], "builtin": False,
         }, headers=admin_headers)
         role_id = create.json()["data"]["id"]
@@ -78,7 +78,7 @@ class TestDeleteRole:
     """DELETE /api/v3/roles/{id}"""
 
     def test_delete_role(self, client, admin_user, admin_headers):
-        create = client.post("/api/v3/roles", json={
+        create = client.post("/api/v3/roles/create", json={
             "name": "DeleteMe", "permissions": [], "builtin": False,
         }, headers=admin_headers)
         role_id = create.json()["data"]["id"]
