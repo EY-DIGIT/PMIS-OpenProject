@@ -66,6 +66,12 @@ def clone_tree_for_version(
             start_date=src.start_date,
             end_date=src.end_date,
             position=src.position,
+            # Reset status on a new version — work hasn't happened yet.
+            status="not_completed",
+            # `depends` references sibling milestones; the cloned milestones
+            # have new ids, so the reference list is meaningless. Drop it on
+            # clone to avoid carrying stale ids across.
+            depends=None,
             created_at=now,
             updated_at=now,
             created_by=created_by,
@@ -105,6 +111,11 @@ def clone_tree_for_version(
             position=src.position,
             resource_mode=src.resource_mode,
             resource_count=src.resource_count,
+            # Standard-only columns: reset status to 'not_completed' (default
+            # for new work), drop dependency (refers to sibling activity ids
+            # that no longer exist after the clone).
+            status="not_completed" if src.type == "standard" else None,
+            dependency=None,
             created_at=now,
             updated_at=now,
             created_by=created_by,
@@ -140,6 +151,11 @@ def clone_tree_for_version(
                 job_role=src.job_role,
                 qualification=src.qualification,
                 experience_years=src.experience_years,
+                # Classification fields carry through — a cloned version
+                # inherits the same "type of resource" and division labels.
+                type_of_resource_id=getattr(src, "type_of_resource_id", None),
+                division=getattr(src, "division", None),
+                division_other=getattr(src, "division_other", None),
                 created_at=now,
                 updated_at=now,
             ))

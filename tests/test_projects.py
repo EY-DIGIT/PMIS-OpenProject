@@ -218,3 +218,83 @@ class TestUpsert:
         assert data["name"] == "Wizard v2"
         assert data["_created"] is False
         assert data["id"] == new_uuid
+
+
+class TestDeleteCascadesToVersions:
+    """DELETE /api/v3/projects/{id} should also soft-delete all live versions
+    when the target is a baseline. Deleting a version alone must NOT touch
+    the baseline or sibling versions."""
+
+    def _publish(self, client, headers, pid):
+        r = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
+        assert r.status_code == 200, r.text
+
+    def _new_version(self, client, headers, baseline_id):
+        r = client.post(f"/api/v3/projects/{baseline_id}/versions", headers=headers)
+        assert r.status_code == 201, r.text
+        return r.json()["data"]["id"]
+
+    def test_delete_baseline_with_no_versions(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        resp = client.delete(
+            f"/api/v3/projects/{sample_project.id}", headers=admin_headers
+        )
+        assert resp.status_code == 204
+        # 404 after delete
+        g = client.get(f"/api/v3/projects/{sample_project.id}", headers=admin_headers)
+        assert g.status_code == 404
+
+    def test_delete_baseline_cascades_to_versions(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        # Version 1 — live, active
+        self._publish(client, admin_headers, sample_project.id)
+        v1_id = self._new_version(client, admin_headers, sample_project.id)
+        # Suspend v1 so we can create v2
+        s = client.post(f"/api/v3/projects/{v1_id}/suspend", headers=admin_headers)
+        assert s.status_code == 200
+        # Version 2 — new, active
+        v2_id = self._new_version(client, admin_headers, sample_project.id)
+
+        # Soft-delete the baseline. Should take v1 and v2 with it.
+        resp = client.delete(
+            f"/api/v3/projects/{sample_project.id}", headers=admin_headers
+        )
+        assert resp.status_code == 204
+
+        for proj_id, label in (
+            (sample_project.id, "baseline"),
+            (v1_id, "v1"),
+            (v2_id, "v2"),
+        ):
+            g = client.get(f"/api/v3/projects/{proj_id}", headers=admin_headers)
+            assert g.status_code == 404, f"{label} should be 404 after baseline delete"
+
+    def test_delete_version_does_not_touch_baseline_or_siblings(
+        self, client, admin_user, admin_headers, sample_project
+    ):
+        self._publish(client, admin_headers, sample_project.id)
+        v1_id = self._new_version(client, admin_headers, sample_project.id)
+        # Suspend v1 so we can spawn v2
+        client.post(f"/api/v3/projects/{v1_id}/suspend", headers=admin_headers)
+        v2_id = self._new_version(client, admin_headers, sample_project.id)
+
+        # Delete just v2 — baseline + v1 must stay live.
+        resp = client.delete(f"/api/v3/projects/{v2_id}", headers=admin_headers)
+        assert resp.status_code == 204
+
+        assert (
+            client.get(f"/api/v3/projects/{v2_id}", headers=admin_headers).status_code
+            == 404
+        )
+        assert (
+            client.get(
+                f"/api/v3/projects/{sample_project.id}", headers=admin_headers
+            ).status_code
+            == 200
+        )
+        assert (
+            client.get(f"/api/v3/projects/{v1_id}", headers=admin_headers).status_code
+            == 200
+        )

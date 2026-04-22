@@ -1,11 +1,12 @@
 """
 Project API schemas (request/response models).
 """
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from .services.transitions import (
+    CATEGORY_OTHERS,
     PROJECT_STATUS_CHOICES,
     PROJECT_CATEGORY_CHOICES,
 )
@@ -36,6 +37,20 @@ class ProjectCreateRequest(BaseModel):
     category: Optional[str] = Field(
         None,
         description=f"Category. One of: {', '.join(PROJECT_CATEGORY_CHOICES)}",
+    )
+    categoryOther: Optional[str] = Field(
+        None,
+        alias="category_other",
+        max_length=255,
+        description=(
+            f"Required (non-empty) when category == '{CATEGORY_OTHERS}'. "
+            "Must be omitted / null for any other category."
+        ),
+    )
+    vendorIds: Optional[List[str]] = Field(
+        None,
+        alias="vendor_ids",
+        description="Optional list of vendor UUIDs to associate with this project.",
     )
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
@@ -96,6 +111,15 @@ class ProjectUpdateRequest(BaseModel):
     status: Optional[str] = Field(None)
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)
+    categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
+    vendorIds: Optional[List[str]] = Field(
+        None,
+        alias="vendor_ids",
+        description=(
+            "Replace the full vendor list for this project. Omit to leave the "
+            "existing list unchanged; send `[]` to clear."
+        ),
+    )
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
@@ -172,6 +196,8 @@ class ProjectUpsertRequest(BaseModel):
     status: str = Field("new")
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)
+    categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
+    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
 

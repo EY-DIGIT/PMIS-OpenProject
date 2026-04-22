@@ -93,6 +93,8 @@ class ProjectController:
             status=data.status,
             owner=data.owner,
             category=data.category,
+            category_other=data.categoryOther,
+            vendor_ids=data.vendorIds,
             start_date=data.start_date,
             end_date=data.end_date,
         )
@@ -157,7 +159,13 @@ class ProjectController:
             "end_date": data.end_date,
             "actual_end_date": data.actual_end_date,
         }
-        result = update_project(db, pid, actor_id=actor_id, patch=patch)
+        # vendor_ids is an Optional[List[str]]. None means "don't touch the
+        # vendor list"; an empty list means "clear"; a non-empty list means
+        # "replace". The service handles it outside the column-whitelist path
+        # because vendors live in an association table.
+        result = update_project(
+            db, pid, actor_id=actor_id, patch=patch, vendor_ids=data.vendorIds,
+        )
         if not result.is_success():
             return _error_response(result)
         formatted = format_project_response(result.data.to_dict(), "/api/v3")

@@ -81,6 +81,7 @@ def create_version(
             status=STATUS_NEW,
             owner=source.owner,
             category=source.category,
+            category_other=getattr(source, "category_other", None),
             start_date=source.start_date,
             end_date=source.end_date,
             actual_end_date=None,
@@ -90,6 +91,16 @@ def create_version(
             version_no=version_no,
             created_by=actor_id,
         )
+
+        # Carry the source project's vendor list onto the version.
+        from .....infrastructure.db.repositories.vendor_repository import (
+            VendorRepository,
+        )
+        vendor_repo = VendorRepository(db)
+        src_vendor_ids = vendor_repo.project_vendor_ids(source.id)
+        if src_vendor_ids:
+            vendor_repo.set_project_vendors(target.id, src_vendor_ids)
+            target.vendors = vendor_repo.list_project_vendors(target.id)
 
         # Hook: deep-clone the M/A/T/S subtree into the new version row.
         clone_tree_for_version(

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Text, Index,
+    JSON, Column, Integer, String, DateTime, ForeignKey, Text, Index,
 )
 from ..session import Base
 
@@ -30,6 +30,15 @@ class MilestoneModel(Base):
     end_date = Column(DateTime, nullable=False)
 
     position = Column(Integer, nullable=False, default=0)
+
+    # Configurable status — values in MILESTONE_STATUS_CHOICES
+    # (app/domain/milestones/milestone.py). Defaults to 'not_completed'.
+    status = Column(String(32), nullable=False, default="not_completed", index=True)
+
+    # List of milestone ids this milestone depends on. Stored as JSON so we
+    # can extend later without a schema migration. Currently carried through
+    # the API unchanged — no referential integrity is enforced.
+    depends = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

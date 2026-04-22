@@ -1,7 +1,7 @@
 """
 Project creation service.
 """
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session
 from .....domain.projects.project import Project
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.user_repository import UserRepository
+from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.datetime import ensure_aware_utc
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
 from .audit import ACTION_CREATE, project_snapshot, record_audit
 from .transitions import (
+    CATEGORY_OTHERS,
     PROJECT_CATEGORY_CHOICES,
     PROJECT_STATUS_CHOICES,
     STATUS_NEW,
@@ -38,6 +40,8 @@ def create_project(
     status: str = STATUS_NEW,
     owner: Optional[str] = None,
     category: Optional[str] = None,
+    category_other: Optional[str] = None,
+    vendor_ids: Optional[List[str]] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> ServiceResult[Project]:
@@ -77,6 +81,30 @@ def create_project(
             error_type="validation_error",
         )
 
+    # "others" category: categoryOther is required, non-empty, <= 255 chars.
+    # For non-'others' categories the field must be None (accidentally setting
+    # it is a client bug we reject with 422 rather than silently storing).
+    if category == CATEGORY_OTHERS:
+        co = normalize_string(category_other) if category_other else ""
+        if not co:
+            return ServiceResult.fail(
+                error="categoryOther is required when category is 'others'.",
+                error_type="validation_error",
+            )
+        if len(co) > 255:
+            return ServiceResult.fail(
+                error="categoryOther must be 1-255 characters.",
+                error_type="validation_error",
+            )
+        category_other = co
+    else:
+        if category_other is not None and normalize_string(category_other) != "":
+            return ServiceResult.fail(
+                error="categoryOther may only be provided when category is 'others'.",
+                error_type="validation_error",
+            )
+        category_other = None
+
     # "Must be in the future" is enforced by the Pydantic schema; skip the
     # duplicate check here to avoid naive/aware datetime comparison bugs.
     start_utc = ensure_aware_utc(start_date)
@@ -94,12 +122,27 @@ def create_project(
         )
 
     repo = ProjectRepository(db)
+    vendor_repo = VendorRepository(db)
 
     if parent_id is not None and not repo.exists_by_id(parent_id):
         return ServiceResult.fail(
             error=f"Parent project with ID {parent_id} does not exist",
             error_type="not_found",
         )
+
+    # De-duplicate + validate vendor IDs.
+    if vendor_ids:
+        unique_vids = list(dict.fromkeys(vendor_ids))  # preserve order, unique
+        ok_ids = set(vendor_repo.existing_active_ids(unique_vids))
+        missing = [v for v in unique_vids if v not in ok_ids]
+        if missing:
+            return ServiceResult.fail(
+                error=f"Unknown or inactive vendor(s): {', '.join(missing)}",
+                error_type="validation_error",
+            )
+        vendor_ids = unique_vids
+    else:
+        vendor_ids = []
 
     try:
         project = repo.create(
@@ -112,11 +155,18 @@ def create_project(
             status=status,
             owner=owner,
             category=category,
+            category_other=category_other,
             start_date=start_date,
             end_date=end_date,
             is_version=False,
             created_by=actor_id,
         )
+
+        # Attach vendors (repository flushes but does not commit).
+        if vendor_ids:
+            vendor_repo.set_project_vendors(project.id, vendor_ids)
+            # Refresh the domain object's vendor list for the response.
+            project.vendors = vendor_repo.list_project_vendors(project.id)
 
         record_audit(
             db,

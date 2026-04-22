@@ -1,7 +1,7 @@
 """Activity domain entity."""
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Any, List, Optional, Tuple
 
 
 # Enum-style constants for type validation.
@@ -19,6 +19,16 @@ ACTIVITY_TYPES = (
 RESOURCE_MODE_COUNT = "count"
 RESOURCE_MODE_DETAILS = "details"
 RESOURCE_MODES = (RESOURCE_MODE_COUNT, RESOURCE_MODE_DETAILS)
+
+
+# Status choices for standard-type activities only. Extensible.
+ACTIVITY_STATUS_NOT_COMPLETED = "not_completed"
+ACTIVITY_STATUS_COMPLETED = "completed"
+ACTIVITY_STATUS_CHOICES: Tuple[str, ...] = (
+    ACTIVITY_STATUS_NOT_COMPLETED,
+    ACTIVITY_STATUS_COMPLETED,
+)
+ACTIVITY_STATUS_DEFAULT = ACTIVITY_STATUS_NOT_COMPLETED
 
 
 @dataclass
@@ -52,6 +62,9 @@ class Activity:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
+    # Standard-only fields; NULL on non-standard activities.
+    status: Optional[str] = None
+    dependency: Optional[List[Any]] = None
 
     def to_dict(self) -> dict:
         return {
@@ -68,6 +81,8 @@ class Activity:
             "position": self.position,
             "resource_mode": self.resource_mode,
             "resource_count": self.resource_count,
+            "status": self.status,
+            "dependency": self.dependency if self.dependency is not None else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

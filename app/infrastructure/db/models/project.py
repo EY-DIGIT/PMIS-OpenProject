@@ -51,8 +51,11 @@ class ProjectModel(Base):
     # Status: lowercase values. Allowed: new, draft, published, closed, suspended.
     status = Column(String(50), default="new", nullable=False, index=True)
     owner = Column(String(255), nullable=True, index=True)
-    # Category: MSAP, MSIP, BSP. Immutable after create.
+    # Category: MSAP, MSIP, BSP, or 'others'. Immutable after create.
     category = Column(String(50), nullable=True, index=True)
+    # When category == 'others', a free-text label is required and stored here.
+    # NULL for all other categories.
+    category_other = Column(String(255), nullable=True)
     start_date = Column(DateTime, nullable=True, index=True)
     end_date = Column(DateTime, nullable=True, index=True)
     # Versions may record the project's actual end date; baselines leave it NULL.

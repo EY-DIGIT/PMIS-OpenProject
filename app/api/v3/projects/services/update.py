@@ -1,7 +1,7 @@
 """
 Project update service.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from .....core.project_lock import assert_project_editable
 from .....domain.projects.project import Project
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.user_repository import UserRepository
+from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.datetime import ensure_aware_utc
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
@@ -29,6 +30,7 @@ def update_project(
     *,
     actor_id: Optional[int],
     patch: Dict[str, Any],
+    vendor_ids: Optional[List[str]] = None,
 ) -> ServiceResult[Project]:
     """
     Apply a field patch to a project.
@@ -36,6 +38,13 @@ def update_project(
     ``patch`` is a dict of snake_case field names (the controller translates
     from the request schema). Fields outside the editable whitelist for the
     project's current state are rejected with 422 invalid_field.
+
+    ``vendor_ids`` is independent of the column whitelist because vendors
+    live in an association table. Semantics:
+      - None  : leave the project's current vendor list unchanged.
+      - []    : clear the vendor list.
+      - [...] : replace the vendor list with exactly these UUIDs (must all
+                reference existing active vendors; otherwise 422).
     """
     repo = ProjectRepository(db)
     project = repo.get_by_id(project_id)
@@ -129,6 +138,22 @@ def update_project(
             error_type="validation_error",
         )
 
+    # Vendor-list replacement. Handled outside the column whitelist.
+    vendor_repo = VendorRepository(db)
+    will_replace_vendors = vendor_ids is not None
+    clean_vendor_ids: List[str] = []
+    if will_replace_vendors:
+        unique_vids = list(dict.fromkeys(vendor_ids or []))
+        if unique_vids:
+            ok_ids = set(vendor_repo.existing_active_ids(unique_vids))
+            missing = [v for v in unique_vids if v not in ok_ids]
+            if missing:
+                return ServiceResult.fail(
+                    error=f"Unknown or inactive vendor(s): {', '.join(missing)}",
+                    error_type="validation_error",
+                )
+        clean_vendor_ids = unique_vids
+
     before = project_snapshot(project)
 
     try:
@@ -142,6 +167,10 @@ def update_project(
                 error=f"Project with ID {project_id} not found",
                 error_type="not_found",
             )
+
+        if will_replace_vendors:
+            vendor_repo.set_project_vendors(project_id, clean_vendor_ids)
+            updated.vendors = vendor_repo.list_project_vendors(project_id)
 
         record_audit(
             db,

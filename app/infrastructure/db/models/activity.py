@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
+    JSON, Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
 )
 from ..session import Base
 
@@ -39,6 +39,15 @@ class ActivityModel(Base):
     # Resource-type flavor.
     resource_mode = Column(String(10), nullable=True)
     resource_count = Column(Integer, nullable=True)
+
+    # Standard-activity-only fields. For any non-'standard' activity these
+    # MUST remain NULL; the schema / service layer enforces this.
+    # ``status`` is one of ACTIVITY_STATUS_CHOICES (e.g. 'not_completed' |
+    # 'completed'), extensible.
+    status = Column(String(32), nullable=True, index=True)
+    # ``dependency`` stores a JSON list of activity ids this activity depends
+    # on. Reserved — no logic inspects it yet.
+    dependency = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

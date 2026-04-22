@@ -46,8 +46,8 @@ class ProjectRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _to_domain(self, model: ProjectModel) -> Project:
-        return Project(
+    def _to_domain(self, model: ProjectModel, *, with_vendors: bool = True) -> Project:
+        p = Project(
             id=model.id,
             project_code=model.project_code,
             name=model.name,
@@ -72,7 +72,13 @@ class ProjectRepository:
             updated_by=model.updated_by,
             deleted_at=model.deleted_at,
             deleted_by=model.deleted_by,
+            category_other=getattr(model, "category_other", None),
         )
+        if with_vendors:
+            # Lazy-load the vendor pairs. Cheap join; safe on every read path.
+            from .vendor_repository import VendorRepository
+            p.vendors = VendorRepository(self.db).list_project_vendors(model.id)
+        return p
 
     # ------------------------------------------------------------------
     # writes — no commit except in upsert; caller owns transaction boundary
@@ -104,6 +110,7 @@ class ProjectRepository:
         # Caller may inject a pre-computed project_code (rare). If omitted,
         # a unique one is generated at IST-seconds precision.
         project_code: Optional[str] = None,
+        category_other: Optional[str] = None,
     ) -> Project:
         if id is None:
             id = str(uuid4())
@@ -122,6 +129,7 @@ class ProjectRepository:
             status=status,
             owner=owner,
             category=category,
+            category_other=category_other,
             start_date=start_date,
             end_date=end_date,
             actual_end_date=actual_end_date,
@@ -134,7 +142,7 @@ class ProjectRepository:
         )
         self.db.add(model)
         self.db.flush()
-        return self._to_domain(model)
+        return self._to_domain(model, with_vendors=False)
 
     def upsert_by_id(
         self,
@@ -151,6 +159,7 @@ class ProjectRepository:
         category: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        category_other: Optional[str] = None,
     ) -> Tuple[Project, bool]:
         """
         Insert a project if no row with this id exists; otherwise update the
@@ -190,6 +199,7 @@ class ProjectRepository:
             status=status,
             owner=owner,
             category=category,
+            category_other=category_other,
             start_date=start_date,
             end_date=end_date,
             created_at=now,
@@ -208,6 +218,7 @@ class ProjectRepository:
                 "status": stmt.excluded.status,
                 "owner": stmt.excluded.owner,
                 "category": stmt.excluded.category,
+                "category_other": stmt.excluded.category_other,
                 "start_date": stmt.excluded.start_date,
                 "end_date": stmt.excluded.end_date,
                 "updated_at": now,
@@ -366,3 +377,23 @@ class ProjectRepository:
             .scalar()
         )
         return (max_no or 0) + 1
+
+    def list_live_version_ids(self, baseline_id: str) -> List[str]:
+        """Return the ids of every non-deleted version row for this baseline.
+
+        Used by the delete flow to cascade a baseline-level soft-delete down
+        to its versions. Includes versions in any status (including
+        'suspended') so long as they aren't already soft-deleted.
+        """
+        rows = (
+            self.db.query(ProjectModel.id)
+            .filter(
+                and_(
+                    ProjectModel.version_of == baseline_id,
+                    ProjectModel.is_version == True,  # noqa: E712
+                    ProjectModel.deleted_at.is_(None),
+                )
+            )
+            .all()
+        )
+        return [r[0] for r in rows]

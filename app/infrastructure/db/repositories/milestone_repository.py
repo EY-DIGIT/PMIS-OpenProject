@@ -21,8 +21,8 @@ class MilestoneRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _to_domain(self, m: MilestoneModel) -> Milestone:
-        return Milestone(
+    def _to_domain(self, m: MilestoneModel, *, with_vendors: bool = True) -> Milestone:
+        dom = Milestone(
             id=m.id,
             project_id=m.project_id,
             name=m.name,
@@ -35,7 +35,13 @@ class MilestoneRepository:
             created_by=m.created_by,
             updated_by=m.updated_by,
             deleted_at=m.deleted_at,
+            status=getattr(m, "status", None) or "not_completed",
+            depends=getattr(m, "depends", None),
         )
+        if with_vendors:
+            from .vendor_repository import VendorRepository
+            dom.vendors = VendorRepository(self.db).list_milestone_vendors(m.id)
+        return dom
 
     # ---------- reads ----------
 
@@ -86,6 +92,8 @@ class MilestoneRepository:
         start_date: datetime, end_date: datetime,
         position: int,
         created_by: Optional[int],
+        status: str = "not_completed",
+        depends: Optional[list] = None,
     ) -> Milestone:
         m = MilestoneModel(
             project_id=project_id,
@@ -96,11 +104,13 @@ class MilestoneRepository:
             position=position,
             created_by=created_by,
             updated_by=created_by,
+            status=status,
+            depends=depends,
         )
         self.db.add(m)
         self.db.commit()
         self.db.refresh(m)
-        return self._to_domain(m)
+        return self._to_domain(m, with_vendors=False)
 
     def update(
         self, milestone_id: str, *, updates: dict, updated_by: Optional[int],

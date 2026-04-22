@@ -14,6 +14,8 @@ from .v3.activities import activities_milestone_router, activities_router
 from .v3.tasks import tasks_activity_router, tasks_router
 from .v3.subtasks import subtasks_task_router, subtasks_router
 from .v3.tree import router as tree_router
+from .v3.vendors import router as vendors_router
+from .v3.resource_types import router as resource_types_router
 
 # Create API v3 router
 api_v3_router = APIRouter(prefix="/api/v3")
@@ -40,4 +42,8 @@ api_v3_router.include_router(tasks_router)
 api_v3_router.include_router(subtasks_task_router)
 api_v3_router.include_router(subtasks_router)
 api_v3_router.include_router(tree_router)
+
+# Catalog modules
+api_v3_router.include_router(vendors_router)
+api_v3_router.include_router(resource_types_router)
 

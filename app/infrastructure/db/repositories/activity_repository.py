@@ -36,6 +36,8 @@ class ActivityRepository:
             position=a.position,
             resource_mode=a.resource_mode,
             resource_count=a.resource_count,
+            status=getattr(a, "status", None),
+            dependency=getattr(a, "dependency", None),
             created_at=a.created_at,
             updated_at=a.updated_at,
             created_by=a.created_by,
@@ -58,6 +60,9 @@ class ActivityRepository:
             job_role=r.job_role,
             qualification=r.qualification,
             experience_years=r.experience_years,
+            type_of_resource_id=getattr(r, "type_of_resource_id", None),
+            division=getattr(r, "division", None),
+            division_other=getattr(r, "division_other", None),
             created_at=r.created_at,
             updated_at=r.updated_at,
             deleted_at=r.deleted_at,
@@ -120,6 +125,8 @@ class ActivityRepository:
         position: int, created_by: Optional[int],
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
+        status: Optional[str] = None,
+        dependency: Optional[list] = None,
     ) -> Activity:
         a = ActivityModel(
             project_id=project_id,
@@ -134,6 +141,8 @@ class ActivityRepository:
             position=position,
             resource_mode=resource_mode,
             resource_count=resource_count,
+            status=status,
+            dependency=dependency,
             created_by=created_by,
             updated_by=created_by,
         )
@@ -170,6 +179,9 @@ class ActivityRepository:
             job_role=data.get("job_role"),
             qualification=data.get("qualification"),
             experience_years=data.get("experience_years"),
+            type_of_resource_id=data.get("type_of_resource_id"),
+            division=data.get("division"),
+            division_other=data.get("division_other"),
         )
         self.db.add(r)
         self.db.flush()
@@ -198,6 +210,7 @@ class ActivityRepository:
             "resource_name", "onboard_date", "actual_onboard_date",
             "offboard_date", "actual_offboard_date",
             "position", "designation", "job_role", "qualification", "experience_years",
+            "type_of_resource_id", "division", "division_other",
         ):
             if field in data:
                 setattr(existing, field, data[field])

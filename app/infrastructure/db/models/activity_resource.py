@@ -35,6 +35,20 @@ class ActivityResourceModel(Base):
     qualification = Column(String(255), nullable=True)
     experience_years = Column(Numeric(4, 1), nullable=True)
 
+    # Resource classification — references resource_types.id (a UUID).
+    # NULL allowed for legacy rows; required on new inserts via schema validator.
+    type_of_resource_id = Column(
+        String(36),
+        ForeignKey("resource_types.id"),
+        nullable=True,
+        index=True,
+    )
+    # Division: one of DIVISION_CHOICES ('tmd1', 'tmd2', 'others'). Stored
+    # lowercase. When ``division == 'others'`` a free-text label is required
+    # and stored in ``division_other``; NULL otherwise.
+    division = Column(String(32), nullable=True)
+    division_other = Column(String(255), nullable=True)
+
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     deleted_at = Column(DateTime, nullable=True, index=True)

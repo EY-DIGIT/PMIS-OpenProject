@@ -29,6 +29,12 @@ class ActivityResource:
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
+    # Catalog reference — UUID of a row in `resource_types`.
+    type_of_resource_id: Optional[str] = None
+    # Division: lowercase code ('tmd1', 'tmd2', 'others').
+    division: Optional[str] = None
+    # When division == 'others', free-text label; NULL otherwise.
+    division_other: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +51,9 @@ class ActivityResource:
             "job_role": self.job_role,
             "qualification": self.qualification,
             "experience_years": float(self.experience_years) if self.experience_years is not None else None,
+            "type_of_resource_id": self.type_of_resource_id,
+            "division": self.division,
+            "division_other": self.division_other,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,

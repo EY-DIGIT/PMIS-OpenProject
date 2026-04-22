@@ -1,22 +1,28 @@
 """Create an activity under a milestone. Handles nested resource."""
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_project_editable
-from .....infrastructure.db.models.project import ProjectModel
-from .....infrastructure.db.models.milestone import MilestoneModel
-from .....infrastructure.db.repositories.activity_repository import ActivityRepository
-from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.activities.activity import (
-    Activity,
+    ACTIVITY_STATUS_CHOICES,
+    ACTIVITY_STATUS_DEFAULT,
     ACTIVITY_TYPE_RESOURCE,
+    ACTIVITY_TYPE_STANDARD,
+    Activity,
     RESOURCE_MODE_COUNT,
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.activities.activity_resource import ActivityResource
+from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.models.milestone import MilestoneModel
+from .....infrastructure.db.repositories.activity_repository import ActivityRepository
+from .....infrastructure.db.repositories.resource_type_repository import (
+    ResourceTypeRepository,
+)
+from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 
 
 def create_activity(
@@ -35,6 +41,8 @@ def create_activity(
     resource_count: Optional[int],
     resource: Optional[dict],
     current_user_id: Optional[int],
+    status: Optional[str] = None,
+    dependency: Optional[List[Any]] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     milestone = (
         db.query(MilestoneModel)
@@ -63,9 +71,8 @@ def create_activity(
         parent_label="milestone",
     )
 
-    # Pydantic model_validator already enforced the (type, mode, count, resource)
-    # invariants on the create request. Re-check the "if resource block is
-    # present, its dates are sane" rule against the project floor.
+    # Resource block: validate the classification columns now that we know we
+    # have a details-mode resource block.
     if resource is not None:
         validate_resource_dates(
             onboard=resource.get("onboard_date"),
@@ -74,15 +81,34 @@ def create_activity(
             actual_offboard=resource.get("actual_offboard_date"),
             project_start_date=project.start_date,
         )
-
-    repo = ActivityRepository(db)
-    pos = position if position is not None else repo.next_position(milestone_id)
+        # type_of_resource_id must exist + be active in the catalog.
+        type_of_resource_id = resource.get("type_of_resource_id")
+        if type_of_resource_id:
+            rt_repo = ResourceTypeRepository(db)
+            if not rt_repo.is_active(type_of_resource_id):
+                raise ValidationError(
+                    "The selected 'type of resource' could not be found or is inactive."
+                )
 
     # Normalize: for non-resource activities, mode + count must be NULL.
     store_mode = resource_mode if type == ACTIVITY_TYPE_RESOURCE else None
     store_count = resource_count if (
         type == ACTIVITY_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
     ) else None
+
+    # Standard-only fields: apply a safe default status, keep dependency verbatim.
+    resolved_status: Optional[str] = None
+    resolved_dependency: Optional[list] = None
+    if type == ACTIVITY_TYPE_STANDARD:
+        resolved_status = status or ACTIVITY_STATUS_DEFAULT
+        if resolved_status not in ACTIVITY_STATUS_CHOICES:
+            raise ValidationError(
+                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+            )
+        resolved_dependency = dependency
+
+    repo = ActivityRepository(db)
+    pos = position if position is not None else repo.next_position(milestone_id)
 
     activity = repo.create(
         project_id=milestone.project_id,
@@ -98,6 +124,8 @@ def create_activity(
         created_by=current_user_id,
         resource_mode=store_mode,
         resource_count=store_count,
+        status=resolved_status,
+        dependency=resolved_dependency,
     )
 
     resource_domain = None

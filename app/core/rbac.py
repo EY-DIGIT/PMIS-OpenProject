@@ -35,6 +35,14 @@ class Permission(str, Enum):
     PROJECTS_PUBLISH = "projects:publish"
     PROJECTS_CLOSE = "projects:close"
 
+    # Vendor catalog (read = anyone authenticated; manage = admin only).
+    VENDORS_READ = "vendors:read"
+    VENDORS_MANAGE = "vendors:manage"
+
+    # Resource-type catalog (read = anyone authenticated; manage = admin only).
+    RESOURCE_TYPES_READ = "resource_types:read"
+    RESOURCE_TYPES_MANAGE = "resource_types:manage"
+
     # Project Members permissions
     PROJECT_MEMBERS_READ = "project_members:read"
     PROJECT_MEMBERS_ADD = "project_members:add"
@@ -110,6 +118,10 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECTS_DELETE_ALL,
         Permission.PROJECTS_PUBLISH,
         Permission.PROJECTS_CLOSE,
+        Permission.VENDORS_READ,
+        Permission.VENDORS_MANAGE,
+        Permission.RESOURCE_TYPES_READ,
+        Permission.RESOURCE_TYPES_MANAGE,
         Permission.PROJECT_MEMBERS_READ,
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,
@@ -155,6 +167,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECTS_READ,
         Permission.PROJECTS_CREATE,
         Permission.PROJECTS_UPDATE,
+        Permission.VENDORS_READ,
+        Permission.RESOURCE_TYPES_READ,
         Permission.PROJECT_MEMBERS_READ,
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,
@@ -187,6 +201,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
     Role.VIEWER: {
         Permission.USERS_READ,
         Permission.PROJECTS_READ,
+        Permission.VENDORS_READ,
+        Permission.RESOURCE_TYPES_READ,
         Permission.PROJECT_MEMBERS_READ,
         Permission.WORK_PACKAGES_VIEW,
         Permission.MEETINGS_VIEW,

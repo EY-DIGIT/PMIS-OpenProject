@@ -1,20 +1,32 @@
 """Activity API schemas (with nested resource)."""
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ....domain.activities.activity import (
+    ACTIVITY_STATUS_CHOICES,
+    ACTIVITY_STATUS_DEFAULT,
     ACTIVITY_TYPES,
     ACTIVITY_TYPE_RESOURCE,
+    ACTIVITY_TYPE_STANDARD,
     RESOURCE_MODES,
     RESOURCE_MODE_COUNT,
     RESOURCE_MODE_DETAILS,
 )
+from ....domain.resource_types.resource_type import DIVISION_CHOICES, DIVISION_OTHERS
 
 
 class ResourcePayload(BaseModel):
-    """Resource fields (inline for create; partial for update)."""
+    """Resource fields (inline for create; partial for update).
+
+    Classification additions:
+      - ``typeOfResourceId`` references ``/resource_types``. Required on
+        *create* when the parent activity is type='resource' in details mode.
+      - ``division`` is one of DIVISION_CHOICES. When ``division == 'others'``,
+        ``divisionOther`` must be a non-empty string. Otherwise it must be
+        omitted / null.
+    """
     model_config = ConfigDict(populate_by_name=True)
 
     resource_name: str = Field(..., min_length=1, max_length=255, alias="resourceName")
@@ -27,15 +39,71 @@ class ResourcePayload(BaseModel):
     job_role: Optional[str] = Field(None, max_length=255, alias="jobRole")
     qualification: Optional[str] = Field(None, max_length=255)
     experience_years: Optional[Decimal] = Field(None, ge=0, le=99, alias="experienceYears")
+    type_of_resource_id: Optional[str] = Field(
+        None,
+        alias="typeOfResourceId",
+        description="UUID of a row in /resource_types (required on create).",
+    )
+    division: Optional[str] = Field(
+        None,
+        description=f"One of: {', '.join(DIVISION_CHOICES)}",
+    )
+    division_other: Optional[str] = Field(
+        None,
+        alias="divisionOther",
+        max_length=255,
+        description=f"Required (non-empty) when division == '{DIVISION_OTHERS}'.",
+    )
+
+    @field_validator("division", mode="before")
+    @classmethod
+    def _validate_division(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in DIVISION_CHOICES:
+            raise ValueError(
+                f"Division must be one of: {', '.join(DIVISION_CHOICES)}."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _validate_division_other(self):
+        # Enforce the 'others + free text' idiom symmetrically.
+        if self.division == DIVISION_OTHERS:
+            if not self.division_other or not str(self.division_other).strip():
+                raise ValueError(
+                    f"divisionOther is required when division is '{DIVISION_OTHERS}'."
+                )
+        else:
+            # Any non-'others' or None division must have no divisionOther.
+            if self.division_other is not None and str(self.division_other).strip():
+                raise ValueError(
+                    f"divisionOther may only be provided when division is '{DIVISION_OTHERS}'."
+                )
+        return self
 
 
 class ActivityCreateRequest(BaseModel):
     """POST /milestones/{milestone_id}/activities.
 
-    When `type='resource'`, `resourceMode` is required:
-      - mode='count'   : provide `resourceCount` (>= 1); `resource` must be omitted.
-      - mode='details' : provide `resource` (the 9 fields); `resourceCount` must be omitted.
-    When `type != 'resource'`, resourceMode/resourceCount/resource must all be omitted.
+    Type-specific fields:
+
+    * type='standard':
+      - ``status`` (optional; default 'not_completed', one of
+        ACTIVITY_STATUS_CHOICES)
+      - ``dependency`` (optional; list of any — no referential integrity yet)
+      - resourceMode / resourceCount / resource MUST all be omitted.
+
+    * type='resource':
+      - resourceMode required (one of 'count' | 'details')
+        - 'count'   → provide resourceCount (>=1); resource MUST be omitted
+        - 'details' → provide resource (the 9+ fields); resourceCount omitted
+      - status / dependency MUST NOT be supplied.
+
+    * type='transactional':
+      - Neither the standard-only nor the resource-only fields may be used.
     """
     model_config = ConfigDict(populate_by_name=True)
 
@@ -51,11 +119,23 @@ class ActivityCreateRequest(BaseModel):
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
 
+    # Standard-only fields.
+    status: Optional[str] = Field(
+        None,
+        description=(
+            f"Applies only to type='standard'. One of: "
+            f"{', '.join(ACTIVITY_STATUS_CHOICES)}. Defaults to "
+            f"'{ACTIVITY_STATUS_DEFAULT}' when omitted."
+        ),
+    )
+    dependency: Optional[List[Any]] = Field(
+        None,
+        description="Applies only to type='standard'. Reserved; no referential integrity yet.",
+    )
+
     @field_validator("type", mode="before")
     @classmethod
     def _validate_type(cls, v):
-        # Accept any case ("Standard", "STANDARD", "standard"); normalize to
-        # the canonical wire value before the enum check.
         if isinstance(v, str):
             v = v.strip().lower()
         if v not in ACTIVITY_TYPES:
@@ -75,6 +155,19 @@ class ActivityCreateRequest(BaseModel):
             raise ValueError("Resource mode must be either 'count' or 'details'.")
         return v
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in ACTIVITY_STATUS_CHOICES:
+            raise ValueError(
+                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+            )
+        return v
+
     @field_validator("end_date")
     @classmethod
     def _end_after_start(cls, v, info):
@@ -84,10 +177,23 @@ class ActivityCreateRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _resource_shape(self):
+    def _cross_field_shape(self):
         is_resource_type = self.type == ACTIVITY_TYPE_RESOURCE
+        is_standard_type = self.type == ACTIVITY_TYPE_STANDARD
+
+        # status / dependency are STANDARD-only.
+        if not is_standard_type:
+            if self.status is not None:
+                raise ValueError(
+                    "status is only valid on standard-type activities."
+                )
+            if self.dependency is not None:
+                raise ValueError(
+                    "dependency is only valid on standard-type activities."
+                )
+
+        # Resource-block consistency (mirrors prior behaviour; kept verbatim).
         if not is_resource_type:
-            # Non-resource activity: none of the resource fields may be set.
             if self.resource_mode is not None:
                 raise ValueError(
                     "Resource mode should only be provided when the activity type is 'resource'."
@@ -122,6 +228,16 @@ class ActivityCreateRequest(BaseModel):
                 raise ValueError(
                     "Resource details are required when resource mode is 'details'."
                 )
+            # typeOfResourceId is mandatory on a details-mode create.
+            if not self.resource.type_of_resource_id:
+                raise ValueError(
+                    "typeOfResourceId is required on the resource block when resource mode is 'details'."
+                )
+            # division is also mandatory on a details-mode create.
+            if self.resource.division is None:
+                raise ValueError(
+                    "division is required on the resource block when resource mode is 'details'."
+                )
             if self.resource_count is not None:
                 raise ValueError(
                     "Resource count should be omitted when resource mode is 'details'."
@@ -149,6 +265,8 @@ class ActivityUpdateRequest(BaseModel):
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
+    status: Optional[str] = None
+    dependency: Optional[List[Any]] = None
 
     @field_validator("type", mode="before")
     @classmethod
@@ -172,6 +290,19 @@ class ActivityUpdateRequest(BaseModel):
             v = v.strip().lower()
         if v not in RESOURCE_MODES:
             raise ValueError("Resource mode must be either 'count' or 'details'.")
+        return v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in ACTIVITY_STATUS_CHOICES:
+            raise ValueError(
+                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+            )
         return v
 
 

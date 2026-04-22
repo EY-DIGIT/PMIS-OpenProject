@@ -1,7 +1,12 @@
 """Milestone API schemas (request/response)."""
 from datetime import datetime
-from typing import Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ....domain.milestones.milestone import (
+    MILESTONE_STATUS_CHOICES,
+    MILESTONE_STATUS_DEFAULT,
+)
 
 
 class MilestoneCreateRequest(BaseModel):
@@ -14,12 +19,38 @@ class MilestoneCreateRequest(BaseModel):
     end_date: datetime = Field(..., alias="endDate")
     position: Optional[int] = Field(None, ge=0, description="Optional; auto-assigned if omitted")
 
+    # Configurable status — values in MILESTONE_STATUS_CHOICES. Defaults to
+    # 'not_completed' when omitted.
+    status: str = Field(
+        MILESTONE_STATUS_DEFAULT,
+        description=f"One of: {', '.join(MILESTONE_STATUS_CHOICES)}",
+    )
+    # Reserved: a list of other milestone ids this one depends on. No
+    # referential integrity is enforced yet; stored as-is.
+    depends: Optional[List[Any]] = Field(None)
+    # Optional subset of the project's vendors. Each id MUST also appear in
+    # the project's vendor list (enforced by the service layer).
+    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
+
     @field_validator("end_date")
     @classmethod
     def _end_after_start(cls, v, info):
         start = info.data.get("start_date")
         if start is not None and v < start:
             raise ValueError("End date cannot be before the start date.")
+        return v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, v):
+        if v is None:
+            return MILESTONE_STATUS_DEFAULT
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in MILESTONE_STATUS_CHOICES:
+            raise ValueError(
+                f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
+            )
         return v
 
 
@@ -32,6 +63,22 @@ class MilestoneUpdateRequest(BaseModel):
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
     position: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = None
+    depends: Optional[List[Any]] = None
+    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in MILESTONE_STATUS_CHOICES:
+            raise ValueError(
+                f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
+            )
+        return v
 
 
 class MilestoneListQuery(BaseModel):

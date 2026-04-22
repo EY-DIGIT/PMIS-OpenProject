@@ -50,6 +50,7 @@ def init_db() -> None:
     # This ensures models are registered with Base before table creation
     from .models import (  # noqa: F401
         UserModel, ProjectModel, ProjectAuditLogModel, RoleModel, ProjectMemberModel,
+        ProjectVendorModel, MilestoneVendorModel, VendorModel, ResourceTypeModel,
         WorkPackageModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
         MeetingAgendaItemModel,
         MilestoneModel, ActivityModel, ActivityResourceModel,
@@ -116,6 +117,8 @@ def init_db() -> None:
                         ("deleted_at",        "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
                         ("deleted_by",        "ALTER TABLE projects ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
                         ("project_code",      "ALTER TABLE projects ADD COLUMN project_code VARCHAR(30)"),
+                        # NEW: free-text label when category == 'others'.
+                        ("category_other",    "ALTER TABLE projects ADD COLUMN category_other VARCHAR(255)"),
                     ]
                     for col, ddl in project_column_ddl:
                         if col not in project_cols:
@@ -193,6 +196,55 @@ def init_db() -> None:
                         """))
                     except Exception as e:
                         logging.warning("Failed to backfill %s.resource_mode: %s", main_table, e)
+
+                # ---- NEW: milestones.status + milestones.depends ---------
+                try:
+                    res = conn.execute(text("PRAGMA table_info('milestones')"))
+                    mcols = {r[1] for r in res.fetchall()}
+                    for col, stmt in (
+                        ("status",  "ALTER TABLE milestones ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'not_completed'"),
+                        ("depends", "ALTER TABLE milestones ADD COLUMN depends TEXT"),
+                    ):
+                        if col not in mcols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add milestones.%s: %s", col, e)
+                except Exception:
+                    pass
+
+                # ---- NEW: activities.status + activities.dependency ------
+                try:
+                    res = conn.execute(text("PRAGMA table_info('activities')"))
+                    acols = {r[1] for r in res.fetchall()}
+                    for col, stmt in (
+                        ("status",     "ALTER TABLE activities ADD COLUMN status VARCHAR(32)"),
+                        ("dependency", "ALTER TABLE activities ADD COLUMN dependency TEXT"),
+                    ):
+                        if col not in acols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add activities.%s: %s", col, e)
+                except Exception:
+                    pass
+
+                # ---- NEW: activity_resources classification columns ------
+                try:
+                    res = conn.execute(text("PRAGMA table_info('activity_resources')"))
+                    arcols = {r[1] for r in res.fetchall()}
+                    for col, stmt in (
+                        ("type_of_resource_id", "ALTER TABLE activity_resources ADD COLUMN type_of_resource_id VARCHAR(36) REFERENCES resource_types(id)"),
+                        ("division",            "ALTER TABLE activity_resources ADD COLUMN division VARCHAR(32)"),
+                        ("division_other",      "ALTER TABLE activity_resources ADD COLUMN division_other VARCHAR(255)"),
+                    ):
+                        if col not in arcols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add activity_resources.%s: %s", col, e)
+                except Exception:
+                    pass
     except Exception:
         # Non-fatal: do not prevent application start on unexpected errors
         pass
@@ -274,5 +326,40 @@ def init_db() -> None:
             except Exception:
                 # Do not raise on bootstrap failures; log could be added
                 pass
+    finally:
+        db.close()
+
+    # Seed resource_types catalog (idempotent).
+    db = SessionLocal()
+    try:
+        from .repositories import ResourceTypeRepository
+        from ...domain.resource_types.resource_type import RESOURCE_TYPE_SEED
+
+        rt_repo = ResourceTypeRepository(db)
+        for code, name in RESOURCE_TYPE_SEED:
+            try:
+                if not rt_repo.exists_by_code(code):
+                    rt_repo.create(code=code, name=name, active=True)
+            except Exception:
+                pass
+        db.commit()
+    finally:
+        db.close()
+
+    # Seed a few demo vendors so the frontend has something to render on first
+    # run. Remove or replace with real vendor data when vendor management
+    # flows land.
+    db = SessionLocal()
+    try:
+        from .repositories import VendorRepository
+
+        v_repo = VendorRepository(db)
+        for name in ("Infosys", "TCS", "Wipro", "Accenture", "Capgemini"):
+            try:
+                if v_repo.get_by_name(name) is None:
+                    v_repo.create(name=name, active=True)
+            except Exception:
+                pass
+        db.commit()
     finally:
         db.close()

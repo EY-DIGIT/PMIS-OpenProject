@@ -32,7 +32,18 @@ PROJECT_STATUS_CHOICES: Tuple[str, ...] = (
     STATUS_SUSPENDED,
 )
 
-PROJECT_CATEGORY_CHOICES: Tuple[str, ...] = ("MSAP", "MSIP", "BSP")
+CATEGORY_MSAP = "MSAP"
+CATEGORY_MSIP = "MSIP"
+CATEGORY_BSP = "BSP"
+# Free-text category. When used, ``category_other`` on the project row MUST
+# be a non-empty string (max 255 chars) — the create/upsert services enforce.
+CATEGORY_OTHERS = "others"
+PROJECT_CATEGORY_CHOICES: Tuple[str, ...] = (
+    CATEGORY_MSAP,
+    CATEGORY_MSIP,
+    CATEGORY_BSP,
+    CATEGORY_OTHERS,
+)
 
 # "Active" version = not suspended and not soft-deleted. Used for the
 # one-active-version-per-baseline invariant.

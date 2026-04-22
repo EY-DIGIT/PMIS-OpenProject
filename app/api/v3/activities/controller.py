@@ -28,6 +28,9 @@ def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "jobRole": r["job_role"],
         "qualification": r["qualification"],
         "experienceYears": r["experience_years"],
+        "typeOfResourceId": r.get("type_of_resource_id"),
+        "division": r.get("division"),
+        "divisionOther": r.get("division_other"),
         "createdAt": r["created_at"],
         "updatedAt": r["updated_at"],
     }
@@ -56,6 +59,8 @@ def format_activity_response(
         "position": a["position"],
         "resourceMode": a.get("resource_mode"),
         "resourceCount": a.get("resource_count"),
+        "status": a.get("status"),
+        "dependency": a.get("dependency"),
         "createdAt": a["created_at"],
         "updatedAt": a["updated_at"],
         "createdBy": a["created_by"],
@@ -85,6 +90,8 @@ class ActivityController:
             resource_count=data.resource_count,
             resource=resource_dict,
             current_user_id=current_user_id,
+            status=data.status,
+            dependency=data.dependency,
         )
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
@@ -137,6 +144,8 @@ class ActivityController:
             resource_count=data.resource_count,
             resource=resource_dict,
             current_user_id=current_user_id,
+            status=data.status,
+            dependency=data.dependency,
         )
         return BaseController.ok(data=format_activity_response(
             activity.to_dict(), resource.to_dict() if resource else None,

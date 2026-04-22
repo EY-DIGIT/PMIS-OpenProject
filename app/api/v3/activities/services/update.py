@@ -28,10 +28,16 @@ from .....core.project_lock import assert_project_editable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
+from .....infrastructure.db.repositories.resource_type_repository import (
+    ResourceTypeRepository,
+)
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.activities.activity import (
     Activity,
+    ACTIVITY_STATUS_CHOICES,
+    ACTIVITY_STATUS_DEFAULT,
     ACTIVITY_TYPE_RESOURCE,
+    ACTIVITY_TYPE_STANDARD,
     RESOURCE_MODE_COUNT,
     RESOURCE_MODE_DETAILS,
 )
@@ -59,6 +65,8 @@ def update_activity(
     resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
+    status: Optional[str] = None,
+    dependency: Optional[list] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     repo = ActivityRepository(db)
     model = repo.get_model(activity_id)
@@ -173,6 +181,34 @@ def update_activity(
             actual_offboard=resource.get("actual_offboard_date"),
             project_start_date=project.start_date,
         )
+        # Validate type_of_resource_id existence when provided.
+        new_type_of_resource_id = resource.get("type_of_resource_id")
+        if new_type_of_resource_id is not None:
+            rt_repo = ResourceTypeRepository(db)
+            if not rt_repo.is_active(new_type_of_resource_id):
+                raise ValidationError(
+                    "The selected 'type of resource' could not be found or is inactive."
+                )
+
+    # Standard-only fields: status / dependency are valid ONLY when the final
+    # type is standard. A PATCH that flips type=standard -> non-standard must
+    # clear them (done via the final shape below).
+    status_supplied = status is not None
+    dependency_supplied = dependency is not None
+    if new_type != ACTIVITY_TYPE_STANDARD:
+        if status_supplied:
+            raise ValidationError(
+                "status is only valid on standard-type activities."
+            )
+        if dependency_supplied:
+            raise ValidationError(
+                "dependency is only valid on standard-type activities."
+            )
+    else:
+        if status_supplied and status not in ACTIVITY_STATUS_CHOICES:
+            raise ValidationError(
+                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+            )
 
     # Build the activity-row update dict.
     updates: Dict[str, Any] = {}
@@ -197,6 +233,22 @@ def update_activity(
     if final_mode != model.resource_mode or final_count != model.resource_count:
         updates["resource_mode"] = final_mode
         updates["resource_count"] = final_count
+
+    # Standard-only fields.
+    if new_type == ACTIVITY_TYPE_STANDARD:
+        if status_supplied:
+            updates["status"] = status
+        elif model.type != ACTIVITY_TYPE_STANDARD:
+            # Transitioning INTO standard with no status supplied — default.
+            updates["status"] = ACTIVITY_STATUS_DEFAULT
+        if dependency_supplied:
+            updates["dependency"] = dependency
+    else:
+        # Transitioning OUT of standard — clear both fields.
+        if model.status is not None:
+            updates["status"] = None
+        if model.dependency is not None:
+            updates["dependency"] = None
 
     if updates:
         repo.update(activity_id, updates=updates, updated_by=current_user_id)

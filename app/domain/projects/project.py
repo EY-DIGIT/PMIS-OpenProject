@@ -1,9 +1,9 @@
 """
 Project domain model.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -43,6 +43,11 @@ class Project:
     updated_by: Optional[int] = None
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[int] = None
+    # Present when category == 'others'; otherwise None.
+    category_other: Optional[str] = None
+    # List of (vendor_id, vendor_name) pairs associated with this project.
+    # Populated by the repository on read (left empty when not eagerly loaded).
+    vendors: List[Tuple[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -70,6 +75,8 @@ class Project:
             "updated_by": self.updated_by,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by": self.deleted_by,
+            "category_other": self.category_other,
+            "vendors": [{"id": vid, "name": vname} for (vid, vname) in self.vendors],
         }
 
     def is_active(self) -> bool:
