@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PMIS API v3.0.0",
-    "description": "OpenProject-compatible User Management API - Project Management Information System",
+    "description": "OpenProject-compatible Project Management Information System. Authentication via JWT. All project-scoped path params are UUIDs (project_uuid). Catalog modules (vendors, resource_types) seed demo data on first boot.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "12345"
   },
@@ -46,22 +46,18 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"login\": \"admin\",\n  \"password\": \"admin123456\"\n}"
+              "raw": "{\n  \"login\": \"admin\",\n  \"password\": \"admin123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v3/users/login",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "users", "login"]
             },
-            "description": "Authenticate user and receive JWT token"
+            "description": "Authenticate user and receive JWT access + refresh tokens"
           },
           "response": []
         },
@@ -70,22 +66,18 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"access_token\": \"{{token}}\"\n}"
+              "raw": "{\n  \"access_token\": \"{{token}}\",\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v3/users/introspect",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "users", "introspect"]
             },
-            "description": "Introspect tokens - public endpoint"
+            "description": "Dual-purpose: validates an access token, or rotates an expired access token if a refresh token is also supplied. Public."
           },
           "response": []
         },
@@ -94,11 +86,7 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/users/me",
@@ -119,16 +107,8 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -148,33 +128,16 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/users?offset=1&pageSize=20&status=active",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "users"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "1",
-                  "description": "Page number (1-indexed)"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20",
-                  "description": "Items per page"
-                },
-                {
-                  "key": "status",
-                  "value": "active",
-                  "description": "Filter by status",
-                  "disabled": false
-                }
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "status", "value": "active", "disabled": false}
               ]
             },
             "description": "List all users with pagination (admin only)"
@@ -186,18 +149,14 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/users/1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "users", "1"]
             },
-            "description": "Get user by ID"
+            "description": "Get user by ID (INTEGER for user_id — users did not migrate to UUID)"
           },
           "response": []
         },
@@ -206,16 +165,8 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -235,16 +186,8 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -264,11 +207,7 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/users/1",
@@ -282,34 +221,176 @@
       ]
     },
     {
+      "name": "Vendors",
+      "description": "Vendor catalog used by the project + milestone vendor pickers. Any authenticated user can read; only admins can write. 5 demo vendors are seeded on first boot.",
+      "item": [
+        {
+          "name": "List Vendors",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "vendors"]
+            },
+            "description": "List all active vendors. Use the returned ids when attaching vendors to a project / milestone."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vendor (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Freshly Minted Ltd\",\n  \"description\": \"Demo vendor\",\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "vendors"]
+            },
+            "description": "Create a vendor (admin). Vendor names are unique."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vendor (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renamed Vendor\",\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors/{{vendorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "vendors", "{{vendorId}}"]
+            },
+            "description": "Edit a vendor (admin). Deactivating (active=false) keeps existing associations intact but prevents new ones."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Resource Types",
+      "description": "Resource type catalog referenced by activity_resources.type_of_resource_id. Seeded with rfp / asg / ccm.",
+      "item": [
+        {
+          "name": "List Resource Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/resource_types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "resource_types"]
+            },
+            "description": "List all active resource types. Use the id (NOT the code) as typeOfResourceId on resource-mode activities."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Resource Type (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"mou\",\n  \"name\": \"Memorandum of Understanding\",\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/resource_types",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "resource_types"]
+            },
+            "description": "Create a resource type (admin). Codes are unique, lowercase."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Projects",
+      "description": "Project lifecycle (new/draft/published/closed/suspended) with versioning and soft-delete-with-cascade. Deleting a baseline cascades the soft-delete to every live version of it.",
       "item": [
         {
           "name": "Create Project",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"New Project\",\n  \"description\": \"Project description\",\n  \"active\": true,\n  \"public\": false\n}"
+              "raw": "{\n  \"name\": \"New Project\",\n  \"description\": \"Project description\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"owner\": \"admin\",\n  \"category\": \"MSIP\",\n  \"startDate\": \"2026-05-01T09:00:00Z\",\n  \"endDate\": \"2026-12-31T17:00:00Z\",\n  \"vendorIds\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v3/projects",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "projects"]
             },
-            "description": "Create a new project"
+            "description": "Create a project. Server generates id (UUID) + projectCode. category must be one of MSIP, MSAP, BSP, others. If 'others', supply categoryOther (see next request). vendorIds is an optional list of vendor UUIDs (fetch via GET /vendors)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project (category=others)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Others Category Project\",\n  \"description\": \"Demo of category=others with free-text label\",\n  \"owner\": \"admin\",\n  \"category\": \"others\",\n  \"categoryOther\": \"Inception Phase\",\n  \"vendorIds\": [\"{{vendorId}}\"],\n  \"startDate\": \"2026-05-01T09:00:00Z\",\n  \"endDate\": \"2026-12-31T17:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects"]
+            },
+            "description": "Create a project with category='others'. categoryOther is REQUIRED and non-empty when category='others'; it must be omitted for any other category."
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Project by UUID",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Wizard Project\",\n  \"owner\": \"admin\",\n  \"isPublic\": false,\n  \"startDate\": \"2026-05-01T09:00:00Z\",\n  \"endDate\": \"2026-12-31T17:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}"]
+            },
+            "description": "Idempotent create-or-update keyed by UUID (wizard flow). The frontend generates the UUID once per wizard session via crypto.randomUUID(). 201 on first call, 200 on subsequent calls. On update, the caller must own the project (or be admin)."
           },
           "response": []
         },
@@ -318,62 +399,36 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects?offset=1&pageSize=20&active=true&public=false",
+              "raw": "{{baseUrl}}/api/v3/projects?offset=1&pageSize=20&active=true",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "projects"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "1",
-                  "description": "Page number (1-indexed)"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20",
-                  "description": "Items per page"
-                },
-                {
-                  "key": "active",
-                  "value": "true",
-                  "description": "Filter by active status",
-                  "disabled": false
-                },
-                {
-                  "key": "public",
-                  "value": "false",
-                  "description": "Filter by public status",
-                  "disabled": false
-                }
+                {"key": "offset", "value": "1", "description": "Page number (1-indexed)"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "active", "value": "true", "disabled": false},
+                {"key": "public", "value": "false", "disabled": true}
               ]
             },
-            "description": "List all projects with pagination"
+            "description": "List projects (soft-deleted rows are filtered out by default)"
           },
           "response": []
         },
         {
-          "name": "Get Project by ID",
+          "name": "Get Project by UUID",
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}"]
             },
-            "description": "Get project by ID"
+            "description": "Fetch a project by UUID. 404 if soft-deleted."
           },
           "response": []
         },
@@ -382,47 +437,696 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Project Name\",\n  \"description\": \"Updated description\",\n  \"active\": true,\n  \"public\": false\n}"
+              "raw": "{\n  \"name\": \"Updated Project Name\",\n  \"description\": \"Updated description\",\n  \"isPublic\": true,\n  \"vendorIds\": [\"{{vendorId}}\"]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}"]
             },
-            "description": "Update project details"
+            "description": "Only whitelisted fields are applied: name, description, owner, start_date, end_date, public, active, status_explanation (on unpublished baselines). Versions allow only owner, public, actual_end_date, status_explanation. Anything else returns 422 invalid_field. Sending vendorIds replaces the full list; omit to leave it unchanged; send [] to clear."
           },
           "response": []
         },
         {
-          "name": "Delete Project",
+          "name": "Save Project (new -> draft)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/save",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "save"]
+            },
+            "description": "Maps to the Step-1 wizard 'Save Project' button. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Without milestones: 422. Idempotent once past 'new'."
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Project (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/publish",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "publish"]
+            },
+            "description": "Publish the project. Transitions status to 'published'. After this, PATCH returns 409 project_locked and any writes into the subtree return 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Close Project (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Closure reason stored in status_explanation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/close",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "close"]
+            },
+            "description": "Close the project. reason is optional; when provided it is stored in status_explanation."
+          },
+          "response": []
+        },
+        {
+          "name": "Suspend Version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/suspend",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "suspend"]
+            },
+            "description": "Suspend a version project (only works when isVersion=true). Terminal — suspended versions do not come back. Frees the active-version slot so a new version can be created from the baseline."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/versions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "versions"]
+            },
+            "description": "Clone a published baseline into a fresh version. Source must have isVersion=false AND status='published'. Response includes new id, new projectCode, isVersion=true, baselineId=source. Only ONE active (non-suspended, non-deleted) version per baseline is allowed."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project (admin, cascades to versions)",
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}"]
             },
-            "description": "Delete project by ID (admin only)"
+            "description": "Soft-delete a project. When the target is a BASELINE (isVersion=false), every live version of it is soft-deleted too, and each one's M/A/T/S subtree is cascaded. Deleting a version alone leaves the baseline and siblings live. One transaction — no partial state."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Project Tree",
+      "item": [
+        {
+          "name": "Get Project Tree",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/tree",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "tree"],
+              "query": [
+                {"key": "includeDeleted", "value": "false", "disabled": true}
+              ]
+            },
+            "description": "Full M/A/T/S tree under a project: milestones -> activities -> tasks -> subtasks, with resource details inlined for resource-type rows. Soft-deleted rows are filtered unless includeDeleted=true (admin practice)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Milestones",
+      "description": "Milestones live under projects. Carry status (not_completed | completed), an optional depends list (pass-through), and an optional vendor subset (must be a subset of the parent project's vendors).",
+      "item": [
+        {
+          "name": "Create Milestone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"M1 — API foundation\",\n  \"description\": \"Auth, projects, M/A/T/S CRUD\",\n  \"startDate\": \"2026-05-05T09:00:00Z\",\n  \"endDate\": \"2026-08-31T17:00:00Z\",\n  \"status\": \"not_completed\",\n  \"depends\": [],\n  \"vendorIds\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/milestones",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "milestones"]
+            },
+            "description": "Create a milestone. startDate must be >= project.startDate. vendorIds must be a subset of the project's vendor list."
+          },
+          "response": []
+        },
+        {
+          "name": "List Milestones under Project",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/milestones?offset=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "milestones"],
+              "query": [
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "includeDeleted", "value": "false", "disabled": true}
+              ]
+            },
+            "description": "List milestones under a project (sorted by position, then id)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Milestone by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Fetch a single milestone by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Milestone",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"M1 — renamed\",\n  \"status\": \"completed\",\n  \"vendorIds\": [\"{{vendorId}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Partial update. Sending vendorIds replaces the full list; omit to leave unchanged; send [] to clear. status must be one of not_completed, completed."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Milestone (cascades to subtree)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}"]
+            },
+            "description": "Soft-delete a milestone and every descendant (activities, their resources, tasks, their resources, subtasks, their resources). One transaction."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Milestone (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "restore"]
+            },
+            "description": "Restore a soft-deleted milestone. Does NOT auto-restore descendants."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Activities",
+      "description": "Activities live under milestones. type is one of 'standard' (status + dependency apply), 'resource' (resourceMode + resource block apply), or 'transactional' (no extras).",
+      "item": [
+        {
+          "name": "Create Activity (standard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A1 — Design REST schemas\",\n  \"description\": \"\",\n  \"type\": \"standard\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"status\": \"not_completed\",\n  \"dependency\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+            },
+            "description": "Create a standard activity. status defaults to 'not_completed'. dependency is a pass-through list (no referential integrity yet). status + dependency are ONLY valid when type='standard'."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Activity (transactional)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A2 — Add transactions\",\n  \"type\": \"transactional\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+            },
+            "description": "Transactional activity. status / dependency / resource* fields must all be absent."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Activity (resource, count mode)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A3 — Need N engineers\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"count\",\n  \"resourceCount\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+            },
+            "description": "Resource activity in 'count' mode. Just a headcount — no inline resource block."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Activity (resource, details — tmd1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A4 — Onboard Designer\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Alice Kumar\",\n    \"onboardDate\": \"2026-05-11T09:00:00Z\",\n    \"offboardDate\": \"2026-07-25T17:00:00Z\",\n    \"jobRole\": \"Backend Engineer\",\n    \"experienceYears\": 5,\n    \"typeOfResourceId\": \"{{resourceTypeId}}\",\n    \"division\": \"tmd1\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+            },
+            "description": "Resource activity, details mode. typeOfResourceId is REQUIRED and must reference an active row in /resource_types. division is one of tmd1, tmd2, others. Here: tmd1."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Activity (resource, details — division=others)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A5 — Special Projects engineer\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-10T09:00:00Z\",\n  \"endDate\": \"2026-07-31T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Bob Pereira\",\n    \"jobRole\": \"Integration Lead\",\n    \"experienceYears\": 8,\n    \"typeOfResourceId\": \"{{resourceTypeId}}\",\n    \"division\": \"others\",\n    \"divisionOther\": \"Beta Program\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"]
+            },
+            "description": "Resource activity with division='others'. divisionOther is REQUIRED and non-empty. For any non-'others' division, divisionOther must be omitted."
+          },
+          "response": []
+        },
+        {
+          "name": "List Activities under Milestone",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{{milestoneId}}/activities?offset=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "milestones", "{{milestoneId}}", "activities"],
+              "query": [
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "includeDeleted", "value": "false", "disabled": true}
+              ]
+            },
+            "description": "List activities under a milestone. The inline resource block is not included on list — use GET /activities/{id} for that."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Activity by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}"]
+            },
+            "description": "Fetch one activity, with its resource block inlined when present."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Activity",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A1 — renamed\",\n  \"status\": \"completed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}"]
+            },
+            "description": "Partial update. Handles type transitions (standard <-> resource <-> transactional). When leaving type=standard, status + dependency are cleared. When entering type=resource/details, typeOfResourceId and division become required."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Activity (cascades to tasks + subtasks)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}"]
+            },
+            "description": "Soft-delete an activity and its descendants + resources. One transaction."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Activity (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}", "restore"]
+            },
+            "description": "Restore a soft-deleted activity."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "description": "Tasks live under activities. Same shape as activities re: type / resourceMode / resource block.",
+      "item": [
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"T1 — Implement /versions endpoint\",\n  \"type\": \"standard\",\n  \"startDate\": \"2026-05-15T09:00:00Z\",\n  \"endDate\": \"2026-07-20T17:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}", "tasks"]
+            },
+            "description": "Create a task under an activity. Dates must fit within the parent activity's window."
+          },
+          "response": []
+        },
+        {
+          "name": "List Tasks under Activity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{{activityId}}/tasks?offset=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "activities", "{{activityId}}", "tasks"],
+              "query": [
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "includeDeleted", "value": "false", "disabled": true}
+              ]
+            },
+            "description": "List tasks under an activity."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}"]
+            },
+            "description": "Fetch one task."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"T1 — renamed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}"]
+            },
+            "description": "Partial update."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task (cascades to subtasks)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}"]
+            },
+            "description": "Soft-delete a task and its subtasks + resources."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Task (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}", "restore"]
+            },
+            "description": "Restore a soft-deleted task."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subtasks",
+      "description": "Subtasks live under tasks. Same shape as activities/tasks.",
+      "item": [
+        {
+          "name": "Create Subtask (resource, details)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ST1 — Wire clone_tree_for_version\",\n  \"type\": \"resource\",\n  \"startDate\": \"2026-05-18T09:00:00Z\",\n  \"endDate\": \"2026-06-30T17:00:00Z\",\n  \"resourceMode\": \"details\",\n  \"resource\": {\n    \"resourceName\": \"Alice Kumar\",\n    \"jobRole\": \"Backend Engineer\",\n    \"experienceYears\": 4\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}/subtasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}", "subtasks"]
+            },
+            "description": "Create a subtask under a task. Note: typeOfResourceId + division are currently scoped to activities' resources, not subtasks' (the subtasks module exposes the same ResourcePayload shape but the extra classification columns live only on activity_resources)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Subtasks under Task",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{{taskId}}/subtasks?offset=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "tasks", "{{taskId}}", "subtasks"],
+              "query": [
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "includeDeleted", "value": "false", "disabled": true}
+              ]
+            },
+            "description": "List subtasks under a task."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subtask by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{{subtaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "subtasks", "{{subtaskId}}"]
+            },
+            "description": "Fetch one subtask."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Subtask",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ST1 — renamed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{{subtaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "subtasks", "{{subtaskId}}"]
+            },
+            "description": "Partial update."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Subtask",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{{subtaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "subtasks", "{{subtaskId}}"]
+            },
+            "description": "Soft-delete a subtask + its resource."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Subtask (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{{subtaskId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "subtasks", "{{subtaskId}}", "restore"]
+            },
+            "description": "Restore a soft-deleted subtask."
           },
           "response": []
         }
@@ -436,25 +1140,17 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"user_id\": 2,\n  \"roles\": [\"member\"]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/memberships",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/memberships",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "memberships"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "memberships"]
             },
             "description": "Add a user to a project"
           },
@@ -465,25 +1161,15 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/memberships?offset=1&pageSize=20",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/memberships?offset=1&pageSize=20",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "memberships"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "memberships"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "1"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20"
-                }
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"}
               ]
             },
             "description": "List members of a project"
@@ -495,25 +1181,17 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"roles\": [\"member\", \"admin\"]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/memberships/1",
+              "raw": "{{baseUrl}}/api/v3/memberships/{{membershipId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "memberships", "1"]
+              "path": ["api", "v3", "memberships", "{{membershipId}}"]
             },
             "description": "Update member roles"
           },
@@ -524,16 +1202,12 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/memberships/1",
+              "raw": "{{baseUrl}}/api/v3/memberships/{{membershipId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "memberships", "1"]
+              "path": ["api", "v3", "memberships", "{{membershipId}}"]
             },
             "description": "Remove a user from a project"
           },
@@ -549,16 +1223,8 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -578,28 +1244,18 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/roles?offset=0&pageSize=20",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "roles"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "0"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20"
-                }
+                {"key": "offset", "value": "0"},
+                {"key": "pageSize", "value": "20"}
               ]
             },
-            "description": "List all roles with pagination (admin only)"
+            "description": "List all roles (admin only)"
           },
           "response": []
         },
@@ -608,18 +1264,14 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/roles/1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "roles", "1"]
             },
-            "description": "Get role by ID (admin only)"
+            "description": "Get role by ID"
           },
           "response": []
         },
@@ -628,16 +1280,8 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -648,7 +1292,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "roles", "1"]
             },
-            "description": "Update role details (admin only, builtin roles cannot be modified)"
+            "description": "Update role details (admin; builtin roles cannot be modified)"
           },
           "response": []
         },
@@ -657,18 +1301,14 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/roles/1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "roles", "1"]
             },
-            "description": "Delete a role (admin only, builtin roles cannot be deleted)"
+            "description": "Delete a role (admin; builtin roles cannot be deleted)"
           },
           "response": []
         }
@@ -682,27 +1322,19 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"subject\": \"New Work Package\",\n  \"description\": \"Work package description\",\n  \"type\": \"Task\",\n  \"status\": \"New\",\n  \"priority\": \"Normal\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/work_packages",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/work_packages",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "work_packages"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "work_packages"]
             },
-            "description": "Create a new work package in a project"
+            "description": "Create a work package under a project"
           },
           "response": []
         },
@@ -711,33 +1343,20 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/work_packages?offset=1&pageSize=20&parentId=",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/work_packages?offset=1&pageSize=20",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "work_packages"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "work_packages"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "1"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20"
-                },
-                {
-                  "key": "parentId",
-                  "value": "",
-                  "disabled": true
-                }
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"},
+                {"key": "parentId", "value": "", "disabled": true},
+                {"key": "type", "value": "milestone", "disabled": true}
               ]
             },
-            "description": "List work packages in a project with pagination"
+            "description": "List work packages in a project"
           },
           "response": []
         },
@@ -746,18 +1365,30 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/work_packages/1",
+              "raw": "{{baseUrl}}/api/v3/work_packages/{{workPackageId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "work_packages", "1"]
+              "path": ["api", "v3", "work_packages", "{{workPackageId}}"]
             },
-            "description": "Get work package by ID"
+            "description": "Get a work package by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Work Package Children (subtree)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/work_packages/{{workPackageId}}/children",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v3", "work_packages", "{{workPackageId}}", "children"]
+            },
+            "description": "Recursive subtree under a work package."
           },
           "response": []
         },
@@ -766,25 +1397,17 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject\": \"Updated Work Package\",\n  \"description\": \"Updated description\",\n  \"status\": \"In Progress\",\n  \"priority\": \"High\"\n}"
+              "raw": "{\n  \"subject\": \"Updated Work Package\",\n  \"status\": \"in_progress\",\n  \"priority\": \"High\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/work_packages/1",
+              "raw": "{{baseUrl}}/api/v3/work_packages/{{workPackageId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "work_packages", "1"]
+              "path": ["api", "v3", "work_packages", "{{workPackageId}}"]
             },
             "description": "Update a work package"
           },
@@ -795,16 +1418,12 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/work_packages/1",
+              "raw": "{{baseUrl}}/api/v3/work_packages/{{workPackageId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "work_packages", "1"]
+              "path": ["api", "v3", "work_packages", "{{workPackageId}}"]
             },
             "description": "Delete a work package"
           },
@@ -820,25 +1439,15 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/work_package_types?offset=1&pageSize=20",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "work_package_types"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "1"
-                },
-                {
-                  "key": "pageSize",
-                  "value": "20"
-                }
+                {"key": "offset", "value": "1"},
+                {"key": "pageSize", "value": "20"}
               ]
             },
             "description": "List all work package types"
@@ -850,18 +1459,14 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/work_package_types/1",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "work_package_types", "1"]
             },
-            "description": "Get work package type by ID"
+            "description": "Get a work package type"
           },
           "response": []
         },
@@ -870,27 +1475,19 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Feature\",\n  \"builtin\": false\n}"
+              "raw": "{\n  \"name\": \"Feature\",\n  \"internal_name\": \"feature\",\n  \"is_builtin\": false,\n  \"is_active\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v3/work_package_types",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v3", "work_package_types"]
             },
-            "description": "Create a new work package type"
+            "description": "Create a work package type (admin)"
           },
           "response": []
         },
@@ -899,16 +1496,8 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
@@ -928,11 +1517,7 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v3/work_package_types/1",
@@ -953,27 +1538,19 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Team Meeting\",\n  \"description\": \"Weekly team sync\",\n  \"start_date\": \"2024-04-15T10:00:00Z\",\n  \"end_date\": \"2024-04-15T11:00:00Z\",\n  \"location\": \"Conference Room A\"\n}"
+              "raw": "{\n  \"title\": \"Team Meeting\",\n  \"description\": \"Weekly team sync\",\n  \"start_date\": \"2026-05-15T10:00:00Z\",\n  \"end_date\": \"2026-05-15T11:00:00Z\",\n  \"location\": \"Conference Room A\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/meetings",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/meetings",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "meetings"]
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "meetings"]
             },
-            "description": "Create a new meeting in a project"
+            "description": "Create a meeting under a project"
           },
           "response": []
         },
@@ -982,25 +1559,15 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/1/meetings?offset=0&limit=20",
+              "raw": "{{baseUrl}}/api/v3/projects/{{projectUuid}}/meetings?offset=0&limit=20",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "projects", "1", "meetings"],
+              "path": ["api", "v3", "projects", "{{projectUuid}}", "meetings"],
               "query": [
-                {
-                  "key": "offset",
-                  "value": "0"
-                },
-                {
-                  "key": "limit",
-                  "value": "20"
-                }
+                {"key": "offset", "value": "0"},
+                {"key": "limit", "value": "20"}
               ]
             },
             "description": "List meetings in a project"
@@ -1012,16 +1579,12 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}"]
             },
             "description": "Get a meeting by ID"
           },
@@ -1032,25 +1595,17 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Updated Team Meeting\",\n  \"description\": \"Updated description\",\n  \"start_date\": \"2024-04-15T14:00:00Z\",\n  \"end_date\": \"2024-04-15T15:00:00Z\"\n}"
+              "raw": "{\n  \"title\": \"Updated Team Meeting\",\n  \"start_date\": \"2026-05-15T14:00:00Z\",\n  \"end_date\": \"2026-05-15T15:00:00Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}"]
             },
             "description": "Update a meeting"
           },
@@ -1061,16 +1616,12 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}"]
             },
             "description": "Delete a meeting"
           },
@@ -1086,31 +1637,17 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"user_id\": 2\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1/participants?project_id=1",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/participants",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1", "participants"],
-              "query": [
-                {
-                  "key": "project_id",
-                  "value": "1"
-                }
-              ]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "participants"]
             },
             "description": "Add a participant to a meeting"
           },
@@ -1121,16 +1658,12 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1/participants",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/participants",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1", "participants"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "participants"]
             },
             "description": "List participants in a meeting"
           },
@@ -1141,16 +1674,12 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1/participants/2",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/participants/2",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1", "participants", "2"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "participants", "2"]
             },
             "description": "Remove a participant from a meeting"
           },
@@ -1166,33 +1695,19 @@
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Agenda Item 1\",\n  \"description\": \"Item description\",\n  \"duration\": 15,\n  \"order\": 1\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1/agenda_items?project_id=1",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/agenda_items",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1", "agenda_items"],
-              "query": [
-                {
-                  "key": "project_id",
-                  "value": "1"
-                }
-              ]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "agenda_items"]
             },
-            "description": "Create an agenda item for a meeting"
+            "description": "Create an agenda item under a meeting"
           },
           "response": []
         },
@@ -1201,16 +1716,12 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/meetings/1/agenda_items",
+              "raw": "{{baseUrl}}/api/v3/meetings/{{meetingId}}/agenda_items",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "meetings", "1", "agenda_items"]
+              "path": ["api", "v3", "meetings", "{{meetingId}}", "agenda_items"]
             },
             "description": "List agenda items for a meeting"
           },
@@ -1221,16 +1732,12 @@
           "request": {
             "method": "GET",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/agenda_items/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/agenda_items/{{agendaItemId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "agenda_items", "1"]
+              "path": ["api", "v3", "meetings", "agenda_items", "{{agendaItemId}}"]
             },
             "description": "Get an agenda item by ID"
           },
@@ -1241,25 +1748,17 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Updated Agenda Item\",\n  \"description\": \"Updated description\",\n  \"duration\": 20\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v3/agenda_items/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/agenda_items/{{agendaItemId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "agenda_items", "1"]
+              "path": ["api", "v3", "meetings", "agenda_items", "{{agendaItemId}}"]
             },
             "description": "Update an agenda item"
           },
@@ -1270,16 +1769,12 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
+              {"key": "Authorization", "value": "Bearer {{token}}", "type": "text"}
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/agenda_items/1",
+              "raw": "{{baseUrl}}/api/v3/meetings/agenda_items/{{agendaItemId}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v3", "agenda_items", "1"]
+              "path": ["api", "v3", "meetings", "agenda_items", "{{agendaItemId}}"]
             },
             "description": "Delete an agenda item"
           },
@@ -1289,15 +1784,19 @@
     }
   ],
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8000",
-      "type": "string"
-    },
-    {
-      "key": "token",
-      "value": "",
-      "type": "string"
-    }
+    {"key": "baseUrl", "value": "http://localhost:8000", "type": "string"},
+    {"key": "token", "value": "", "type": "string", "description": "Paste access_token from POST /api/v3/users/login"},
+    {"key": "refreshToken", "value": "", "type": "string", "description": "Paste refresh_token from POST /api/v3/users/login"},
+    {"key": "projectUuid", "value": "", "type": "string", "description": "UUID of a project (copy from POST /projects response.data.id)"},
+    {"key": "milestoneId", "value": "", "type": "string", "description": "UUID of a milestone"},
+    {"key": "activityId", "value": "", "type": "string", "description": "UUID of an activity"},
+    {"key": "taskId", "value": "", "type": "string", "description": "UUID of a task"},
+    {"key": "subtaskId", "value": "", "type": "string", "description": "UUID of a subtask"},
+    {"key": "vendorId", "value": "", "type": "string", "description": "UUID of a vendor (GET /vendors)"},
+    {"key": "resourceTypeId", "value": "", "type": "string", "description": "UUID of a resource type (GET /resource_types)"},
+    {"key": "workPackageId", "value": "", "type": "string", "description": "UUID of a work package"},
+    {"key": "meetingId", "value": "", "type": "string", "description": "UUID of a meeting"},
+    {"key": "membershipId", "value": "", "type": "string", "description": "UUID of a project membership"},
+    {"key": "agendaItemId", "value": "", "type": "string", "description": "UUID of an agenda item"}
   ]
 }
