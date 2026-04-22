@@ -79,6 +79,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             ActivityDependencyModel.target_activity_id,
         )
         .filter(ActivityDependencyModel.project_id == project_id)
+        .filter(ActivityDependencyModel.deleted_at.is_(None))
         .all()
     ):
         act_deps_by_source[src].append(tgt)
@@ -90,6 +91,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             TaskDependencyModel.target_task_id,
         )
         .filter(TaskDependencyModel.project_id == project_id)
+        .filter(TaskDependencyModel.deleted_at.is_(None))
         .all()
     ):
         task_deps_by_source[src].append(tgt)
@@ -101,6 +103,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             SubtaskDependencyModel.target_subtask_id,
         )
         .filter(SubtaskDependencyModel.project_id == project_id)
+        .filter(SubtaskDependencyModel.deleted_at.is_(None))
         .all()
     ):
         subtask_deps_by_source[src].append(tgt)

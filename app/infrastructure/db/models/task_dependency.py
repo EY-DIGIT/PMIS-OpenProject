@@ -1,23 +1,18 @@
-"""Task-to-task dependency association.
+"""Task-to-task dependency association (soft-delete).
 
-Composite PK on (source_task_id, target_task_id). Both sides FK into
-``tasks.id``. ``project_id`` is denormalized for cheap project-scope queries.
-
-Rules enforced at the SERVICE layer:
-- source_task_id != target_task_id
-- both source and target belong to the same project (i.e. the same version,
-  since tasks only exist on versions)
-- source.activity_id MUST already depend on target.activity_id (per
-  ``activity_dependencies``). This enforces the user's hierarchy rule:
-  "tasks may only depend on tasks under activities that are themselves
-  dependent." Without this, you'd be able to wire arbitrary task graphs that
-  contradict the activity-level structure.
-- target must not be soft-deleted; soft-deleted target → row auto-removed
-- the directed task graph stays acyclic
+See ``activity_dependency.py`` for the schema rationale. Same pattern:
+- Surrogate UUID PK.
+- Partial unique on ``(source_task_id, target_task_id)`` WHERE
+  ``deleted_at IS NULL``.
+- Hierarchy rule (service-layer): source.activity must already depend on
+  target.activity (via ``activity_dependencies``), unless source and target
+  share the same activity.
+- Same-activity targets always allowed.
 """
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, text
 
 from ..session import Base
 
@@ -29,16 +24,22 @@ def _utcnow():
 class TaskDependencyModel(Base):
     __tablename__ = "task_dependencies"
 
+    id = Column(
+        String(36),
+        primary_key=True,
+        index=True,
+        default=lambda: str(uuid4()),
+    )
     source_task_id = Column(
         String(36),
         ForeignKey("tasks.id"),
-        primary_key=True,
+        nullable=False,
         index=True,
     )
     target_task_id = Column(
         String(36),
         ForeignKey("tasks.id"),
-        primary_key=True,
+        nullable=False,
         index=True,
     )
     project_id = Column(
@@ -48,15 +49,25 @@ class TaskDependencyModel(Base):
         index=True,
     )
     created_at = Column(DateTime, default=_utcnow, nullable=False)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
-        Index("idx_task_deps_source", "source_task_id"),
-        Index("idx_task_deps_target", "target_task_id"),
-        Index("idx_task_deps_project", "project_id"),
+        Index("idx_task_deps_source_live", "source_task_id", "deleted_at"),
+        Index("idx_task_deps_target_live", "target_task_id", "deleted_at"),
+        Index("idx_task_deps_project_live", "project_id", "deleted_at"),
+        Index(
+            "uq_task_deps_pair_live",
+            "source_task_id", "target_task_id",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
+        state = "deleted" if self.deleted_at else "live"
         return (
             f"<TaskDependencyModel(source='{self.source_task_id}', "
-            f"target='{self.target_task_id}')>"
+            f"target='{self.target_task_id}', {state})>"
         )

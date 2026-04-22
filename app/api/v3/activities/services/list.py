@@ -44,6 +44,7 @@ def list_activities(
                 ActivityDependencyModel.target_activity_id,
             )
             .filter(ActivityDependencyModel.source_activity_id.in_(ids))
+            .filter(ActivityDependencyModel.deleted_at.is_(None))
             .all()
         )
         bucket: dict = {}

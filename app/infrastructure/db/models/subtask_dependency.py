@@ -1,19 +1,13 @@
-"""Subtask-to-subtask dependency association.
+"""Subtask-to-subtask dependency association (soft-delete).
 
-Composite PK on (source_subtask_id, target_subtask_id). Same pattern as the
-activity / task dependency tables, one level deeper.
-
-Service-layer rules:
-- source != target
-- both subtasks live in the same project (version)
-- source.task_id MUST already depend on target.task_id (per
-  ``task_dependencies``) — mirrors the activity-level rule one layer down
-- target must not be soft-deleted; cascade-removed when target is deleted
-- acyclic
+See ``activity_dependency.py`` for the schema rationale. Same pattern,
+one level deeper. Hierarchy rule: source.task must already depend on
+target.task (via ``task_dependencies``), unless they share the same task.
 """
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, text
 
 from ..session import Base
 
@@ -25,16 +19,22 @@ def _utcnow():
 class SubtaskDependencyModel(Base):
     __tablename__ = "subtask_dependencies"
 
+    id = Column(
+        String(36),
+        primary_key=True,
+        index=True,
+        default=lambda: str(uuid4()),
+    )
     source_subtask_id = Column(
         String(36),
         ForeignKey("subtasks.id"),
-        primary_key=True,
+        nullable=False,
         index=True,
     )
     target_subtask_id = Column(
         String(36),
         ForeignKey("subtasks.id"),
-        primary_key=True,
+        nullable=False,
         index=True,
     )
     project_id = Column(
@@ -44,15 +44,25 @@ class SubtaskDependencyModel(Base):
         index=True,
     )
     created_at = Column(DateTime, default=_utcnow, nullable=False)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
-        Index("idx_subtask_deps_source", "source_subtask_id"),
-        Index("idx_subtask_deps_target", "target_subtask_id"),
-        Index("idx_subtask_deps_project", "project_id"),
+        Index("idx_subtask_deps_source_live", "source_subtask_id", "deleted_at"),
+        Index("idx_subtask_deps_target_live", "target_subtask_id", "deleted_at"),
+        Index("idx_subtask_deps_project_live", "project_id", "deleted_at"),
+        Index(
+            "uq_subtask_deps_pair_live",
+            "source_subtask_id", "target_subtask_id",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
+        state = "deleted" if self.deleted_at else "live"
         return (
             f"<SubtaskDependencyModel(source='{self.source_subtask_id}', "
-            f"target='{self.target_subtask_id}')>"
+            f"target='{self.target_subtask_id}', {state})>"
         )

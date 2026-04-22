@@ -188,6 +188,7 @@ def update_subtask(
     if desired_deps is not None:
         DependencyRepository(db).set_subtask_dependencies(
             subtask_id, model.project_id, desired_deps,
+            actor_id=current_user_id,
         )
 
     db.commit()

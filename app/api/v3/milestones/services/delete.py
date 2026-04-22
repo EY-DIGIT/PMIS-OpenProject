@@ -65,27 +65,12 @@ def delete_milestone(db: Session, *, milestone_id: str, current_user_id: Optiona
         "project_id": model.project_id,
     }
 
-    # Wipe all dep edges touching the subtree before soft-deleting the rows.
-    dep_repo = DependencyRepository(db)
-    for aid in activity_ids:
-        dep_repo.cascade_remove_activity_targets(aid)
-    if task_ids or subtask_ids:
-        from .....infrastructure.db.models.task_dependency import TaskDependencyModel
-        from .....infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
-        if task_ids:
-            db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.source_task_id.in_(task_ids)
-            ).delete(synchronize_session=False)
-            db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.target_task_id.in_(task_ids)
-            ).delete(synchronize_session=False)
-        if subtask_ids:
-            db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.source_subtask_id.in_(subtask_ids)
-            ).delete(synchronize_session=False)
-            db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.target_subtask_id.in_(subtask_ids)
-            ).delete(synchronize_session=False)
+    # Soft-delete all dep edges touching the subtree before we soft-delete
+    # the rows themselves. Single call — the repo handles the bulk UPDATEs.
+    DependencyRepository(db).cascade_remove_for_deleted_milestone_subtree(
+        activity_ids, task_ids, subtask_ids,
+        actor_id=current_user_id,
+    )
 
     repo.soft_delete_with_cascade(milestone_id, deleted_by=current_user_id)
     record_audit(

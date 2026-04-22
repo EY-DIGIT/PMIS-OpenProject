@@ -315,31 +315,11 @@ def propagate_milestone_soft_delete(
                         )
                     ).all()
                 ]
-        # Wipe all dep edges that touch any row in this milestone's subtree.
-        for aid in twin_activity_ids:
-            dep_repo.cascade_remove_activity_targets(aid)
-        # Task + subtask edges via bulk method on the repo: we have the id
-        # lists, so a manual bulk delete is cheapest.
-        if twin_task_ids:
-            from .....infrastructure.db.models.task_dependency import (
-                TaskDependencyModel,
-            )
-            db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.source_task_id.in_(twin_task_ids)
-            ).delete(synchronize_session=False)
-            db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.target_task_id.in_(twin_task_ids)
-            ).delete(synchronize_session=False)
-        if twin_subtask_ids:
-            from .....infrastructure.db.models.subtask_dependency import (
-                SubtaskDependencyModel,
-            )
-            db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.source_subtask_id.in_(twin_subtask_ids)
-            ).delete(synchronize_session=False)
-            db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.target_subtask_id.in_(twin_subtask_ids)
-            ).delete(synchronize_session=False)
+        # Soft-delete all dep edges across this twin's subtree.
+        dep_repo.cascade_remove_for_deleted_milestone_subtree(
+            twin_activity_ids, twin_task_ids, twin_subtask_ids,
+            actor_id=actor_id,
+        )
 
         _soft_delete_milestone_subtree(db, twin.id, actor_id=actor_id, now=now)
         record_audit(
@@ -591,6 +571,7 @@ def propagate_activity_soft_delete(
         # delete path: silently drop stale edges.
         dep_repo.cascade_remove_for_deleted_activity_subtree(
             twin.id, twin_task_ids, twin_subtask_ids,
+            actor_id=actor_id,
         )
 
         _soft_delete_activity_subtree(db, twin.id, actor_id=actor_id, now=now)

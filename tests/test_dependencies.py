@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.infrastructure.db.models.activity_dependency import ActivityDependencyModel
+from app.infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
+from app.infrastructure.db.models.task_dependency import TaskDependencyModel
 
 
 def _future_iso(days: int) -> str:
@@ -310,30 +312,115 @@ class TestActivityStatusGate:
 # ===========================================================================
 
 class TestActivityDepsCascadeOnDelete:
-    def test_deleting_target_drops_edges(self, client, admin_user, admin_headers, db_session):
+    def test_deleting_target_soft_deletes_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Cascade is a SOFT-delete: the edge row stays in the DB with
+        ``deleted_at`` set, but is no longer visible to reads."""
         _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
         ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
         ax_id = ax.json()["data"]["id"]
 
-        # Sanity: edge exists.
-        assert db_session.query(ActivityDependencyModel).filter(
+        # Sanity: one LIVE edge before delete.
+        live_before = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.is_(None),
+        ).count()
+        total_before = db_session.query(ActivityDependencyModel).filter(
             ActivityDependencyModel.target_activity_id == a1
-        ).count() == 1
+        ).count()
+        assert live_before == 1
+        assert total_before == 1
 
-        # Delete A1. AX's incoming dep should be silently dropped; AX itself stays.
+        # Delete A1. AX's incoming dep should be silently dropped (soft).
         resp = client.delete(f"/api/v3/activities/{a1}", headers=admin_headers)
         assert resp.status_code in (200, 204), resp.text
-
-        # Edge gone.
         db_session.expire_all()
-        assert db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1
-        ).count() == 0
 
-        # AX still exists, with empty dependsOn now.
+        # Zero live edges remain.
+        live_after = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.is_(None),
+        ).count()
+        assert live_after == 0
+
+        # But the row STILL exists in the table with deleted_at set (soft).
+        total_after = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1
+        ).count()
+        deleted_after = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.isnot(None),
+        ).count()
+        assert total_after == 1, "soft-delete must preserve the row"
+        assert deleted_after == 1
+
+        # API view: AX still exists with empty dependsOn.
         get_ax = client.get(f"/api/v3/activities/{ax_id}", headers=admin_headers)
         assert get_ax.status_code == 200
         assert get_ax.json()["data"]["dependsOn"] == []
+
+    def test_replace_list_soft_deletes_removed_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """PATCH dependsOn that removes a target must soft-delete the edge,
+        not physically remove it."""
+        _, _, m2, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
+        ax_id = ax.json()["data"]["id"]
+
+        # Replace [a1] with [a2]: a1 edge is removed, a2 edge is added.
+        resp = client.patch(
+            f"/api/v3/activities/{ax_id}",
+            json={"dependsOn": [a2]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        db_session.expire_all()
+
+        # DB state: old (ax → a1) exists with deleted_at set; new (ax → a2) live.
+        old_edge = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.source_activity_id == ax_id,
+            ActivityDependencyModel.target_activity_id == a1,
+        ).one()
+        assert old_edge.deleted_at is not None, "removed edge must be soft-deleted"
+
+        new_edge = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.source_activity_id == ax_id,
+            ActivityDependencyModel.target_activity_id == a2,
+            ActivityDependencyModel.deleted_at.is_(None),
+        ).one()
+        assert new_edge.deleted_at is None
+
+    def test_re_adding_previously_removed_edge_inserts_fresh_row(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Re-adding a previously removed (source, target) pair creates a
+        NEW row (history preserved). The partial unique index allows the
+        dead + live rows to coexist."""
+        _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
+        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
+        ax_id = ax.json()["data"]["id"]
+
+        # Remove, then re-add.
+        client.patch(
+            f"/api/v3/activities/{ax_id}",
+            json={"dependsOn": []}, headers=admin_headers,
+        )
+        client.patch(
+            f"/api/v3/activities/{ax_id}",
+            json={"dependsOn": [a1]}, headers=admin_headers,
+        )
+        db_session.expire_all()
+
+        # Two rows for the (ax, a1) pair: one soft-deleted, one live.
+        rows = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.source_activity_id == ax_id,
+            ActivityDependencyModel.target_activity_id == a1,
+        ).all()
+        assert len(rows) == 2
+        assert sum(1 for r in rows if r.deleted_at is None) == 1
+        assert sum(1 for r in rows if r.deleted_at is not None) == 1
 
 
 # ===========================================================================
@@ -522,3 +609,481 @@ class TestTreeEmitsDependsOn:
         }
         assert flat[a1] == []
         assert flat[a2] == [a1]
+
+
+# ===========================================================================
+# Soft-delete DB-level assertions for TASK dependencies
+# ===========================================================================
+
+class TestTaskDepsSoftDelete:
+    def _setup_two_linked_tasks(self, client, admin_headers):
+        """Build a version with V_A1 deps V_A2 set up + T1 and T2 where T2
+        deps T1. Returns (version_id, T1_id, T2_id)."""
+        pid, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        client.patch(
+            f"/api/v3/activities/{a2}",
+            json={"dependsOn": [a1]},
+            headers=admin_headers,
+        )
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+        tr = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers)
+        v_a1 = v_a2 = None
+        for ms in tr.json()["data"]["milestones"]:
+            for a in ms["activities"]:
+                if a["name"] == "A1":
+                    v_a1 = a["id"]
+                if a["name"] == "A2":
+                    v_a2 = a["id"]
+        t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
+        t2 = _create_task(
+            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+        ).json()["data"]["id"]
+        return vid, t1, t2
+
+    def test_task_replace_soft_deletes_removed_edge(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """PATCH task dependsOn with the target removed must soft-delete
+        the edge row (not DELETE FROM)."""
+        _, t1, t2 = self._setup_two_linked_tasks(client, admin_headers)
+
+        # Remove the dep.
+        resp = client.patch(
+            f"/api/v3/tasks/{t2}",
+            json={"dependsOn": []},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        db_session.expire_all()
+
+        rows = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.source_task_id == t2,
+            TaskDependencyModel.target_task_id == t1,
+        ).all()
+        assert len(rows) == 1, "edge row must persist (soft-delete)"
+        assert rows[0].deleted_at is not None
+
+    def test_task_re_adding_previously_removed_edge_inserts_fresh_row(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Re-adding the same (source, target) pair creates a NEW row; the
+        partial unique allows dead + live to coexist."""
+        _, t1, t2 = self._setup_two_linked_tasks(client, admin_headers)
+
+        client.patch(f"/api/v3/tasks/{t2}", json={"dependsOn": []}, headers=admin_headers)
+        client.patch(f"/api/v3/tasks/{t2}", json={"dependsOn": [t1]}, headers=admin_headers)
+        db_session.expire_all()
+
+        rows = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.source_task_id == t2,
+            TaskDependencyModel.target_task_id == t1,
+        ).all()
+        assert len(rows) == 2
+        assert sum(1 for r in rows if r.deleted_at is None) == 1
+        assert sum(1 for r in rows if r.deleted_at is not None) == 1
+
+    def test_task_delete_cascade_soft_deletes_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Deleting a target task soft-deletes incoming edges (row persists
+        with deleted_at set)."""
+        _, t1, t2 = self._setup_two_linked_tasks(client, admin_headers)
+
+        # Sanity: one live edge.
+        live = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+            TaskDependencyModel.deleted_at.is_(None),
+        ).count()
+        assert live == 1
+
+        # Delete the target task.
+        resp = client.delete(f"/api/v3/tasks/{t1}", headers=admin_headers)
+        assert resp.status_code in (200, 204), resp.text
+        db_session.expire_all()
+
+        # Zero live, but the row still exists with deleted_at set.
+        live = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+            TaskDependencyModel.deleted_at.is_(None),
+        ).count()
+        total = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+        ).count()
+        assert live == 0 and total == 1
+
+
+# ===========================================================================
+# Soft-delete DB-level assertions for SUBTASK dependencies
+# ===========================================================================
+
+class TestSubtaskDepsSoftDelete:
+    def _setup_two_linked_subtasks(self, client, admin_headers):
+        """Build a version with task-level dep + S1 under T1 and S2 under
+        T2 where S2 deps S1. Returns (S1_id, S2_id)."""
+        pid, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        client.patch(
+            f"/api/v3/activities/{a2}",
+            json={"dependsOn": [a1]},
+            headers=admin_headers,
+        )
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+        tr = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers)
+        v_a1 = v_a2 = None
+        for ms in tr.json()["data"]["milestones"]:
+            for a in ms["activities"]:
+                if a["name"] == "A1":
+                    v_a1 = a["id"]
+                if a["name"] == "A2":
+                    v_a2 = a["id"]
+        t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1]).json()["data"]["id"]
+        s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1]).json()["data"]["id"]
+        return s1, s2
+
+    def test_subtask_replace_soft_deletes_removed_edge(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        s1, s2 = self._setup_two_linked_subtasks(client, admin_headers)
+
+        resp = client.patch(
+            f"/api/v3/subtasks/{s2}",
+            json={"dependsOn": []},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        db_session.expire_all()
+
+        rows = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.source_subtask_id == s2,
+            SubtaskDependencyModel.target_subtask_id == s1,
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].deleted_at is not None
+
+    def test_subtask_re_adding_previously_removed_edge_inserts_fresh_row(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        s1, s2 = self._setup_two_linked_subtasks(client, admin_headers)
+
+        client.patch(f"/api/v3/subtasks/{s2}", json={"dependsOn": []}, headers=admin_headers)
+        client.patch(f"/api/v3/subtasks/{s2}", json={"dependsOn": [s1]}, headers=admin_headers)
+        db_session.expire_all()
+
+        rows = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.source_subtask_id == s2,
+            SubtaskDependencyModel.target_subtask_id == s1,
+        ).all()
+        assert len(rows) == 2
+        assert sum(1 for r in rows if r.deleted_at is None) == 1
+        assert sum(1 for r in rows if r.deleted_at is not None) == 1
+
+    def test_subtask_delete_cascade_soft_deletes_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        s1, s2 = self._setup_two_linked_subtasks(client, admin_headers)
+
+        resp = client.delete(f"/api/v3/subtasks/{s1}", headers=admin_headers)
+        assert resp.status_code in (200, 204), resp.text
+        db_session.expire_all()
+
+        live = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.target_subtask_id == s1,
+            SubtaskDependencyModel.deleted_at.is_(None),
+        ).count()
+        total = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.target_subtask_id == s1,
+        ).count()
+        assert live == 0 and total == 1
+
+
+# ===========================================================================
+# Milestone delete cascades dep edges across the whole A/T/S subtree
+# ===========================================================================
+
+class TestMilestoneDeleteCascadesDeps:
+    def test_milestone_delete_soft_deletes_activity_edges_in_subtree(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Deleting a milestone soft-deletes every incoming + outgoing
+        activity_dependencies edge that touches its activities."""
+        _, m1, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        # A2 -> A1 (cross-milestone); deleting M1 will soft-delete A1, and
+        # the edge from A2 should go with it.
+        client.patch(
+            f"/api/v3/activities/{a2}",
+            json={"dependsOn": [a1]},
+            headers=admin_headers,
+        )
+
+        resp = client.delete(f"/api/v3/milestones/{m1}", headers=admin_headers)
+        assert resp.status_code in (200, 204), resp.text
+        db_session.expire_all()
+
+        live = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.is_(None),
+        ).count()
+        total = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+        ).count()
+        assert live == 0, "edge pointing at deleted milestone's activity must be gone from live view"
+        assert total == 1, "row must still exist (soft delete)"
+
+    def test_milestone_delete_soft_deletes_task_and_subtask_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """When a milestone on the baseline is deleted, the propagation to
+        the version's cloned milestone carries through to tasks + subtasks
+        under that milestone — all of their dep edges must be soft-deleted."""
+        pid, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        client.patch(f"/api/v3/activities/{a2}", json={"dependsOn": [a1]}, headers=admin_headers)
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+        tr = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers)
+        v_a1 = v_a2 = v_m1_under_a1 = None
+        for ms in tr.json()["data"]["milestones"]:
+            for a in ms["activities"]:
+                if a["name"] == "A1":
+                    v_a1 = a["id"]
+                    v_m1_under_a1 = ms["id"]
+                if a["name"] == "A2":
+                    v_a2 = a["id"]
+        # Build tasks + subtasks under the version, with deps.
+        t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1]).json()["data"]["id"]
+        s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1]).json()["data"]["id"]
+
+        # Find the BASELINE milestone that maps to v_m1_under_a1.
+        baseline_m1 = None
+        for ms_obj in db_session.query(
+            __import__("app.infrastructure.db.models.milestone", fromlist=["MilestoneModel"]).MilestoneModel
+        ).all():
+            if ms_obj.id == v_m1_under_a1:
+                baseline_m1 = ms_obj.cloned_from_id
+                break
+        assert baseline_m1 is not None
+
+        # Delete the baseline milestone — triggers version propagation.
+        resp = client.delete(f"/api/v3/milestones/{baseline_m1}", headers=admin_headers)
+        assert resp.status_code in (200, 204), resp.text
+        db_session.expire_all()
+
+        # The t1-targeting edge (from t2, because t2 deps t1) must be
+        # soft-deleted, because t1 is under the deleted milestone's subtree.
+        live_t = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+            TaskDependencyModel.deleted_at.is_(None),
+        ).count()
+        total_t = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+        ).count()
+        assert live_t == 0, "task edge under deleted milestone must be soft-deleted"
+        assert total_t == 1, "row preserved"
+
+        # Subtask s1 under t1 (under v_a1 under deleted milestone) — s2's
+        # edge pointing at s1 must be soft-deleted too.
+        live_s = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.target_subtask_id == s1,
+            SubtaskDependencyModel.deleted_at.is_(None),
+        ).count()
+        total_s = db_session.query(SubtaskDependencyModel).filter(
+            SubtaskDependencyModel.target_subtask_id == s1,
+        ).count()
+        assert live_s == 0, "subtask edge under deleted milestone must be soft-deleted"
+        assert total_s == 1
+
+
+# ===========================================================================
+# Actor threading: deleted_by is set on cascade
+# ===========================================================================
+
+class TestActorThreadingOnCascade:
+    def test_deleted_by_set_on_activity_cascade(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
+        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
+
+        resp = client.delete(f"/api/v3/activities/{a1}", headers=admin_headers)
+        assert resp.status_code in (200, 204)
+        db_session.expire_all()
+
+        dead_row = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.isnot(None),
+        ).one()
+        assert dead_row.deleted_by == admin_user.id, \
+            "cascade must stamp deleted_by with the acting user"
+
+    def test_deleted_by_set_on_replace_list(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """PATCH-driven replace that removes an edge must stamp deleted_by
+        with the current actor."""
+        _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
+        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
+        ax_id = ax.json()["data"]["id"]
+
+        client.patch(
+            f"/api/v3/activities/{ax_id}",
+            json={"dependsOn": []},
+            headers=admin_headers,
+        )
+        db_session.expire_all()
+
+        dead_row = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.source_activity_id == ax_id,
+            ActivityDependencyModel.target_activity_id == a1,
+            ActivityDependencyModel.deleted_at.isnot(None),
+        ).one()
+        assert dead_row.deleted_by == admin_user.id
+
+    def test_deleted_by_set_on_task_cascade(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        setup = TestTaskDepsSoftDelete()
+        _, t1, t2 = setup._setup_two_linked_tasks(client, admin_headers)
+
+        resp = client.delete(f"/api/v3/tasks/{t1}", headers=admin_headers)
+        assert resp.status_code in (200, 204)
+        db_session.expire_all()
+
+        dead_row = db_session.query(TaskDependencyModel).filter(
+            TaskDependencyModel.target_task_id == t1,
+            TaskDependencyModel.deleted_at.isnot(None),
+        ).one()
+        assert dead_row.deleted_by == admin_user.id
+
+
+# ===========================================================================
+# Partial unique index enforcement
+# ===========================================================================
+
+class TestPartialUniqueIndex:
+    def test_partial_unique_allows_dead_plus_live_same_pair(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """The partial unique on (source, target) WHERE deleted_at IS NULL
+        permits many dead rows + exactly one live row for the same pair."""
+        _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
+        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
+        ax_id = ax.json()["data"]["id"]
+
+        # Toggle a few times: add/remove/add/remove/add.
+        for deps in [[], [a1], [], [a1], [], [a1]]:
+            client.patch(
+                f"/api/v3/activities/{ax_id}",
+                json={"dependsOn": deps},
+                headers=admin_headers,
+            )
+        db_session.expire_all()
+
+        rows = db_session.query(ActivityDependencyModel).filter(
+            ActivityDependencyModel.source_activity_id == ax_id,
+            ActivityDependencyModel.target_activity_id == a1,
+        ).all()
+        live = [r for r in rows if r.deleted_at is None]
+        dead = [r for r in rows if r.deleted_at is not None]
+        assert len(live) == 1, "exactly one LIVE row allowed"
+        assert len(dead) >= 2, "multiple dead rows coexist as history"
+
+
+# ===========================================================================
+# Legacy-schema migration (schema v1 → v2)
+# ===========================================================================
+
+class TestLegacyDepTableMigration:
+    def test_heal_drops_legacy_composite_pk_tables(self, tmp_path):
+        """The helper ``_heal_legacy_dep_tables`` must detect and drop any
+        dep table whose schema still uses composite PK / no ``id`` column."""
+        from sqlalchemy import create_engine, text
+        from app.infrastructure.db.session import _heal_legacy_dep_tables
+
+        db_file = tmp_path / "legacy.db"
+        engine = create_engine(f"sqlite:///{db_file}")
+
+        # 1. Create three tables with the legacy v1 shape.
+        with engine.connect() as conn:
+            for tbl, (src, tgt) in (
+                ("activity_dependencies", ("source_activity_id", "target_activity_id")),
+                ("task_dependencies", ("source_task_id", "target_task_id")),
+                ("subtask_dependencies", ("source_subtask_id", "target_subtask_id")),
+            ):
+                conn.execute(text(f"""
+                    CREATE TABLE {tbl} (
+                        {src} VARCHAR(36) NOT NULL,
+                        {tgt} VARCHAR(36) NOT NULL,
+                        project_id VARCHAR(36) NOT NULL,
+                        created_at DATETIME,
+                        PRIMARY KEY ({src}, {tgt})
+                    )
+                """))
+            conn.commit()
+
+        # Confirm pre-state: three legacy tables, none has `id`.
+        with engine.connect() as conn:
+            for tbl in ("activity_dependencies", "task_dependencies", "subtask_dependencies"):
+                cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info('{tbl}')")).fetchall()}
+                assert "id" not in cols, f"test setup: {tbl} should be legacy v1"
+
+        # 2. Run the heal helper.
+        with engine.connect() as conn:
+            dropped = _heal_legacy_dep_tables(conn)
+            conn.commit()
+
+        # 3. Helper reports three drops; all three tables should be gone,
+        # ready for ``create_all`` to rebuild with v2.
+        assert set(dropped) == {
+            "activity_dependencies", "task_dependencies", "subtask_dependencies",
+        }
+        with engine.connect() as conn:
+            for tbl in ("activity_dependencies", "task_dependencies", "subtask_dependencies"):
+                cols = conn.execute(text(f"PRAGMA table_info('{tbl}')")).fetchall()
+                assert cols == [], f"{tbl} should be dropped"
+
+    def test_heal_is_noop_on_v2_tables(self, tmp_path):
+        """Running the helper against v2-shaped tables must not touch them."""
+        from sqlalchemy import create_engine, text
+        from app.infrastructure.db.session import _heal_legacy_dep_tables
+
+        db_file = tmp_path / "v2.db"
+        engine = create_engine(f"sqlite:///{db_file}")
+
+        with engine.connect() as conn:
+            # v2 shape: has `id` column.
+            conn.execute(text("""
+                CREATE TABLE activity_dependencies (
+                    id VARCHAR(36) PRIMARY KEY,
+                    source_activity_id VARCHAR(36) NOT NULL,
+                    target_activity_id VARCHAR(36) NOT NULL,
+                    project_id VARCHAR(36) NOT NULL,
+                    created_at DATETIME,
+                    deleted_at DATETIME,
+                    deleted_by INTEGER
+                )
+            """))
+            conn.commit()
+
+        with engine.connect() as conn:
+            dropped = _heal_legacy_dep_tables(conn)
+            conn.commit()
+
+        assert dropped == [], "v2 tables must not be dropped"
+        with engine.connect() as conn:
+            cols = {r[1] for r in conn.execute(text("PRAGMA table_info('activity_dependencies')")).fetchall()}
+            assert "id" in cols, "v2 table still intact"
+
+    def test_heal_is_noop_when_tables_missing(self, tmp_path):
+        """If none of the dep tables exist yet (fresh DB), heal is a no-op
+        that returns []; create_all will build the tables afterwards."""
+        from sqlalchemy import create_engine
+        from app.infrastructure.db.session import _heal_legacy_dep_tables
+
+        engine = create_engine(f"sqlite:///{tmp_path / 'empty.db'}")
+        with engine.connect() as conn:
+            dropped = _heal_legacy_dep_tables(conn)
+        assert dropped == []

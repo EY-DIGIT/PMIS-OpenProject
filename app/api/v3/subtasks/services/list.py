@@ -42,6 +42,7 @@ def list_subtasks(
                 SubtaskDependencyModel.target_subtask_id,
             )
             .filter(SubtaskDependencyModel.source_subtask_id.in_(ids))
+            .filter(SubtaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         bucket: dict = {}

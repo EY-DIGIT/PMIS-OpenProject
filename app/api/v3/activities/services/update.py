@@ -373,6 +373,7 @@ def update_activity(
     if desired_deps is not None:
         DependencyRepository(db).set_activity_dependencies(
             activity_id, model.project_id, desired_deps,
+            actor_id=current_user_id,
         )
 
     if updates or desired_deps is not None:

@@ -147,6 +147,7 @@ def create_subtask(
     if desired_deps:
         DependencyRepository(db).set_subtask_dependencies(
             subtask.id, task.project_id, desired_deps,
+            actor_id=current_user_id,
         )
 
     db.commit()

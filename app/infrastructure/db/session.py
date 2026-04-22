@@ -22,6 +22,43 @@ class Base(DeclarativeBase):
     pass
 
 
+def _heal_legacy_dep_tables(conn) -> list:
+    """Drop any dep table still using the v1 schema.
+
+    Schema v1 (initial dep-feature push): composite PK on
+    (source, target), no ``id`` column, no ``deleted_at``.
+    Schema v2 (soft-delete): surrogate UUID ``id`` PK, ``deleted_at`` +
+    ``deleted_by``, partial unique on (source, target) WHERE deleted_at
+    IS NULL.
+
+    SQLite can't alter PK in place, so we drop the legacy table and let
+    ``Base.metadata.create_all`` rebuild it with the v2 schema. Dep edges
+    are derived structural data — losing them during the dev upgrade is
+    acceptable; production had no v1 data.
+
+    Returns the list of table names that were dropped (for logging/tests).
+    No-op on non-SQLite dialects or when tables already have v2 shape.
+    """
+    from sqlalchemy import text
+
+    dropped = []
+    for tbl in ("activity_dependencies", "task_dependencies", "subtask_dependencies"):
+        try:
+            res = conn.execute(text(f"PRAGMA table_info('{tbl}')"))
+            cols = {r[1] for r in res.fetchall()}
+        except Exception:
+            # Table doesn't exist yet; create_all will build it.
+            continue
+        if cols and "id" not in cols:
+            try:
+                conn.execute(text(f"DROP TABLE {tbl}"))
+                dropped.append(tbl)
+                logging.info("Dropped legacy %s (schema v1 -> v2).", tbl)
+            except Exception as e:
+                logging.warning("Failed to drop legacy %s: %s", tbl, e)
+    return dropped
+
+
 def get_db() -> Generator[Session, None, None]:
     """
     Get database session.
@@ -251,6 +288,12 @@ def init_db() -> None:
                         logging.warning("Failed to create ix_activities_cloned_from_id: %s", e)
                 except Exception:
                     pass
+
+                # Dep tables: drop any table still using the legacy v1
+                # composite-PK / no-soft-delete schema so create_all() below
+                # rebuilds it fresh. Extracted into a module-level helper so
+                # tests can exercise it directly.
+                _heal_legacy_dep_tables(conn)
 
                 # ---- NEW: activity_resources classification columns ------
                 try:

@@ -156,6 +156,7 @@ def create_task(
     if desired_deps:
         DependencyRepository(db).set_task_dependencies(
             task.id, activity.project_id, desired_deps,
+            actor_id=current_user_id,
         )
 
     db.commit()

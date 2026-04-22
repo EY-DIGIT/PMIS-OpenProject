@@ -17,6 +17,8 @@ def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[in
         raise NotFoundError("The subtask could not be found.")
     assert_task_subtask_writable(db, model.project_id)
 
-    # Wipe in-edges pointing at this subtask and out-edges leaving it.
-    DependencyRepository(db).cascade_remove_subtask_targets(subtask_id)
+    # Soft-delete in-edges pointing at this subtask and out-edges leaving it.
+    DependencyRepository(db).cascade_remove_subtask_targets(
+        subtask_id, actor_id=current_user_id,
+    )
     repo.soft_delete(subtask_id, deleted_by=current_user_id)

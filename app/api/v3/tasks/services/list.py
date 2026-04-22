@@ -43,6 +43,7 @@ def list_tasks(
                 TaskDependencyModel.target_task_id,
             )
             .filter(TaskDependencyModel.source_task_id.in_(ids))
+            .filter(TaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         bucket: dict = {}

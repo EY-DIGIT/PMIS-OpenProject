@@ -199,6 +199,7 @@ def update_task(
     if desired_deps is not None:
         DependencyRepository(db).set_task_dependencies(
             task_id, model.project_id, desired_deps,
+            actor_id=current_user_id,
         )
 
     db.commit()

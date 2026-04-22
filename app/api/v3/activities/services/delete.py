@@ -61,6 +61,7 @@ def delete_activity(db: Session, *, activity_id: str, current_user_id: Optional[
     # commits, which finalizes both writes.
     DependencyRepository(db).cascade_remove_for_deleted_activity_subtree(
         activity_id, task_ids, subtask_ids,
+        actor_id=current_user_id,
     )
     repo.soft_delete_with_cascade(activity_id, deleted_by=current_user_id)
     record_audit(

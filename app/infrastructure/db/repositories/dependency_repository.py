@@ -5,27 +5,27 @@ Centralizes all reads/writes against the three association tables:
 - task_dependencies     (source_task, target_task)
 - subtask_dependencies  (source_subtask, target_subtask)
 
-Design choices
---------------
-- All ``set_*`` writers use replace-list semantics: pass the full desired list
-  of target ids; the repo deletes anything not in the list and inserts what's
-  missing. None ≠ []; the SERVICE layer is responsible for distinguishing
-  "field omitted" from "set to empty".
-- All writes ``flush`` but do NOT commit. Caller owns the transaction.
-- Validation that targets exist + belong to the same project lives in the
-  service layer; this repo only stores edges. The single exception is the
-  ``existing_target_*_ids`` helpers that filter caller-supplied id lists down
-  to those that actually exist + are not soft-deleted + belong to the
-  expected project — used by service validators.
-- Cycle detection is a service concern; the repo exposes ``would_create_cycle_*``
-  helpers as plain DFS over the existing edges.
-- Cascade on target deletion: ``cascade_remove_*_targets`` wipes every row
-  that points at the deleted entity. Source rows survive, just with shorter
-  ``dependsOn`` lists.
+Soft-delete semantics
+---------------------
+Every write is a SOFT delete. Rows are never physically removed:
+- Reads always filter ``deleted_at IS NULL``.
+- "Removing" an edge sets ``deleted_at`` and ``deleted_by`` on the live row.
+- Re-adding a previously removed edge inserts a NEW row (fresh UUID id);
+  the partial unique on ``(source, target) WHERE deleted_at IS NULL``
+  allows the two rows (one dead, one fresh-live) to coexist.
+- All replace-list writers (``set_*_dependencies``) use this pattern:
+  diff the current live set against the desired set; soft-delete removed,
+  insert fresh rows for added.
+- Cascade on entity delete (``cascade_remove_*``) soft-deletes every live
+  row pointing at or leaving the target.
+
+All writes ``flush`` but do NOT commit. Caller owns the transaction.
 """
 from collections import deque
+from datetime import datetime, timezone
 from typing import Iterable, List, Optional, Sequence, Set, Tuple
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from ..models.activity import ActivityModel
@@ -34,6 +34,10 @@ from ..models.subtask import SubtaskModel
 from ..models.subtask_dependency import SubtaskDependencyModel
 from ..models.task import TaskModel
 from ..models.task_dependency import TaskDependencyModel
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class DependencyRepository:
@@ -45,10 +49,11 @@ class DependencyRepository:
     # -------------------------------------------------------------------
 
     def list_activity_dependencies(self, source_activity_id: str) -> List[str]:
-        """Return target activity ids this source depends on (sorted)."""
+        """Target ids this source depends on (live edges only), sorted."""
         rows = (
             self.db.query(ActivityDependencyModel.target_activity_id)
             .filter(ActivityDependencyModel.source_activity_id == source_activity_id)
+            .filter(ActivityDependencyModel.deleted_at.is_(None))
             .all()
         )
         return sorted(r[0] for r in rows)
@@ -58,26 +63,39 @@ class DependencyRepository:
         source_activity_id: str,
         project_id: str,
         target_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
     ) -> None:
-        """Replace the source's dependency target list. Does NOT commit."""
+        """Replace the source's LIVE dependency target list.
+
+        Targets missing from the new list are soft-deleted. Targets new to
+        the list get fresh rows. Does NOT commit.
+        """
         targets = list(dict.fromkeys(target_ids))  # de-dup, preserve order
 
-        existing = set(
+        existing_live = set(
             r[0]
             for r in self.db.query(ActivityDependencyModel.target_activity_id)
             .filter(ActivityDependencyModel.source_activity_id == source_activity_id)
+            .filter(ActivityDependencyModel.deleted_at.is_(None))
             .all()
         )
         desired = set(targets)
 
-        to_remove = existing - desired
+        now = _utcnow()
+        to_remove = existing_live - desired
         if to_remove:
-            self.db.query(ActivityDependencyModel).filter(
-                ActivityDependencyModel.source_activity_id == source_activity_id,
-                ActivityDependencyModel.target_activity_id.in_(to_remove),
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(ActivityDependencyModel)
+                .where(
+                    ActivityDependencyModel.source_activity_id == source_activity_id,
+                    ActivityDependencyModel.target_activity_id.in_(to_remove),
+                    ActivityDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
 
-        to_add = desired - existing
+        to_add = desired - existing_live
         for tid in to_add:
             self.db.add(
                 ActivityDependencyModel(
@@ -108,18 +126,15 @@ class DependencyRepository:
         self, source_activity_id: str, new_target_ids: Sequence[str],
     ) -> Optional[str]:
         """If adding any of ``new_target_ids`` as a dependency of ``source``
-        would create a cycle, return the offending target id. Else None.
-
-        DFS from each candidate target — if we reach the source via existing
-        edges, that means source→target→...→source closes a cycle.
+        would create a cycle in the LIVE edge set, return the offending
+        target id. Else None.
         """
-        # Build adjacency map of EXISTING edges across the project's deps so
-        # we don't scan per-candidate. Cheaper for graphs of any size.
         all_edges = (
             self.db.query(
                 ActivityDependencyModel.source_activity_id,
                 ActivityDependencyModel.target_activity_id,
             )
+            .filter(ActivityDependencyModel.deleted_at.is_(None))
             .all()
         )
         adj: dict = {}
@@ -129,7 +144,6 @@ class DependencyRepository:
         for cand in new_target_ids:
             if cand == source_activity_id:
                 return cand  # self-edge is a 1-cycle
-            # DFS from cand: if we reach source, cycle.
             stack = deque([cand])
             seen = {cand}
             while stack:
@@ -142,16 +156,31 @@ class DependencyRepository:
                         stack.append(nxt)
         return None
 
-    def cascade_remove_activity_targets(self, target_activity_id: str) -> None:
-        """Drop every dep edge pointing at this activity. Does NOT commit."""
-        self.db.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == target_activity_id
-        ).delete(synchronize_session=False)
-        # Also purge any edges whose source is this activity (it's being
-        # soft-deleted; its outgoing deps are meaningless now).
-        self.db.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.source_activity_id == target_activity_id
-        ).delete(synchronize_session=False)
+    def cascade_remove_activity_targets(
+        self, target_activity_id: str, *, actor_id: Optional[int] = None,
+    ) -> None:
+        """Soft-delete every live dep edge pointing at or leaving this
+        activity. Does NOT commit."""
+        now = _utcnow()
+        # Incoming.
+        self.db.execute(
+            update(ActivityDependencyModel)
+            .where(
+                ActivityDependencyModel.target_activity_id == target_activity_id,
+                ActivityDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
+        # Outgoing (this activity is being deleted; its outgoing deps no
+        # longer make sense).
+        self.db.execute(
+            update(ActivityDependencyModel)
+            .where(
+                ActivityDependencyModel.source_activity_id == target_activity_id,
+                ActivityDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
         self.db.flush()
 
     # -------------------------------------------------------------------
@@ -162,6 +191,7 @@ class DependencyRepository:
         rows = (
             self.db.query(TaskDependencyModel.target_task_id)
             .filter(TaskDependencyModel.source_task_id == source_task_id)
+            .filter(TaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         return sorted(r[0] for r in rows)
@@ -171,24 +201,33 @@ class DependencyRepository:
         source_task_id: str,
         project_id: str,
         target_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
     ) -> None:
         targets = list(dict.fromkeys(target_ids))
-        existing = set(
+        existing_live = set(
             r[0]
             for r in self.db.query(TaskDependencyModel.target_task_id)
             .filter(TaskDependencyModel.source_task_id == source_task_id)
+            .filter(TaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         desired = set(targets)
 
-        to_remove = existing - desired
+        now = _utcnow()
+        to_remove = existing_live - desired
         if to_remove:
-            self.db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.source_task_id == source_task_id,
-                TaskDependencyModel.target_task_id.in_(to_remove),
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(TaskDependencyModel)
+                .where(
+                    TaskDependencyModel.source_task_id == source_task_id,
+                    TaskDependencyModel.target_task_id.in_(to_remove),
+                    TaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
 
-        to_add = desired - existing
+        to_add = desired - existing_live
         for tid in to_add:
             self.db.add(
                 TaskDependencyModel(
@@ -202,10 +241,7 @@ class DependencyRepository:
     def existing_target_tasks(
         self, project_id: str, ids: Iterable[str]
     ) -> List[Tuple[str, str]]:
-        """Return [(task_id, activity_id), ...] for ids that exist as live
-        tasks in ``project_id``. The activity_id lets the service check the
-        hierarchy rule (parent activity must already depend on target's
-        parent activity)."""
+        """[(task_id, activity_id), ...] for live tasks in ``project_id``."""
         ids = list({i for i in ids if i})
         if not ids:
             return []
@@ -221,19 +257,17 @@ class DependencyRepository:
     def activity_pair_is_dependent(
         self, source_activity_id: str, target_activity_id: str
     ) -> bool:
-        """True iff there is an activity_dependencies row
-        (source_activity → target_activity). Used to enforce the hierarchy
-        rule for task dependencies.
-        """
+        """True iff a LIVE activity_dependencies row exists for
+        (source → target). Same-activity is always True (tasks under the
+        same activity may reference each other without an activity edge)."""
         if source_activity_id == target_activity_id:
-            # Same activity — tasks under the same activity may always
-            # reference each other without any activity-level edge.
             return True
         return (
-            self.db.query(ActivityDependencyModel.source_activity_id)
+            self.db.query(ActivityDependencyModel.id)
             .filter(
                 ActivityDependencyModel.source_activity_id == source_activity_id,
                 ActivityDependencyModel.target_activity_id == target_activity_id,
+                ActivityDependencyModel.deleted_at.is_(None),
             )
             .first()
             is not None
@@ -247,6 +281,7 @@ class DependencyRepository:
                 TaskDependencyModel.source_task_id,
                 TaskDependencyModel.target_task_id,
             )
+            .filter(TaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         adj: dict = {}
@@ -268,13 +303,26 @@ class DependencyRepository:
                         stack.append(nxt)
         return None
 
-    def cascade_remove_task_targets(self, target_task_id: str) -> None:
-        self.db.query(TaskDependencyModel).filter(
-            TaskDependencyModel.target_task_id == target_task_id
-        ).delete(synchronize_session=False)
-        self.db.query(TaskDependencyModel).filter(
-            TaskDependencyModel.source_task_id == target_task_id
-        ).delete(synchronize_session=False)
+    def cascade_remove_task_targets(
+        self, target_task_id: str, *, actor_id: Optional[int] = None,
+    ) -> None:
+        now = _utcnow()
+        self.db.execute(
+            update(TaskDependencyModel)
+            .where(
+                TaskDependencyModel.target_task_id == target_task_id,
+                TaskDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
+        self.db.execute(
+            update(TaskDependencyModel)
+            .where(
+                TaskDependencyModel.source_task_id == target_task_id,
+                TaskDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
         self.db.flush()
 
     # -------------------------------------------------------------------
@@ -285,6 +333,7 @@ class DependencyRepository:
         rows = (
             self.db.query(SubtaskDependencyModel.target_subtask_id)
             .filter(SubtaskDependencyModel.source_subtask_id == source_subtask_id)
+            .filter(SubtaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         return sorted(r[0] for r in rows)
@@ -294,24 +343,33 @@ class DependencyRepository:
         source_subtask_id: str,
         project_id: str,
         target_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
     ) -> None:
         targets = list(dict.fromkeys(target_ids))
-        existing = set(
+        existing_live = set(
             r[0]
             for r in self.db.query(SubtaskDependencyModel.target_subtask_id)
             .filter(SubtaskDependencyModel.source_subtask_id == source_subtask_id)
+            .filter(SubtaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         desired = set(targets)
 
-        to_remove = existing - desired
+        now = _utcnow()
+        to_remove = existing_live - desired
         if to_remove:
-            self.db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.source_subtask_id == source_subtask_id,
-                SubtaskDependencyModel.target_subtask_id.in_(to_remove),
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.source_subtask_id == source_subtask_id,
+                    SubtaskDependencyModel.target_subtask_id.in_(to_remove),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
 
-        to_add = desired - existing
+        to_add = desired - existing_live
         for tid in to_add:
             self.db.add(
                 SubtaskDependencyModel(
@@ -325,8 +383,7 @@ class DependencyRepository:
     def existing_target_subtasks(
         self, project_id: str, ids: Iterable[str]
     ) -> List[Tuple[str, str]]:
-        """Return [(subtask_id, task_id), ...] for ids that exist as live
-        subtasks in ``project_id``."""
+        """[(subtask_id, task_id), ...] for live subtasks in ``project_id``."""
         ids = list({i for i in ids if i})
         if not ids:
             return []
@@ -342,16 +399,14 @@ class DependencyRepository:
     def task_pair_is_dependent(
         self, source_task_id: str, target_task_id: str
     ) -> bool:
-        """True iff source_task → target_task already exists in
-        task_dependencies. Same-task is always allowed (subtasks under the
-        same task may reference each other freely)."""
         if source_task_id == target_task_id:
             return True
         return (
-            self.db.query(TaskDependencyModel.source_task_id)
+            self.db.query(TaskDependencyModel.id)
             .filter(
                 TaskDependencyModel.source_task_id == source_task_id,
                 TaskDependencyModel.target_task_id == target_task_id,
+                TaskDependencyModel.deleted_at.is_(None),
             )
             .first()
             is not None
@@ -365,6 +420,7 @@ class DependencyRepository:
                 SubtaskDependencyModel.source_subtask_id,
                 SubtaskDependencyModel.target_subtask_id,
             )
+            .filter(SubtaskDependencyModel.deleted_at.is_(None))
             .all()
         )
         adj: dict = {}
@@ -386,17 +442,30 @@ class DependencyRepository:
                         stack.append(nxt)
         return None
 
-    def cascade_remove_subtask_targets(self, target_subtask_id: str) -> None:
-        self.db.query(SubtaskDependencyModel).filter(
-            SubtaskDependencyModel.target_subtask_id == target_subtask_id
-        ).delete(synchronize_session=False)
-        self.db.query(SubtaskDependencyModel).filter(
-            SubtaskDependencyModel.source_subtask_id == target_subtask_id
-        ).delete(synchronize_session=False)
+    def cascade_remove_subtask_targets(
+        self, target_subtask_id: str, *, actor_id: Optional[int] = None,
+    ) -> None:
+        now = _utcnow()
+        self.db.execute(
+            update(SubtaskDependencyModel)
+            .where(
+                SubtaskDependencyModel.target_subtask_id == target_subtask_id,
+                SubtaskDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
+        self.db.execute(
+            update(SubtaskDependencyModel)
+            .where(
+                SubtaskDependencyModel.source_subtask_id == target_subtask_id,
+                SubtaskDependencyModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, deleted_by=actor_id)
+        )
         self.db.flush()
 
     # -------------------------------------------------------------------
-    # Bulk cascade on activity / task soft-delete
+    # Bulk cascade on activity / task / milestone soft-delete
     # -------------------------------------------------------------------
 
     def cascade_remove_for_deleted_activity_subtree(
@@ -404,51 +473,156 @@ class DependencyRepository:
         activity_id: str,
         task_ids: Sequence[str],
         subtask_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
     ) -> None:
-        """Wipe all dependency edges (incoming + outgoing) for an activity
-        and every task / subtask in its cascaded subtree.
-
-        Called from delete_activity AFTER the rows have been soft-deleted.
-        Doing it post-soft-delete keeps the ordering simple — the cascade in
-        the activity repo is what defines the subtree.
+        """Soft-delete every dep edge (incoming + outgoing) that touches
+        ``activity_id`` and every task / subtask in its cascaded subtree.
+        Called post-soft-delete of the rows themselves.
         """
-        # Activity edges (incoming + outgoing).
-        self.cascade_remove_activity_targets(activity_id)
+        now = _utcnow()
+        # Activity edges.
+        self.cascade_remove_activity_targets(activity_id, actor_id=actor_id)
 
         # Task edges.
         if task_ids:
             tids = list(task_ids)
-            self.db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.target_task_id.in_(tids)
-            ).delete(synchronize_session=False)
-            self.db.query(TaskDependencyModel).filter(
-                TaskDependencyModel.source_task_id.in_(tids)
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(TaskDependencyModel)
+                .where(
+                    TaskDependencyModel.target_task_id.in_(tids),
+                    TaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(TaskDependencyModel)
+                .where(
+                    TaskDependencyModel.source_task_id.in_(tids),
+                    TaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
 
         # Subtask edges.
         if subtask_ids:
             sids = list(subtask_ids)
-            self.db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.target_subtask_id.in_(sids)
-            ).delete(synchronize_session=False)
-            self.db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.source_subtask_id.in_(sids)
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.target_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.source_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
         self.db.flush()
 
     def cascade_remove_for_deleted_task_subtree(
-        self, task_id: str, subtask_ids: Sequence[str],
+        self,
+        task_id: str,
+        subtask_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
     ) -> None:
-        """Wipe edges for a task and its cascaded subtasks."""
-        self.cascade_remove_task_targets(task_id)
+        """Soft-delete edges for a task and its cascaded subtasks."""
+        now = _utcnow()
+        self.cascade_remove_task_targets(task_id, actor_id=actor_id)
         if subtask_ids:
             sids = list(subtask_ids)
-            self.db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.target_subtask_id.in_(sids)
-            ).delete(synchronize_session=False)
-            self.db.query(SubtaskDependencyModel).filter(
-                SubtaskDependencyModel.source_subtask_id.in_(sids)
-            ).delete(synchronize_session=False)
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.target_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.source_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+        self.db.flush()
+
+    def cascade_remove_for_deleted_milestone_subtree(
+        self,
+        activity_ids: Sequence[str],
+        task_ids: Sequence[str],
+        subtask_ids: Sequence[str],
+        *,
+        actor_id: Optional[int] = None,
+    ) -> None:
+        """Soft-delete every dep edge across a milestone's A/T/S subtree.
+
+        Caller passes in pre-computed live-row id lists (collected BEFORE
+        soft-deleting the rows themselves). One transaction, one flush.
+        """
+        now = _utcnow()
+        if activity_ids:
+            aids = list(activity_ids)
+            self.db.execute(
+                update(ActivityDependencyModel)
+                .where(
+                    ActivityDependencyModel.target_activity_id.in_(aids),
+                    ActivityDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(ActivityDependencyModel)
+                .where(
+                    ActivityDependencyModel.source_activity_id.in_(aids),
+                    ActivityDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+        if task_ids:
+            tids = list(task_ids)
+            self.db.execute(
+                update(TaskDependencyModel)
+                .where(
+                    TaskDependencyModel.target_task_id.in_(tids),
+                    TaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(TaskDependencyModel)
+                .where(
+                    TaskDependencyModel.source_task_id.in_(tids),
+                    TaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+        if subtask_ids:
+            sids = list(subtask_ids)
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.target_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
+            self.db.execute(
+                update(SubtaskDependencyModel)
+                .where(
+                    SubtaskDependencyModel.source_subtask_id.in_(sids),
+                    SubtaskDependencyModel.deleted_at.is_(None),
+                )
+                .values(deleted_at=now, deleted_by=actor_id)
+            )
         self.db.flush()
 
     # -------------------------------------------------------------------
@@ -461,14 +635,11 @@ class DependencyRepository:
         target_project_id: str,
         activity_id_map: dict,
     ) -> int:
-        """Copy activity_dependencies from a baseline into a new version,
-        rewriting source/target ids using ``activity_id_map`` (baseline
-        activity id → version-cloned activity id). Edges whose endpoints
-        weren't cloned are silently skipped.
+        """Copy LIVE activity_dependencies from baseline into a new version,
+        rewriting source/target ids via ``activity_id_map``. Soft-deleted
+        edges are NOT carried forward.
 
-        Returns the number of edges inserted.
-
-        Does NOT commit; the version-create transaction owns the commit.
+        Returns the number of edges inserted. Does NOT commit.
         """
         if not activity_id_map:
             return 0
@@ -479,6 +650,7 @@ class DependencyRepository:
                 ActivityDependencyModel.target_activity_id,
             )
             .filter(ActivityDependencyModel.project_id == source_project_id)
+            .filter(ActivityDependencyModel.deleted_at.is_(None))
             .all()
         )
         inserted = 0

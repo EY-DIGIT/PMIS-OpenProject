@@ -32,5 +32,6 @@ def delete_task(db: Session, *, task_id: str, current_user_id: Optional[int]) ->
 
     DependencyRepository(db).cascade_remove_for_deleted_task_subtree(
         task_id, subtask_ids,
+        actor_id=current_user_id,
     )
     repo.soft_delete_with_cascade(task_id, deleted_by=current_user_id)
