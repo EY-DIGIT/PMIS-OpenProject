@@ -1,4 +1,5 @@
 """Repositories package."""
+from .dependency_repository import DependencyRepository
 from .user_repository import UserRepository
 from .project_repository import ProjectRepository
 from .project_audit_log_repository import ProjectAuditLogRepository
@@ -7,6 +8,7 @@ from .vendor_repository import VendorRepository
 from .resource_type_repository import ResourceTypeRepository
 
 __all__ = [
+    "DependencyRepository",
     "UserRepository",
     "ProjectRepository",
     "ProjectAuditLogRepository",

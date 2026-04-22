@@ -1,29 +1,34 @@
 """
 Update an activity.
 
-Handles the full type × resource-mode transition matrix in one place:
+Handles the full type × resource-mode transition matrix in one place plus the
+new ``depends_on`` and the status-completion gate.
 
-  Final state (after PATCH)                  Effect
-  ─────────────────────────────────────────────────────────────────────────
-  (type != resource)                          clear mode + count;
-                                              soft-delete live resource row (if any)
-  (type = resource, mode = count)             write count;
-                                              soft-delete live resource row (if any)
-  (type = resource, mode = details)           upsert the resource row from body;
-                                              clear count
+Status gate
+-----------
+Per the dependency spec, an activity may only flip ``status`` to
+``completed`` once every activity it ``depends_on`` is also ``completed``.
+Direct status check (no recursive children rollup); fast and predictable.
 
-For a PATCH body, "final state" = existing columns overlaid with any fields
-provided in the body. This lets the frontend send just the fields the user
-changed.
+Depends-on
+----------
+Replace-list semantics:
+  None (omitted)  → leave list unchanged
+  []              → clear all edges
+  [ids...]        → replace; targets validated for existence in same project,
+                    no self-edge, no cycle.
 
 All changes commit in a single transaction.
 """
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from .....core.errors import NotFoundError, ValidationError
+from .....core.errors import (
+    NotFoundError,
+    ValidationError,
+)
 from .....core.project_lock import assert_milestone_activity_writable
 from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
@@ -35,8 +40,12 @@ from ...projects.services.baseline_version_sync import (
 def _iso(v):
     return v.isoformat() if hasattr(v, "isoformat") else v
 from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.models.activity import ActivityModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
@@ -44,6 +53,7 @@ from .....shared.date_rules import validate_entity_dates, validate_resource_date
 from .....domain.activities.activity import (
     Activity,
     ACTIVITY_STATUS_CHOICES,
+    ACTIVITY_STATUS_COMPLETED,
     ACTIVITY_STATUS_DEFAULT,
     ACTIVITY_TYPE_RESOURCE,
     ACTIVITY_TYPE_STANDARD,
@@ -53,9 +63,37 @@ from .....domain.activities.activity import (
 from .....domain.activities.activity_resource import ActivityResource
 
 
-# Sentinel: body field was not provided vs. body field was explicitly sent as None.
-# We need to distinguish "don't touch this column" from "set to NULL".
-_UNSET = object()
+def _gate_status_against_deps(
+    db: Session, activity_id: str, target_status: str,
+) -> None:
+    """Raise ValidationError if any dep target is not 'completed'.
+
+    Only invoked when the new status is ``completed``. Reads the current edge
+    set from activity_dependencies, then checks each target's status column.
+    """
+    if target_status != ACTIVITY_STATUS_COMPLETED:
+        return
+    dep_repo = DependencyRepository(db)
+    target_ids = dep_repo.list_activity_dependencies(activity_id)
+    if not target_ids:
+        return
+    rows = (
+        db.query(ActivityModel.id, ActivityModel.name, ActivityModel.status)
+        .filter(ActivityModel.id.in_(target_ids))
+        .all()
+    )
+    blockers = [
+        (row[0], row[1], row[2])
+        for row in rows
+        if (row[2] or "") != ACTIVITY_STATUS_COMPLETED
+    ]
+    if blockers:
+        names = ", ".join(f"'{b[1]}'" for b in blockers[:3])
+        more = "" if len(blockers) <= 3 else f" (+{len(blockers) - 3} more)"
+        raise ValidationError(
+            f"Cannot mark this activity as completed — the following "
+            f"dependency target(s) are not yet completed: {names}{more}.",
+        )
 
 
 def update_activity(
@@ -75,7 +113,7 @@ def update_activity(
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
     status: Optional[str] = None,
-    dependency: Optional[list] = None,
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     repo = ActivityRepository(db)
     model = repo.get_model(activity_id)
@@ -199,25 +237,78 @@ def update_activity(
                     "The selected 'type of resource' could not be found or is inactive."
                 )
 
-    # Standard-only fields: status / dependency are valid ONLY when the final
-    # type is standard. A PATCH that flips type=standard -> non-standard must
-    # clear them (done via the final shape below).
+    # Standard-only field: status is valid ONLY when the final type is
+    # standard. A PATCH that flips type=standard -> non-standard must clear
+    # it (done via the final shape below).
     status_supplied = status is not None
-    dependency_supplied = dependency is not None
     if new_type != ACTIVITY_TYPE_STANDARD:
         if status_supplied:
             raise ValidationError(
                 "status is only valid on standard-type activities."
-            )
-        if dependency_supplied:
-            raise ValidationError(
-                "dependency is only valid on standard-type activities."
             )
     else:
         if status_supplied and status not in ACTIVITY_STATUS_CHOICES:
             raise ValidationError(
                 f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
             )
+
+    # Status-completion gate. Only run when the caller is explicitly trying
+    # to set status to 'completed'.
+    if status_supplied and status == ACTIVITY_STATUS_COMPLETED:
+        # Use the eventual edge set if depends_on is being replaced this PATCH;
+        # otherwise the existing set.
+        if depends_on is not None:
+            # Build a temporary lookup against the would-be targets.
+            # Only "would-be" targets need to be validated against status.
+            target_ids = [d for d in dict.fromkeys(depends_on) if d]
+            if target_ids:
+                rows = (
+                    db.query(ActivityModel.id, ActivityModel.name, ActivityModel.status)
+                    .filter(ActivityModel.id.in_(target_ids))
+                    .all()
+                )
+                blockers = [
+                    (r[0], r[1], r[2]) for r in rows
+                    if (r[2] or "") != ACTIVITY_STATUS_COMPLETED
+                ]
+                if blockers:
+                    names = ", ".join(f"'{b[1]}'" for b in blockers[:3])
+                    more = "" if len(blockers) <= 3 else f" (+{len(blockers) - 3} more)"
+                    raise AuthorizationError(
+                        f"Cannot mark this activity as completed — the "
+                        f"following dependency target(s) are not yet "
+                        f"completed: {names}{more}.",
+                    )
+        else:
+            _gate_status_against_deps(db, activity_id, ACTIVITY_STATUS_COMPLETED)
+
+    # Validate dependsOn targets for replace.
+    desired_deps: Optional[List[str]] = None
+    if depends_on is not None:
+        dep_repo = DependencyRepository(db)
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        # Self-edge guard.
+        if activity_id in candidates:
+            raise ValidationError(
+                "An activity cannot depend on itself."
+            )
+        if candidates:
+            ok = dep_repo.existing_target_activity_ids(model.project_id, candidates)
+            missing = [d for d in candidates if d not in ok]
+            if missing:
+                raise ValidationError(
+                    f"Unknown or out-of-project activity dependency target(s): "
+                    f"{', '.join(missing)}"
+                )
+            # Cycle detection: would adding any of these create a cycle?
+            # Check against existing edges that don't include the source's
+            # current outgoing set (those will be replaced below).
+            cycler = dep_repo.would_create_cycle_activity(activity_id, candidates)
+            if cycler is not None:
+                raise ValidationError(
+                    f"Adding dependency on '{cycler}' would create a cycle."
+                )
+        desired_deps = candidates
 
     # Build the activity-row update dict.
     updates: Dict[str, Any] = {}
@@ -250,14 +341,10 @@ def update_activity(
         elif model.type != ACTIVITY_TYPE_STANDARD:
             # Transitioning INTO standard with no status supplied — default.
             updates["status"] = ACTIVITY_STATUS_DEFAULT
-        if dependency_supplied:
-            updates["dependency"] = dependency
     else:
-        # Transitioning OUT of standard — clear both fields.
+        # Transitioning OUT of standard — clear status.
         if model.status is not None:
             updates["status"] = None
-        if model.dependency is not None:
-            updates["dependency"] = None
 
     before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}
 
@@ -281,7 +368,14 @@ def update_activity(
         repo.soft_delete_live_resource(activity_id)
         resource_domain = None
 
-    if updates:
+    # Apply dependsOn replace AFTER the row update so cycle/state checks
+    # used the pre-replace edge set (which we wanted).
+    if desired_deps is not None:
+        DependencyRepository(db).set_activity_dependencies(
+            activity_id, model.project_id, desired_deps,
+        )
+
+    if updates or desired_deps is not None:
         record_audit(
             db,
             project_id=model.project_id,
@@ -303,4 +397,5 @@ def update_activity(
 
     updated = repo.get_by_id(activity_id)
     assert updated is not None
+    updated.depends_on = DependencyRepository(db).list_activity_dependencies(activity_id)
     return updated, resource_domain

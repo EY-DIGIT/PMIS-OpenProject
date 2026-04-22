@@ -28,6 +28,9 @@ from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.models.task_resource import TaskResourceModel
 from .....infrastructure.db.models.subtask import SubtaskModel
 from .....infrastructure.db.models.subtask_resource import SubtaskResourceModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 
 
 def clone_tree_for_version(
@@ -114,11 +117,10 @@ def clone_tree_for_version(
             position=src.position,
             resource_mode=src.resource_mode,
             resource_count=src.resource_count,
-            # Standard-only columns: reset status to 'not_completed' (default
-            # for new work), drop dependency (refers to sibling activity ids
-            # that no longer exist after the clone).
+            # Standard-only column: reset status to 'not_completed' (default
+            # for new work). Activity dependency edges are cloned separately
+            # below via DependencyRepository.clone_activity_dependencies_for_version.
             status="not_completed" if src.type == "standard" else None,
-            dependency=None,
             # Lineage — points back to the baseline activity row.
             cloned_from_id=src.id,
             created_at=now,
@@ -271,6 +273,19 @@ def clone_tree_for_version(
         db.flush()
         subtask_map[src.id] = new.id
         counts["subtasks"] += 1
+
+    # --- Activity dependencies ---
+    # Clone the baseline's activity_dependencies edges into the new version's
+    # scope, rewriting source/target ids via activity_map. Tasks and subtasks
+    # don't exist on a fresh version (they're version-owned and created after
+    # clone), so task/subtask dependency tables are intentionally not
+    # populated here.
+    if activity_map:
+        DependencyRepository(db).clone_activity_dependencies_for_version(
+            source_project_id=source_project_id,
+            target_project_id=target_project_id,
+            activity_id_map=activity_map,
+        )
 
     # --- Subtask resources ---
     if subtask_map:

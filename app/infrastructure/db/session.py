@@ -53,8 +53,10 @@ def init_db() -> None:
         ProjectVendorModel, MilestoneVendorModel, VendorModel, ResourceTypeModel,
         WorkPackageModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
         MeetingAgendaItemModel,
-        MilestoneModel, ActivityModel, ActivityResourceModel,
-        TaskModel, TaskResourceModel, SubtaskModel, SubtaskResourceModel,
+        MilestoneModel,
+        ActivityModel, ActivityDependencyModel, ActivityResourceModel,
+        TaskModel, TaskDependencyModel, TaskResourceModel,
+        SubtaskModel, SubtaskDependencyModel, SubtaskResourceModel,
     )
     from ...core.security import hash_password
     from datetime import datetime, timezone
@@ -222,13 +224,16 @@ def init_db() -> None:
                 except Exception:
                     pass
 
-                # ---- NEW: activities.status + activities.dependency ------
+                # ---- NEW: activities.status (dependency moved to its own
+                # association table activity_dependencies; the legacy
+                # `dependency` column is intentionally NOT re-added — fresh
+                # DBs no longer have it, legacy DBs may keep their orphan
+                # column harmlessly).
                 try:
                     res = conn.execute(text("PRAGMA table_info('activities')"))
                     acols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
                         ("status",         "ALTER TABLE activities ADD COLUMN status VARCHAR(32)"),
-                        ("dependency",     "ALTER TABLE activities ADD COLUMN dependency TEXT"),
                         # Lineage pointer for baseline → version propagation.
                         ("cloned_from_id", "ALTER TABLE activities ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES activities(id)"),
                     ):

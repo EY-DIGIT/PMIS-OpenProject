@@ -30,4 +30,7 @@ def restore_task(db: Session, *, task_id: str, current_user_id: Optional[int]) -
             "Please restore the activity first."
         )
     assert_project_editable(db, model.project_id)
-    return repo.restore(task_id, restored_by=current_user_id)
+    restored = repo.restore(task_id, restored_by=current_user_id)
+    # Deps were purged on delete; a restored task starts with an empty list.
+    restored.depends_on = []
+    return restored

@@ -1,7 +1,7 @@
 """Activity API schemas (with nested resource)."""
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ....domain.activities.activity import (
@@ -93,17 +93,20 @@ class ActivityCreateRequest(BaseModel):
     * type='standard':
       - ``status`` (optional; default 'not_completed', one of
         ACTIVITY_STATUS_CHOICES)
-      - ``dependency`` (optional; list of any — no referential integrity yet)
       - resourceMode / resourceCount / resource MUST all be omitted.
 
     * type='resource':
       - resourceMode required (one of 'count' | 'details')
         - 'count'   → provide resourceCount (>=1); resource MUST be omitted
         - 'details' → provide resource (the 9+ fields); resourceCount omitted
-      - status / dependency MUST NOT be supplied.
+      - status MUST NOT be supplied.
 
     * type='transactional':
       - Neither the standard-only nor the resource-only fields may be used.
+
+    ``dependsOn`` (cross-type): optional list of activity UUIDs this
+    activity depends on. The service validates each id exists in the same
+    project, rejects self-edges, and rejects cycles.
     """
     model_config = ConfigDict(populate_by_name=True)
 
@@ -128,9 +131,14 @@ class ActivityCreateRequest(BaseModel):
             f"'{ACTIVITY_STATUS_DEFAULT}' when omitted."
         ),
     )
-    dependency: Optional[List[Any]] = Field(
+    depends_on: Optional[List[str]] = Field(
         None,
-        description="Applies only to type='standard'. Reserved; no referential integrity yet.",
+        alias="dependsOn",
+        description=(
+            "List of activity UUIDs this activity depends on. Must reference "
+            "live activities in the same project. None = no list provided; "
+            "[] = clear; [...] = replace."
+        ),
     )
 
     @field_validator("type", mode="before")
@@ -181,15 +189,11 @@ class ActivityCreateRequest(BaseModel):
         is_resource_type = self.type == ACTIVITY_TYPE_RESOURCE
         is_standard_type = self.type == ACTIVITY_TYPE_STANDARD
 
-        # status / dependency are STANDARD-only.
+        # status is STANDARD-only.
         if not is_standard_type:
             if self.status is not None:
                 raise ValueError(
                     "status is only valid on standard-type activities."
-                )
-            if self.dependency is not None:
-                raise ValueError(
-                    "dependency is only valid on standard-type activities."
                 )
 
         # Resource-block consistency (mirrors prior behaviour; kept verbatim).
@@ -251,6 +255,8 @@ class ActivityUpdateRequest(BaseModel):
     Cross-field consistency (type vs mode vs count vs resource block) is
     enforced in the service layer because a partial update needs the current
     DB state to reason about the final shape.
+
+    ``dependsOn`` semantics: None=no change, []=clear, [...]=replace.
     """
     model_config = ConfigDict(populate_by_name=True)
 
@@ -266,7 +272,7 @@ class ActivityUpdateRequest(BaseModel):
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
     status: Optional[str] = None
-    dependency: Optional[List[Any]] = None
+    depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
 
     @field_validator("type", mode="before")
     @classmethod

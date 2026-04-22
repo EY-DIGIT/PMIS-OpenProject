@@ -1,7 +1,7 @@
 """Subtask API schemas."""
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ....domain.subtasks.subtask import (
@@ -40,6 +40,16 @@ class SubtaskCreateRequest(BaseModel):
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
+    depends_on: Optional[List[str]] = Field(
+        None,
+        alias="dependsOn",
+        description=(
+            "List of subtask UUIDs this subtask depends on. Each target must "
+            "live in the same project, and the source's parent task must "
+            "already depend on the target's parent task (per "
+            "task_dependencies)."
+        ),
+    )
 
     @field_validator("type", mode="before")
     @classmethod
@@ -118,6 +128,7 @@ class SubtaskUpdateRequest(BaseModel):
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
+    depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
 
     @field_validator("type", mode="before")
     @classmethod

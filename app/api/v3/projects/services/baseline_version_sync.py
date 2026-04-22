@@ -276,7 +276,71 @@ def propagate_milestone_soft_delete(
 
     now = _utcnow()
     count = 0
+    # Local import to avoid circularity.
+    from .....infrastructure.db.repositories.dependency_repository import (
+        DependencyRepository,
+    )
+    dep_repo = DependencyRepository(db)
+
     for twin in twins:
+        # Collect the full A/T/S subtree for this twin BEFORE soft-delete.
+        twin_activity_ids = [
+            r[0]
+            for r in db.execute(
+                select(ActivityModel.id).where(
+                    ActivityModel.milestone_id == twin.id,
+                    ActivityModel.deleted_at.is_(None),
+                )
+            ).all()
+        ]
+        twin_task_ids: list = []
+        twin_subtask_ids: list = []
+        if twin_activity_ids:
+            twin_task_ids = [
+                r[0]
+                for r in db.execute(
+                    select(TaskModel.id).where(
+                        TaskModel.activity_id.in_(twin_activity_ids),
+                        TaskModel.deleted_at.is_(None),
+                    )
+                ).all()
+            ]
+            if twin_task_ids:
+                twin_subtask_ids = [
+                    r[0]
+                    for r in db.execute(
+                        select(SubtaskModel.id).where(
+                            SubtaskModel.task_id.in_(twin_task_ids),
+                            SubtaskModel.deleted_at.is_(None),
+                        )
+                    ).all()
+                ]
+        # Wipe all dep edges that touch any row in this milestone's subtree.
+        for aid in twin_activity_ids:
+            dep_repo.cascade_remove_activity_targets(aid)
+        # Task + subtask edges via bulk method on the repo: we have the id
+        # lists, so a manual bulk delete is cheapest.
+        if twin_task_ids:
+            from .....infrastructure.db.models.task_dependency import (
+                TaskDependencyModel,
+            )
+            db.query(TaskDependencyModel).filter(
+                TaskDependencyModel.source_task_id.in_(twin_task_ids)
+            ).delete(synchronize_session=False)
+            db.query(TaskDependencyModel).filter(
+                TaskDependencyModel.target_task_id.in_(twin_task_ids)
+            ).delete(synchronize_session=False)
+        if twin_subtask_ids:
+            from .....infrastructure.db.models.subtask_dependency import (
+                SubtaskDependencyModel,
+            )
+            db.query(SubtaskDependencyModel).filter(
+                SubtaskDependencyModel.source_subtask_id.in_(twin_subtask_ids)
+            ).delete(synchronize_session=False)
+            db.query(SubtaskDependencyModel).filter(
+                SubtaskDependencyModel.target_subtask_id.in_(twin_subtask_ids)
+            ).delete(synchronize_session=False)
+
         _soft_delete_milestone_subtree(db, twin.id, actor_id=actor_id, now=now)
         record_audit(
             db,
@@ -493,7 +557,42 @@ def propagate_activity_soft_delete(
 
     now = _utcnow()
     count = 0
+    # Local import to avoid circularity.
+    from .....infrastructure.db.repositories.dependency_repository import (
+        DependencyRepository,
+    )
+    dep_repo = DependencyRepository(db)
+
     for twin in twins:
+        # Snapshot the version twin's task/subtask subtree BEFORE soft-delete
+        # so the dep-cascade query can find them.
+        twin_task_ids = [
+            r[0]
+            for r in db.execute(
+                select(TaskModel.id).where(
+                    TaskModel.activity_id == twin.id,
+                    TaskModel.deleted_at.is_(None),
+                )
+            ).all()
+        ]
+        twin_subtask_ids: list = []
+        if twin_task_ids:
+            twin_subtask_ids = [
+                r[0]
+                for r in db.execute(
+                    select(SubtaskModel.id).where(
+                        SubtaskModel.task_id.in_(twin_task_ids),
+                        SubtaskModel.deleted_at.is_(None),
+                    )
+                ).all()
+            ]
+        # Wipe all dependency edges that touch this twin's subtree before we
+        # soft-delete the rows themselves. Same philosophy as the baseline
+        # delete path: silently drop stale edges.
+        dep_repo.cascade_remove_for_deleted_activity_subtree(
+            twin.id, twin_task_ids, twin_subtask_ids,
+        )
+
         _soft_delete_activity_subtree(db, twin.id, actor_id=actor_id, now=now)
         record_audit(
             db,

@@ -37,7 +37,9 @@ class ActivityRepository:
             resource_mode=a.resource_mode,
             resource_count=a.resource_count,
             status=getattr(a, "status", None),
-            dependency=getattr(a, "dependency", None),
+            # depends_on is populated by the service layer from
+            # DependencyRepository.list_activity_dependencies(...).
+            depends_on=[],
             created_at=a.created_at,
             updated_at=a.updated_at,
             created_by=a.created_by,
@@ -126,7 +128,6 @@ class ActivityRepository:
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
         status: Optional[str] = None,
-        dependency: Optional[list] = None,
     ) -> Activity:
         a = ActivityModel(
             project_id=project_id,
@@ -142,7 +143,6 @@ class ActivityRepository:
             resource_mode=resource_mode,
             resource_count=resource_count,
             status=status,
-            dependency=dependency,
             created_by=created_by,
             updated_by=created_by,
         )

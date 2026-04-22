@@ -1,9 +1,12 @@
-"""Soft-delete a subtask (leaf; only its resource cascades)."""
+"""Soft-delete a subtask (leaf; wipe resource + dependency edges)."""
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError
 from .....core.project_lock import assert_task_subtask_writable
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 
 
@@ -13,4 +16,7 @@ def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[in
     if model is None:
         raise NotFoundError("The subtask could not be found.")
     assert_task_subtask_writable(db, model.project_id)
+
+    # Wipe in-edges pointing at this subtask and out-edges leaving it.
+    DependencyRepository(db).cascade_remove_subtask_targets(subtask_id)
     repo.soft_delete(subtask_id, deleted_by=current_user_id)

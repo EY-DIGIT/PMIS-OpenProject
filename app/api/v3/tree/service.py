@@ -16,10 +16,13 @@ from ....core.errors import NotFoundError
 from ....infrastructure.db.models.project import ProjectModel
 from ....infrastructure.db.models.milestone import MilestoneModel
 from ....infrastructure.db.models.activity import ActivityModel
+from ....infrastructure.db.models.activity_dependency import ActivityDependencyModel
 from ....infrastructure.db.models.activity_resource import ActivityResourceModel
 from ....infrastructure.db.models.task import TaskModel
+from ....infrastructure.db.models.task_dependency import TaskDependencyModel
 from ....infrastructure.db.models.task_resource import TaskResourceModel
 from ....infrastructure.db.models.subtask import SubtaskModel
+from ....infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
 from ....infrastructure.db.models.subtask_resource import SubtaskResourceModel
 
 
@@ -66,6 +69,42 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
     subtasks = _q(SubtaskModel).order_by(SubtaskModel.position.asc(), SubtaskModel.id.asc()).all()
     sub_resources = _q(SubtaskResourceModel).all()
 
+    # Bulk-load dependency edges scoped to this project (3 queries — one per
+    # association table). Store as dicts keyed by source id -> list of target
+    # ids so each node render is O(1).
+    act_deps_by_source: Dict[str, List[str]] = defaultdict(list)
+    for src, tgt in (
+        db.query(
+            ActivityDependencyModel.source_activity_id,
+            ActivityDependencyModel.target_activity_id,
+        )
+        .filter(ActivityDependencyModel.project_id == project_id)
+        .all()
+    ):
+        act_deps_by_source[src].append(tgt)
+
+    task_deps_by_source: Dict[str, List[str]] = defaultdict(list)
+    for src, tgt in (
+        db.query(
+            TaskDependencyModel.source_task_id,
+            TaskDependencyModel.target_task_id,
+        )
+        .filter(TaskDependencyModel.project_id == project_id)
+        .all()
+    ):
+        task_deps_by_source[src].append(tgt)
+
+    subtask_deps_by_source: Dict[str, List[str]] = defaultdict(list)
+    for src, tgt in (
+        db.query(
+            SubtaskDependencyModel.source_subtask_id,
+            SubtaskDependencyModel.target_subtask_id,
+        )
+        .filter(SubtaskDependencyModel.project_id == project_id)
+        .all()
+    ):
+        subtask_deps_by_source[src].append(tgt)
+
     # Group children by their immediate parent for O(1) lookup during stitch.
     acts_by_milestone: Dict[int, List[ActivityModel]] = defaultdict(list)
     for a in activities:
@@ -102,6 +141,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "position": s.position,
             "resourceMode": getattr(s, "resource_mode", None),
             "resourceCount": getattr(s, "resource_count", None),
+            "dependsOn": sorted(subtask_deps_by_source.get(s.id, [])),
             "deletedAt": _iso(s.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
         }
@@ -121,6 +161,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "position": t.position,
             "resourceMode": getattr(t, "resource_mode", None),
             "resourceCount": getattr(t, "resource_count", None),
+            "dependsOn": sorted(task_deps_by_source.get(t.id, [])),
             "deletedAt": _iso(t.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "subtasks": [subtask_node(s) for s in subs_by_task.get(t.id, [])],
@@ -135,12 +176,14 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
         return {
             "id": a.id, "milestoneId": a.milestone_id, "projectId": a.project_id,
             "name": a.name, "description": a.description, "type": a.type,
+            "status": getattr(a, "status", None),
             "startDate": _iso(a.start_date), "endDate": _iso(a.end_date),
             "actualStartDate": _iso(a.actual_start_date),
             "actualEndDate": _iso(a.actual_end_date),
             "position": a.position,
             "resourceMode": getattr(a, "resource_mode", None),
             "resourceCount": getattr(a, "resource_count", None),
+            "dependsOn": sorted(act_deps_by_source.get(a.id, [])),
             "deletedAt": _iso(a.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "tasks": [task_node(t) for t in tasks_by_activity.get(a.id, [])],

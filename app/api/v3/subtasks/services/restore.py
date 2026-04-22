@@ -30,4 +30,6 @@ def restore_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[i
             "Please restore the task first."
         )
     assert_project_editable(db, model.project_id)
-    return repo.restore(subtask_id, restored_by=current_user_id)
+    restored = repo.restore(subtask_id, restored_by=current_user_id)
+    restored.depends_on = []
+    return restored

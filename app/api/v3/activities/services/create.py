@@ -1,4 +1,4 @@
-"""Create an activity under a milestone. Handles nested resource."""
+"""Create an activity under a milestone. Handles nested resource and dependsOn."""
 from datetime import datetime
 from typing import Any, List, Optional, Tuple
 
@@ -24,6 +24,9 @@ from .....domain.activities.activity_resource import ActivityResource
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
@@ -47,7 +50,7 @@ def create_activity(
     resource: Optional[dict],
     current_user_id: Optional[int],
     status: Optional[str] = None,
-    dependency: Optional[List[Any]] = None,
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     milestone = (
         db.query(MilestoneModel)
@@ -101,16 +104,34 @@ def create_activity(
         type == ACTIVITY_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
     ) else None
 
-    # Standard-only fields: apply a safe default status, keep dependency verbatim.
+    # Standard-only field: status default.
     resolved_status: Optional[str] = None
-    resolved_dependency: Optional[list] = None
     if type == ACTIVITY_TYPE_STANDARD:
         resolved_status = status or ACTIVITY_STATUS_DEFAULT
         if resolved_status not in ACTIVITY_STATUS_CHOICES:
             raise ValidationError(
                 f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
             )
-        resolved_dependency = dependency
+
+    # Validate dependsOn targets BEFORE creating the row, so we don't leave
+    # an orphan activity if validation fails.
+    desired_deps: List[str] = []
+    if depends_on is not None:
+        dep_repo = DependencyRepository(db)
+        # Drop dupes, keep order.
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        if candidates:
+            ok = dep_repo.existing_target_activity_ids(milestone.project_id, candidates)
+            missing = [d for d in candidates if d not in ok]
+            if missing:
+                raise ValidationError(
+                    f"Unknown or out-of-project activity dependency target(s): "
+                    f"{', '.join(missing)}"
+                )
+            desired_deps = candidates
+        # No cycle / self check needed — the new activity has no id yet, so
+        # it can't appear in any existing edge. (Self-edge is impossible on
+        # create.) The cycle check kicks in on update.
 
     repo = ActivityRepository(db)
     pos = position if position is not None else repo.next_position(milestone_id)
@@ -130,7 +151,6 @@ def create_activity(
         resource_mode=store_mode,
         resource_count=store_count,
         status=resolved_status,
-        dependency=resolved_dependency,
     )
 
     resource_domain = None
@@ -140,6 +160,12 @@ def create_activity(
             activity_id=activity.id,
             project_id=milestone.project_id,
             data=resource,
+        )
+
+    # Persist dependencies once the activity row exists.
+    if desired_deps:
+        DependencyRepository(db).set_activity_dependencies(
+            activity.id, milestone.project_id, desired_deps,
         )
 
     record_audit(
@@ -156,10 +182,13 @@ def create_activity(
             "start_date": activity.start_date.isoformat() if activity.start_date else None,
             "end_date": activity.end_date.isoformat() if activity.end_date else None,
             "position": activity.position,
+            "depends_on": desired_deps,
         },
     )
     db.commit()
     propagate_activity_create(db, baseline_activity_id=activity.id, actor_id=current_user_id)
     # Re-read so the returned domain model has the freshly-written mode/count.
     refreshed = repo.get_by_id(activity.id)
-    return refreshed or activity, resource_domain
+    out = refreshed or activity
+    out.depends_on = DependencyRepository(db).list_activity_dependencies(activity.id)
+    return out, resource_domain

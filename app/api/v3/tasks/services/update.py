@@ -1,11 +1,16 @@
 """Update a task. Full type × resource-mode transition matrix.
 
 See activities/services/update.py for the canonical commentary -- the logic
-here is structurally identical; only the parent entity and the resource
-sub-entity differ.
+here is structurally identical; only the parent entity, the resource
+sub-entity, and the dep table differ.
+
+``depends_on`` semantics: None=no change, []=clear, [...]=replace. Targets
+must be live tasks in the same project; the source's parent activity must
+already depend on the target's parent activity. Tasks within the same
+activity may always reference each other.
 """
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -13,6 +18,9 @@ from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.activity import ActivityModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.tasks.task import (
@@ -22,6 +30,8 @@ from .....domain.tasks.task import (
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.tasks.task_resource import TaskResource
+
+from .create import _validate_task_deps_hierarchy
 
 
 def update_task(
@@ -40,6 +50,7 @@ def update_task(
     resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Task, Optional[TaskResource]]:
     repo = TaskRepository(db)
     model = repo.get_model(task_id)
@@ -135,6 +146,28 @@ def update_task(
             project_start_date=project.start_date,
         )
 
+    # Validate dependsOn for replace.
+    desired_deps: Optional[List[str]] = None
+    if depends_on is not None:
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        if task_id in candidates:
+            raise ValidationError("A task cannot depend on itself.")
+        if candidates:
+            _validate_task_deps_hierarchy(
+                db,
+                source_activity_id=model.activity_id,
+                project_id=model.project_id,
+                target_task_ids=candidates,
+            )
+            cycler = DependencyRepository(db).would_create_cycle_task(
+                task_id, candidates,
+            )
+            if cycler is not None:
+                raise ValidationError(
+                    f"Adding dependency on '{cycler}' would create a cycle."
+                )
+        desired_deps = candidates
+
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
     if description is not None: updates["description"] = description
@@ -163,7 +196,13 @@ def update_task(
         repo.soft_delete_live_resource(task_id)
         resource_domain = None
 
+    if desired_deps is not None:
+        DependencyRepository(db).set_task_dependencies(
+            task_id, model.project_id, desired_deps,
+        )
+
     db.commit()
     updated = repo.get_by_id(task_id)
     assert updated is not None
+    updated.depends_on = DependencyRepository(db).list_task_dependencies(task_id)
     return updated, resource_domain

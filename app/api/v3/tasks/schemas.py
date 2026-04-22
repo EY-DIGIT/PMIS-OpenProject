@@ -1,7 +1,7 @@
 """Task API schemas (with nested resource)."""
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ....domain.tasks.task import (
@@ -40,6 +40,16 @@ class TaskCreateRequest(BaseModel):
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
+    depends_on: Optional[List[str]] = Field(
+        None,
+        alias="dependsOn",
+        description=(
+            "List of task UUIDs this task depends on. Each target task must "
+            "live in the same project, and the source's parent activity must "
+            "already depend on the target's parent activity (per "
+            "activity_dependencies)."
+        ),
+    )
 
     @field_validator("type", mode="before")
     @classmethod
@@ -118,6 +128,7 @@ class TaskUpdateRequest(BaseModel):
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
+    depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
 
     @field_validator("type", mode="before")
     @classmethod

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError
 from .....domain.activities.activity import Activity
+from .....infrastructure.db.models.activity_dependency import ActivityDependencyModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
 
@@ -33,4 +34,22 @@ def list_activities(
         milestone_id=milestone_id, offset=offset, limit=page_size,
         include_deleted=include_deleted,
     )
+
+    # Bulk-load deps for all returned activities in one query.
+    if items:
+        ids = [a.id for a in items]
+        rows = (
+            db.query(
+                ActivityDependencyModel.source_activity_id,
+                ActivityDependencyModel.target_activity_id,
+            )
+            .filter(ActivityDependencyModel.source_activity_id.in_(ids))
+            .all()
+        )
+        bucket: dict = {}
+        for src, tgt in rows:
+            bucket.setdefault(src, []).append(tgt)
+        for a in items:
+            a.depends_on = sorted(bucket.get(a.id, []))
+
     return PagedActivities(items=items, total=total, page=page, page_size=page_size)

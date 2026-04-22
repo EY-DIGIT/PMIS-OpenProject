@@ -1,7 +1,7 @@
 """Activity domain entity."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 # Enum-style constants for type validation.
@@ -62,9 +62,12 @@ class Activity:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
-    # Standard-only fields; NULL on non-standard activities.
+    # Standard-only field; NULL on non-standard activities.
     status: Optional[str] = None
-    dependency: Optional[List[Any]] = None
+    # List of target activity ids this activity depends on. Populated by the
+    # service layer from the activity_dependencies association table; never
+    # stored on the activity row itself.
+    depends_on: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -82,7 +85,7 @@ class Activity:
             "resource_mode": self.resource_mode,
             "resource_count": self.resource_count,
             "status": self.status,
-            "dependency": self.dependency if self.dependency is not None else None,
+            "depends_on": list(self.depends_on or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

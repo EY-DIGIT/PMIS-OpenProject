@@ -56,6 +56,7 @@ def format_subtask_response(
         "position": s["position"],
         "resourceMode": s.get("resource_mode"),
         "resourceCount": s.get("resource_count"),
+        "dependsOn": s.get("depends_on") or [],
         "createdAt": s["created_at"],
         "updatedAt": s["updated_at"],
         "createdBy": s["created_by"],
@@ -79,6 +80,7 @@ class SubtaskController:
             position=data.position,
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
         )
         return BaseController.created(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
 
@@ -113,6 +115,7 @@ class SubtaskController:
             position=data.position,
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
         )
         return BaseController.ok(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
 

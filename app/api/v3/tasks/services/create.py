@@ -1,6 +1,9 @@
-"""Create a task under an activity."""
+"""Create a task under an activity. Validates ``depends_on`` against the
+hierarchy rule: target tasks must live in the same project, and the source's
+parent activity must already depend on the target's parent activity (per the
+activity_dependencies edge set). Same-activity targets are always allowed."""
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +11,9 @@ from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.activity import ActivityModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.tasks.task import (
@@ -17,6 +23,38 @@ from .....domain.tasks.task import (
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.tasks.task_resource import TaskResource
+
+
+def _validate_task_deps_hierarchy(
+    db: Session,
+    *,
+    source_activity_id: str,
+    project_id: str,
+    target_task_ids: List[str],
+) -> None:
+    """Ensure each target task lives in the same project AND its parent
+    activity is referenced by the source's parent activity in
+    activity_dependencies. Same-activity targets are allowed without an
+    activity-level edge.
+    """
+    if not target_task_ids:
+        return
+    dep_repo = DependencyRepository(db)
+    found = dep_repo.existing_target_tasks(project_id, target_task_ids)
+    if len(found) != len({tid for tid in target_task_ids if tid}):
+        ok_ids = {tid for tid, _ in found}
+        missing = [tid for tid in target_task_ids if tid and tid not in ok_ids]
+        raise ValidationError(
+            f"Unknown or out-of-project task dependency target(s): "
+            f"{', '.join(missing)}"
+        )
+    for tid, parent_act in found:
+        if not dep_repo.activity_pair_is_dependent(source_activity_id, parent_act):
+            raise ValidationError(
+                f"Cannot add task dependency on task '{tid}': the source's "
+                f"parent activity does not depend on that task's parent "
+                f"activity. Add the activity-level dependency first."
+            )
 
 
 def create_task(
@@ -35,6 +73,7 @@ def create_task(
     resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Task, Optional[TaskResource]]:
     activity = (
         db.query(ActivityModel)
@@ -72,6 +111,19 @@ def create_task(
             project_start_date=project.start_date,
         )
 
+    # Validate dependsOn BEFORE inserting the task row.
+    desired_deps: List[str] = []
+    if depends_on is not None:
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        # No self-edge needed (new id doesn't exist yet); cycle impossible.
+        _validate_task_deps_hierarchy(
+            db,
+            source_activity_id=activity_id,
+            project_id=activity.project_id,
+            target_task_ids=candidates,
+        )
+        desired_deps = candidates
+
     repo = TaskRepository(db)
     pos = position if position is not None else repo.next_position(activity_id)
 
@@ -100,6 +152,14 @@ def create_task(
         resource_domain = repo.insert_resource(
             task_id=task.id, project_id=activity.project_id, data=resource,
         )
+
+    if desired_deps:
+        DependencyRepository(db).set_task_dependencies(
+            task.id, activity.project_id, desired_deps,
+        )
+
     db.commit()
     refreshed = repo.get_by_id(task.id)
-    return refreshed or task, resource_domain
+    out = refreshed or task
+    out.depends_on = DependencyRepository(db).list_task_dependencies(task.id)
+    return out, resource_domain

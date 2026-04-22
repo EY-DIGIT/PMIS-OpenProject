@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .....core.errors import NotFoundError
 from .....domain.tasks.task import Task
 from .....infrastructure.db.models.activity import ActivityModel
+from .....infrastructure.db.models.task_dependency import TaskDependencyModel
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 
 
@@ -33,4 +34,20 @@ def list_tasks(
         activity_id=activity_id, offset=offset, limit=page_size,
         include_deleted=include_deleted,
     )
+    # Bulk-load dependency lists for the page in one query.
+    if items:
+        ids = [t.id for t in items]
+        rows = (
+            db.query(
+                TaskDependencyModel.source_task_id,
+                TaskDependencyModel.target_task_id,
+            )
+            .filter(TaskDependencyModel.source_task_id.in_(ids))
+            .all()
+        )
+        bucket: dict = {}
+        for src, tgt in rows:
+            bucket.setdefault(src, []).append(tgt)
+        for t in items:
+            t.depends_on = sorted(bucket.get(t.id, []))
     return PagedTasks(items=items, total=total, page=page, page_size=page_size)

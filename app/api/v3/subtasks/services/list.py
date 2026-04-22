@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError
 from .....domain.subtasks.subtask import Subtask
+from .....infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
 from .....infrastructure.db.models.task import TaskModel
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 
@@ -32,4 +33,20 @@ def list_subtasks(
     items, total = SubtaskRepository(db).list_by_task(
         task_id=task_id, offset=offset, limit=page_size, include_deleted=include_deleted,
     )
+    # Bulk-load dependency lists for the page.
+    if items:
+        ids = [s.id for s in items]
+        rows = (
+            db.query(
+                SubtaskDependencyModel.source_subtask_id,
+                SubtaskDependencyModel.target_subtask_id,
+            )
+            .filter(SubtaskDependencyModel.source_subtask_id.in_(ids))
+            .all()
+        )
+        bucket: dict = {}
+        for src, tgt in rows:
+            bucket.setdefault(src, []).append(tgt)
+        for s in items:
+            s.depends_on = sorted(bucket.get(s.id, []))
     return PagedSubtasks(items=items, total=total, page=page, page_size=page_size)

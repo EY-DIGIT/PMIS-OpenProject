@@ -1,7 +1,7 @@
 """Task domain entity."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 
 TASK_TYPE_STANDARD = "standard"
@@ -39,6 +39,9 @@ class Task:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
+    # Target task ids this task depends on. Populated by the service from the
+    # task_dependencies association table.
+    depends_on: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +58,7 @@ class Task:
             "position": self.position,
             "resource_mode": self.resource_mode,
             "resource_count": self.resource_count,
+            "depends_on": list(self.depends_on or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

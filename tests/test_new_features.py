@@ -5,7 +5,7 @@
 - Task 4: milestone status
 - Task 5: milestone vendors (subset of project vendors)
 - Task 6: milestone depends (pass-through)
-- Task 7: activity (standard) status + dependency
+- Task 7: activity (standard) status (dependsOn is covered by test_dependencies.py)
 - Task 8: activity (resource) type_of_resource_id
 - Task 9: activity (resource) division + division_other
 """
@@ -228,7 +228,7 @@ class TestMilestoneFields:
 
 
 # ---------------------------------------------------------------------------
-# Task 7: activity (standard) status + dependency
+# Task 7: activity (standard) status (dependency moved to test_dependencies.py)
 # ---------------------------------------------------------------------------
 
 class TestStandardActivityFields:
@@ -264,17 +264,21 @@ class TestStandardActivityFields:
         assert resp.status_code == 201, resp.text
         assert resp.json()["data"]["status"] == "not_completed"
 
-    def test_standard_accepts_status_and_dependency(self, client, admin_headers, db_session):
+    def test_standard_accepts_status(self, client, admin_headers, db_session):
+        """status is accepted on standard-type activities (the legacy
+        ``dependency`` passthrough field is removed; dependsOn is covered by
+        tests/test_dependencies.py)."""
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
             f"/api/v3/milestones/{mid}/activities/create",
-            json=self._activity_body(status="completed", dependency=[str(uuid4())]),
+            json=self._activity_body(status="completed"),
             headers=admin_headers,
         )
         assert resp.status_code == 201
         body = resp.json()["data"]
         assert body["status"] == "completed"
-        assert isinstance(body["dependency"], list) and len(body["dependency"]) == 1
+        # Fresh activity has no dependencies yet.
+        assert body.get("dependsOn") == []
 
     def test_transactional_rejects_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)

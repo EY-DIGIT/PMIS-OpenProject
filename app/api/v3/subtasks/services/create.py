@@ -1,6 +1,9 @@
-"""Create a subtask under a task."""
+"""Create a subtask under a task. Enforces dependsOn hierarchy: target subtasks
+must live in the same project, and the source's parent task must already
+depend on the target's parent task (per task_dependencies). Same-task targets
+are always allowed."""
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +11,9 @@ from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.subtasks.subtask import (
@@ -17,6 +23,35 @@ from .....domain.subtasks.subtask import (
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.subtasks.subtask_resource import SubtaskResource
+
+
+def _validate_subtask_deps_hierarchy(
+    db: Session,
+    *,
+    source_task_id: str,
+    project_id: str,
+    target_subtask_ids: List[str],
+) -> None:
+    """Targets must live in the same project AND source.task must already
+    depend on target.task. Same-task is always allowed."""
+    if not target_subtask_ids:
+        return
+    dep_repo = DependencyRepository(db)
+    found = dep_repo.existing_target_subtasks(project_id, target_subtask_ids)
+    if len(found) != len({sid for sid in target_subtask_ids if sid}):
+        ok_ids = {sid for sid, _ in found}
+        missing = [sid for sid in target_subtask_ids if sid and sid not in ok_ids]
+        raise ValidationError(
+            f"Unknown or out-of-project subtask dependency target(s): "
+            f"{', '.join(missing)}"
+        )
+    for sid, parent_task in found:
+        if not dep_repo.task_pair_is_dependent(source_task_id, parent_task):
+            raise ValidationError(
+                f"Cannot add subtask dependency on subtask '{sid}': the "
+                f"source's parent task does not depend on that subtask's "
+                f"parent task. Add the task-level dependency first."
+            )
 
 
 def create_subtask(
@@ -35,6 +70,7 @@ def create_subtask(
     resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
     task = (
         db.query(TaskModel)
@@ -70,6 +106,17 @@ def create_subtask(
             project_start_date=project.start_date,
         )
 
+    desired_deps: List[str] = []
+    if depends_on is not None:
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        _validate_subtask_deps_hierarchy(
+            db,
+            source_task_id=task_id,
+            project_id=task.project_id,
+            target_subtask_ids=candidates,
+        )
+        desired_deps = candidates
+
     repo = SubtaskRepository(db)
     pos = position if position is not None else repo.next_position(task_id)
 
@@ -96,6 +143,14 @@ def create_subtask(
         resource_domain = repo.insert_resource(
             subtask_id=subtask.id, project_id=task.project_id, data=resource,
         )
+
+    if desired_deps:
+        DependencyRepository(db).set_subtask_dependencies(
+            subtask.id, task.project_id, desired_deps,
+        )
+
     db.commit()
     refreshed = repo.get_by_id(subtask.id)
-    return refreshed or subtask, resource_domain
+    out = refreshed or subtask
+    out.depends_on = DependencyRepository(db).list_subtask_dependencies(subtask.id)
+    return out, resource_domain

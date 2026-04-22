@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    JSON, Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
+    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
 )
 from ..session import Base
 
@@ -43,11 +43,10 @@ class ActivityModel(Base):
     # Standard-activity-only fields. For any non-'standard' activity these
     # MUST remain NULL; the schema / service layer enforces this.
     # ``status`` is one of ACTIVITY_STATUS_CHOICES (e.g. 'not_completed' |
-    # 'completed'), extensible.
+    # 'completed'), extensible. The status-completion gate uses this column:
+    # an activity may only flip to 'completed' once every activity it
+    # ``dependsOn`` (per the activity_dependencies table) is also 'completed'.
     status = Column(String(32), nullable=True, index=True)
-    # ``dependency`` stores a JSON list of activity ids this activity depends
-    # on. Reserved — no logic inspects it yet.
-    dependency = Column(JSON, nullable=True)
 
     # Lineage pointer: when a version project is created from a baseline,
     # each cloned activity records the id of its source baseline activity

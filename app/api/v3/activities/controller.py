@@ -60,7 +60,7 @@ def format_activity_response(
         "resourceMode": a.get("resource_mode"),
         "resourceCount": a.get("resource_count"),
         "status": a.get("status"),
-        "dependency": a.get("dependency"),
+        "dependsOn": a.get("depends_on") or [],
         "createdAt": a["created_at"],
         "updatedAt": a["updated_at"],
         "createdBy": a["created_by"],
@@ -91,7 +91,7 @@ class ActivityController:
             resource=resource_dict,
             current_user_id=current_user_id,
             status=data.status,
-            dependency=data.dependency,
+            depends_on=data.depends_on,
         )
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
@@ -145,7 +145,7 @@ class ActivityController:
             resource=resource_dict,
             current_user_id=current_user_id,
             status=data.status,
-            dependency=data.dependency,
+            depends_on=data.depends_on,
         )
         return BaseController.ok(data=format_activity_response(
             activity.to_dict(), resource.to_dict() if resource else None,

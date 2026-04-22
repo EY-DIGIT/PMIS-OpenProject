@@ -1,7 +1,7 @@
 """Subtask domain entity."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 
 SUBTASK_TYPE_STANDARD = "standard"
@@ -38,6 +38,9 @@ class Subtask:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
+    # Target subtask ids this subtask depends on. Populated from
+    # subtask_dependencies association table.
+    depends_on: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +57,7 @@ class Subtask:
             "position": self.position,
             "resource_mode": self.resource_mode,
             "resource_count": self.resource_count,
+            "depends_on": list(self.depends_on or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

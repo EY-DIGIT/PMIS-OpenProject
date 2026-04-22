@@ -34,4 +34,8 @@ def restore_activity(db: Session, *, activity_id: str, current_user_id: Optional
         )
 
     assert_project_editable(db, model.project_id)
-    return repo.restore(activity_id, restored_by=current_user_id)
+    restored = repo.restore(activity_id, restored_by=current_user_id)
+    # Restored activities start with empty dep list (cascade-on-delete wiped
+    # their edges; admins must re-attach if desired).
+    restored.depends_on = []
+    return restored

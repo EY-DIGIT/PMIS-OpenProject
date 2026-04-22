@@ -56,6 +56,7 @@ def format_task_response(
         "position": t["position"],
         "resourceMode": t.get("resource_mode"),
         "resourceCount": t.get("resource_count"),
+        "dependsOn": t.get("depends_on") or [],
         "createdAt": t["created_at"],
         "updatedAt": t["updated_at"],
         "createdBy": t["created_by"],
@@ -79,6 +80,7 @@ class TaskController:
             position=data.position,
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
         )
         return BaseController.created(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
 
@@ -113,6 +115,7 @@ class TaskController:
             position=data.position,
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
         )
         return BaseController.ok(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
 

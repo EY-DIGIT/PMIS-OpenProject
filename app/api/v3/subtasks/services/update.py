@@ -1,9 +1,9 @@
-"""Update a subtask. Full type × resource-mode transition matrix.
+"""Update a subtask. Full type × resource-mode transition matrix + dependsOn.
 
 See activities/services/update.py for the canonical commentary.
 """
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,9 @@ from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_task_subtask_writable
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.task import TaskModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....domain.subtasks.subtask import (
@@ -20,6 +23,8 @@ from .....domain.subtasks.subtask import (
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.subtasks.subtask_resource import SubtaskResource
+
+from .create import _validate_subtask_deps_hierarchy
 
 
 def update_subtask(
@@ -38,6 +43,7 @@ def update_subtask(
     resource_count: Optional[int],
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
+    depends_on: Optional[List[str]] = None,
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
     repo = SubtaskRepository(db)
     model = repo.get_model(subtask_id)
@@ -115,8 +121,6 @@ def update_subtask(
                 raise ValidationError(
                     "Please provide the resource details when using resource mode 'details'."
                 )
-            # Reject only if the CALLER explicitly sent resource_count.
-            # A stale value inherited from prior 'count' mode is silently cleared.
             if resource_count is not None:
                 raise ValidationError("Resource count should be omitted when resource mode is 'details'.")
             final_mode = RESOURCE_MODE_DETAILS
@@ -131,6 +135,27 @@ def update_subtask(
             actual_offboard=resource.get("actual_offboard_date"),
             project_start_date=project.start_date,
         )
+
+    desired_deps: Optional[List[str]] = None
+    if depends_on is not None:
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        if subtask_id in candidates:
+            raise ValidationError("A subtask cannot depend on itself.")
+        if candidates:
+            _validate_subtask_deps_hierarchy(
+                db,
+                source_task_id=model.task_id,
+                project_id=model.project_id,
+                target_subtask_ids=candidates,
+            )
+            cycler = DependencyRepository(db).would_create_cycle_subtask(
+                subtask_id, candidates,
+            )
+            if cycler is not None:
+                raise ValidationError(
+                    f"Adding dependency on '{cycler}' would create a cycle."
+                )
+        desired_deps = candidates
 
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
@@ -160,7 +185,13 @@ def update_subtask(
         repo.soft_delete_live_resource(subtask_id)
         resource_domain = None
 
+    if desired_deps is not None:
+        DependencyRepository(db).set_subtask_dependencies(
+            subtask_id, model.project_id, desired_deps,
+        )
+
     db.commit()
     updated = repo.get_by_id(subtask_id)
     assert updated is not None
+    updated.depends_on = DependencyRepository(db).list_subtask_dependencies(subtask_id)
     return updated, resource_domain
