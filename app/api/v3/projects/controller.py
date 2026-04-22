@@ -33,6 +33,7 @@ from .services import (
     get_project_by_id,
     list_projects,
     publish_project,
+    save_project_setup,
     suspend_version,
     update_project,
     upsert_project,
@@ -235,6 +236,20 @@ class ProjectController:
             return _error_response(result)
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
         return BaseController.created(data=formatted)
+
+    @staticmethod
+    def save(request: Request, project_uuid: str, db: Session) -> JSONResponse:
+        """Handle the 'Save Project' action: new -> draft if a milestone exists.
+
+        The service itself raises not_found when the project is missing, so we
+        don't need the ``_project_exists`` pre-check the other handlers use.
+        """
+        actor_id = get_current_user_id(request)
+        result = save_project_setup(db, project_uuid, actor_id=actor_id)
+        if not result.is_success():
+            return _error_response(result)
+        formatted = format_project_response(result.data.to_dict(), "/api/v3")
+        return BaseController.ok(data=formatted)
 
     @staticmethod
     def upsert(

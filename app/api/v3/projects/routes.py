@@ -127,6 +127,25 @@ def delete_project(
 
 
 @router.post(
+    "/{project_uuid}/save",
+    dependencies=[require_permission(PROJECTS_UPDATE)],
+    summary="Save project setup (new -> draft if milestones exist)",
+    description=(
+        "Maps to the 'Save Project' button in the Step-1 wizard. Flips status "
+        "from 'new' to 'draft' when at least one live milestone exists on the "
+        "project. Adding a milestone alone does NOT change status — only this "
+        "explicit save call does. Idempotent: a no-op once past 'new'."
+    ),
+)
+def save_project(
+    request: Request,
+    project_uuid: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return ProjectController.save(request, project_uuid, db)
+
+
+@router.post(
     "/{project_uuid}/publish",
     dependencies=[require_permission(PROJECTS_PUBLISH)],
     summary="Publish project",
