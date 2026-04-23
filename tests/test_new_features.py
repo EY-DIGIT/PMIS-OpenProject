@@ -245,9 +245,9 @@ class TestStandardActivityFields:
         return mr.json()["data"]["id"]
 
     def _activity_body(self, **over):
+        # The split endpoints take no ``type`` field — the URL encodes it.
         body = {
             "name": "A1",
-            "type": "standard",
             "startDate": _future_iso(4),
             "endDate": _future_iso(20),
         }
@@ -257,7 +257,7 @@ class TestStandardActivityFields:
     def test_standard_default_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/standard/create",
             json=self._activity_body(),
             headers=admin_headers,
         )
@@ -265,12 +265,11 @@ class TestStandardActivityFields:
         assert resp.json()["data"]["status"] == "not_completed"
 
     def test_standard_accepts_status(self, client, admin_headers, db_session):
-        """status is accepted on standard-type activities (the legacy
-        ``dependency`` passthrough field is removed; dependsOn is covered by
-        tests/test_dependencies.py)."""
+        """status is accepted on the standard endpoint (dependsOn is covered
+        by tests/test_dependencies.py)."""
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/standard/create",
             json=self._activity_body(status="completed"),
             headers=admin_headers,
         )
@@ -280,19 +279,25 @@ class TestStandardActivityFields:
         # Fresh activity has no dependencies yet.
         assert body.get("dependsOn") == []
 
-    def test_transactional_rejects_status(self, client, admin_headers, db_session):
+    def test_transactional_has_no_status_field(self, client, admin_headers, db_session):
+        """The transactional endpoint's schema has no ``status`` field.
+        Sending one is silently ignored (Pydantic default extras="ignore"),
+        and the created activity's status is NULL. This replaces the old
+        'rejects status' test — the split endpoint makes the wrong
+        combination structurally impossible at the contract boundary."""
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
-            json=self._activity_body(type="transactional", status="completed"),
+            f"/api/v3/milestones/{mid}/activities/transactional/create",
+            json=self._activity_body(status="completed"),
             headers=admin_headers,
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"].get("status") is None
 
     def test_standard_rejects_invalid_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/standard/create",
             json=self._activity_body(status="nope"),
             headers=admin_headers,
         )
@@ -315,12 +320,12 @@ class TestResourceActivityFields:
         return mr.json()["data"]["id"]
 
     def _resource_activity(self, *, type_of_resource_id=None, division="tmd1", division_other=None):
+        # The split endpoint encodes type=resource + resourceMode=details
+        # in the URL; body is just the payload data.
         body = {
             "name": "A-res",
-            "type": "resource",
             "startDate": _future_iso(4),
             "endDate": _future_iso(20),
-            "resourceMode": "details",
             "resource": {
                 "resourceName": "Alice",
                 "typeOfResourceId": type_of_resource_id,
@@ -335,7 +340,7 @@ class TestResourceActivityFields:
         mid = self._milestone(client, admin_headers)
         # type_of_resource_id omitted
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(),
             headers=admin_headers,
         )
@@ -347,7 +352,7 @@ class TestResourceActivityFields:
     def test_resource_type_id_must_exist(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(type_of_resource_id=str(uuid4())),
             headers=admin_headers,
         )
@@ -357,7 +362,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(type_of_resource_id=rfp_id, division="tmd2"),
             headers=admin_headers,
         )
@@ -371,7 +376,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(type_of_resource_id=rfp_id, division="others"),
             headers=admin_headers,
         )
@@ -381,7 +386,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(
                 type_of_resource_id=rfp_id, division="others", division_other="Special Projects",
             ),
@@ -396,7 +401,7 @@ class TestResourceActivityFields:
         rfp_id, _, _ = _seed_resource_types(db_session)
         mid = self._milestone(client, admin_headers)
         resp = client.post(
-            f"/api/v3/milestones/{mid}/activities/create",
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
             json=self._resource_activity(
                 type_of_resource_id=rfp_id, division="tmd1", division_other="stray",
             ),

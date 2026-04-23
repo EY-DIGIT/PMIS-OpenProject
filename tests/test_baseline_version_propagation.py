@@ -41,10 +41,9 @@ def _create_milestone(client, headers, project_id, name="M1", days_start=3, days
 
 def _create_activity(client, headers, milestone_id, name="A1", days_start=4, days_end=20):
     return client.post(
-        f"/api/v3/milestones/{milestone_id}/activities/create",
+        f"/api/v3/milestones/{milestone_id}/activities/standard/create",
         json={
             "name": name,
-            "type": "standard",
             "startDate": _iso(days_start),
             "endDate": _iso(days_end),
         },

@@ -65,14 +65,13 @@ def _create_milestone(client, admin_headers, project_id, *, name="M"):
 def _create_activity(client, admin_headers, milestone_id, *, name="A", depends_on=None):
     body = {
         "name": name,
-        "type": "standard",
         "startDate": _future_iso(3),
         "endDate": _future_iso(80),
     }
     if depends_on is not None:
         body["dependsOn"] = depends_on
     resp = client.post(
-        f"/api/v3/milestones/{milestone_id}/activities/create",
+        f"/api/v3/milestones/{milestone_id}/activities/standard/create",
         json=body,
         headers=admin_headers,
     )

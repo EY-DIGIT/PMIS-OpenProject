@@ -316,3 +316,129 @@ class ActivityListQuery(BaseModel):
     offset: int = Field(1, ge=1)
     pageSize: int = Field(20, ge=1, le=100)
     includeDeleted: bool = Field(False)
+
+
+# ---------------------------------------------------------------------------
+# Split create schemas — one per (type, mode) pair.
+#
+# The original ActivityCreateRequest accepted a ``type`` discriminator plus
+# the superset of fields across every type, then used a post-parse
+# model_validator to reject the invalid combinations. That was cluttered
+# for callers because:
+#   - The request body showed every field regardless of type.
+#   - You could only discover cross-field rules by reading the validator
+#     error.
+#   - Swagger rendered one schema with ~12 optional fields.
+#
+# These four schemas carry exactly the fields each type needs, with the
+# required ones marked required. No ``type`` discriminator — the route
+# path says which type we're creating. Service-layer logic is unchanged;
+# the controller just translates these into the existing create_activity
+# call with fixed type/resource_mode arguments.
+# ---------------------------------------------------------------------------
+
+
+class _ActivityCommonFields(BaseModel):
+    """Fields shared by every create schema."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=5000)
+    start_date: datetime = Field(..., alias="startDate")
+    end_date: datetime = Field(..., alias="endDate")
+    actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
+    actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
+    position: Optional[int] = Field(None, ge=0)
+    depends_on: Optional[List[str]] = Field(
+        None,
+        alias="dependsOn",
+        description=(
+            "List of activity UUIDs this activity depends on. "
+            "None = no list provided; [] = clear; [...] = replace."
+        ),
+    )
+
+    @field_validator("end_date")
+    @classmethod
+    def _end_after_start(cls, v, info):
+        s = info.data.get("start_date")
+        if s is not None and v < s:
+            raise ValueError("End date cannot be before the start date.")
+        return v
+
+
+class StandardActivityCreateRequest(_ActivityCommonFields):
+    """POST /milestones/{milestone_id}/activities/standard/create.
+
+    Standard activities carry a status (defaulting to 'not_completed') and
+    can be the source or target of dependency edges. No resource block.
+    """
+    status: Optional[str] = Field(
+        None,
+        description=(
+            f"One of: {', '.join(ACTIVITY_STATUS_CHOICES)}. "
+            f"Defaults to '{ACTIVITY_STATUS_DEFAULT}' when omitted."
+        ),
+    )
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        if v not in ACTIVITY_STATUS_CHOICES:
+            raise ValueError(
+                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+            )
+        return v
+
+
+class ResourceCountActivityCreateRequest(_ActivityCommonFields):
+    """POST /milestones/{milestone_id}/activities/resource/count/create.
+
+    Resource activity in count mode — just a headcount. No inline resource
+    block; no classification columns; no status. resourceCount is required
+    and must be >= 1.
+    """
+    resource_count: int = Field(..., ge=1, alias="resourceCount")
+
+
+class ResourceDetailsActivityCreateRequest(_ActivityCommonFields):
+    """POST /milestones/{milestone_id}/activities/resource/details/create.
+
+    Resource activity in details mode — full inline resource block with
+    classification. typeOfResourceId + division are REQUIRED on the nested
+    resource (the inner ResourcePayload enforces this via its own
+    validators for the division='others' idiom; the explicit required
+    check happens below).
+    """
+    resource: ResourcePayload = Field(...)
+
+    @model_validator(mode="after")
+    def _require_classification(self):
+        # typeOfResourceId and division are both required on a details-mode
+        # create. ResourcePayload already handles the 'others' idiom for
+        # divisionOther; we add the required-ness here because the payload
+        # leaves them Optional at the field level.
+        if not self.resource.type_of_resource_id:
+            raise ValueError(
+                "typeOfResourceId is required on the resource block for a "
+                "resource/details activity."
+            )
+        if self.resource.division is None:
+            raise ValueError(
+                "division is required on the resource block for a "
+                "resource/details activity."
+            )
+        return self
+
+
+class TransactionalActivityCreateRequest(_ActivityCommonFields):
+    """POST /milestones/{milestone_id}/activities/transactional/create.
+
+    Transactional activities have no status, no dependency-completion gate,
+    and no resource block. ``dependsOn`` edges are still allowed.
+    """
+    pass

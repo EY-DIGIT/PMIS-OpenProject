@@ -1,4 +1,19 @@
-"""Activities routes."""
+"""Activities routes.
+
+Create is split by (type, mode) into four dedicated endpoints. Each
+schema carries only the fields that type needs, so Swagger shows a
+focused body and callers can't accidentally send fields that belong to
+a different type.
+
+    POST /milestones/{id}/activities/standard/create
+    POST /milestones/{id}/activities/resource/count/create
+    POST /milestones/{id}/activities/resource/details/create
+    POST /milestones/{id}/activities/transactional/create
+
+Read / update / delete / restore stay single endpoints. The update path
+still handles full type transitions (standard ↔ resource ↔ transactional)
+because editing the existing activity doesn't fit a per-type endpoint.
+"""
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
@@ -10,7 +25,14 @@ from .permissions import (
     ACTIVITIES_CREATE, ACTIVITIES_READ, ACTIVITIES_UPDATE,
     ACTIVITIES_DELETE, ACTIVITIES_RESTORE,
 )
-from .schemas import ActivityCreateRequest, ActivityUpdateRequest, ActivityListQuery
+from .schemas import (
+    ActivityUpdateRequest,
+    ActivityListQuery,
+    ResourceCountActivityCreateRequest,
+    ResourceDetailsActivityCreateRequest,
+    StandardActivityCreateRequest,
+    TransactionalActivityCreateRequest,
+)
 
 
 activities_milestone_router = APIRouter(prefix="/milestones", tags=["activities"])
@@ -18,16 +40,55 @@ activities_router = APIRouter(prefix="/activities", tags=["activities"])
 
 
 @activities_milestone_router.post(
-    "/{milestone_id}/activities/create",
+    "/{milestone_id}/activities/standard/create",
     dependencies=[require_permission(ACTIVITIES_CREATE)],
-    summary="Create activity under milestone",
+    summary="Create a standard activity under milestone",
     status_code=201,
 )
-def create(
+def create_standard(
     request: Request, milestone_id: str,
-    data: ActivityCreateRequest, db: Session = Depends(get_db),
+    data: StandardActivityCreateRequest, db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ActivityController.create(request, milestone_id, data, db)
+    return ActivityController.create_standard(request, milestone_id, data, db)
+
+
+@activities_milestone_router.post(
+    "/{milestone_id}/activities/resource/count/create",
+    dependencies=[require_permission(ACTIVITIES_CREATE)],
+    summary="Create a resource activity (count mode) under milestone",
+    status_code=201,
+)
+def create_resource_count(
+    request: Request, milestone_id: str,
+    data: ResourceCountActivityCreateRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return ActivityController.create_resource_count(request, milestone_id, data, db)
+
+
+@activities_milestone_router.post(
+    "/{milestone_id}/activities/resource/details/create",
+    dependencies=[require_permission(ACTIVITIES_CREATE)],
+    summary="Create a resource activity (details mode, full classification) under milestone",
+    status_code=201,
+)
+def create_resource_details(
+    request: Request, milestone_id: str,
+    data: ResourceDetailsActivityCreateRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return ActivityController.create_resource_details(request, milestone_id, data, db)
+
+
+@activities_milestone_router.post(
+    "/{milestone_id}/activities/transactional/create",
+    dependencies=[require_permission(ACTIVITIES_CREATE)],
+    summary="Create a transactional activity under milestone",
+    status_code=201,
+)
+def create_transactional(
+    request: Request, milestone_id: str,
+    data: TransactionalActivityCreateRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return ActivityController.create_transactional(request, milestone_id, data, db)
 
 
 @activities_milestone_router.get(

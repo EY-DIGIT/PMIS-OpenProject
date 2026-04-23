@@ -5,7 +5,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
-from .schemas import ActivityCreateRequest, ActivityUpdateRequest, ActivityListQuery
+from .schemas import (
+    ActivityCreateRequest,
+    ActivityUpdateRequest,
+    ActivityListQuery,
+    ResourceCountActivityCreateRequest,
+    ResourceDetailsActivityCreateRequest,
+    StandardActivityCreateRequest,
+    TransactionalActivityCreateRequest,
+)
 from .services import (
     create_activity, get_activity_with_resource, list_activities,
     update_activity, delete_activity, restore_activity,
@@ -91,6 +99,137 @@ class ActivityController:
             resource=resource_dict,
             current_user_id=current_user_id,
             status=data.status,
+            depends_on=data.depends_on,
+        )
+        return BaseController.created(data=format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+        ))
+
+    # ------------------------------------------------------------------
+    # Split-by-type create handlers.
+    # Each one calls the single service with the right fixed type /
+    # resource_mode arguments so the service layer (and its dependency-
+    # graph, lineage propagation, audit) stay in one place.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def create_standard(
+        request: Request,
+        milestone_id: str,
+        data: StandardActivityCreateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="standard",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=None,
+            resource_count=None,
+            resource=None,
+            current_user_id=current_user_id,
+            status=data.status,
+            depends_on=data.depends_on,
+        )
+        return BaseController.created(data=format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+        ))
+
+    @staticmethod
+    def create_resource_count(
+        request: Request,
+        milestone_id: str,
+        data: ResourceCountActivityCreateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="resource",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode="count",
+            resource_count=data.resource_count,
+            resource=None,
+            current_user_id=current_user_id,
+            status=None,
+            depends_on=data.depends_on,
+        )
+        return BaseController.created(data=format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+        ))
+
+    @staticmethod
+    def create_resource_details(
+        request: Request,
+        milestone_id: str,
+        data: ResourceDetailsActivityCreateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="resource",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode="details",
+            resource_count=None,
+            resource=data.resource.model_dump(),
+            current_user_id=current_user_id,
+            status=None,
+            depends_on=data.depends_on,
+        )
+        return BaseController.created(data=format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+        ))
+
+    @staticmethod
+    def create_transactional(
+        request: Request,
+        milestone_id: str,
+        data: TransactionalActivityCreateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="transactional",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=None,
+            resource_count=None,
+            resource=None,
+            current_user_id=current_user_id,
+            status=None,
             depends_on=data.depends_on,
         )
         return BaseController.created(data=format_activity_response(
