@@ -97,16 +97,65 @@ def init_db() -> None:
         SubtaskModel, SubtaskDependencyModel, SubtaskResourceModel,
     )
     from ...core.security import hash_password
+    from ...core.config import settings
     from datetime import datetime, timezone
-    
-    Base.metadata.create_all(bind=engine)
+
+    # ---- Schema management -------------------------------------------------
+    # Two paths, mutually exclusive based on the active dialect:
+    #
+    # SQLite (tests + any legacy dev DB):
+    #   Use Base.metadata.create_all (Alembic adds no value for in-memory
+    #   test DBs, which are torn down per test). The SQLite-only ALTER
+    #   blocks below also stay active to handle legacy on-disk pmis.db
+    #   files left over from before the column-by-column migrations landed.
+    #
+    # Postgres (and any other prod-grade engine):
+    #   Alembic is the single source of truth. We auto-run
+    #   ``alembic upgrade head`` on every boot so devs never have to
+    #   remember to run migrations manually. Idempotent — already-applied
+    #   migrations are no-ops.
+    if engine.dialect.name == "sqlite":
+        Base.metadata.create_all(bind=engine)
+    else:
+        # Run ``alembic upgrade head`` as a subprocess so it gets a clean
+        # Python state — no shared logger config, no shared SQLAlchemy
+        # engine pool. Calling alembic in-process while the app's own
+        # engine is initialized has been observed to hang on Windows.
+        # Subprocess pattern is widely used (Django, Flask-Migrate, etc.).
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        project_root = Path(__file__).resolve().parents[3]
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**__import__("os").environ},
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                "alembic upgrade head timed out after 120s"
+            ) from e
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"alembic upgrade head failed (exit {result.returncode}):\n"
+                f"STDOUT: {result.stdout}\n"
+                f"STDERR: {result.stderr}"
+            )
+        logging.info("alembic upgrade head completed successfully")
 
     # SQLite schema drift handler: add missing nullable columns via ALTER TABLE
     # This runs only for SQLite and is idempotent. It MUST run before any
     # ORM queries that expect the new columns.
     try:
         from sqlalchemy import text
-        import logging
+        # NOTE: ``logging`` is imported at module level — do NOT re-import
+        # here, or it would become a local in init_db and shadow the
+        # module-level reference used earlier in the function.
 
         if engine.dialect.name == "sqlite":
             with engine.connect() as conn:
@@ -339,19 +388,20 @@ def init_db() -> None:
         # Do not prevent application start for any unexpected inspector errors
         pass
     
-    # Idempotent admin bootstrap: create admin only if no users exist
+    # Idempotent admin bootstrap. Creds come from env (BOOTSTRAP_ADMIN_*) so
+    # ops can rotate them without code changes. If the configured login
+    # already exists, skip — no overwrite, no demotion of an existing admin.
     db = SessionLocal()
     try:
         admin_exists = db.query(UserModel).filter(
-            UserModel.login == "admin"
+            UserModel.login == settings.BOOTSTRAP_ADMIN_LOGIN
         ).first()
-        
+
         if not admin_exists:
-            # Create default admin user (only on first run)
             admin_user = UserModel(
-                login="admin",
-                email="admin@example.com",
-                hashed_password=hash_password("admin123"),
+                login=settings.BOOTSTRAP_ADMIN_LOGIN,
+                email=settings.BOOTSTRAP_ADMIN_EMAIL,
+                hashed_password=hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD),
                 first_name="Administrator",
                 last_name="System",
                 admin=True,

@@ -39,5 +39,11 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
 
+    # Bootstrap admin — only inserted on first boot when no admin user
+    # exists. Idempotent: subsequent boots check for existence and skip.
+    BOOTSTRAP_ADMIN_LOGIN: str = "admin"
+    BOOTSTRAP_ADMIN_EMAIL: str = "admin@example.com"
+    BOOTSTRAP_ADMIN_PASSWORD: str = "admin123"
+
 
 settings = Settings()

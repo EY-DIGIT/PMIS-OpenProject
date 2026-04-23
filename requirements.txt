@@ -186,3 +186,4 @@ websockets==16.0
     # via uvicorn
 
 psycopg2-binary==2.9.9
+alembic==1.18.4

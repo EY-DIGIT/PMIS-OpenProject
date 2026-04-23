@@ -8,8 +8,13 @@ __pycache__/
 venv/
 .venv/
 env/
-.env            # bare dotenv (secrets)
-.env.*          # .env.local, .env.production, etc.
+
+# Secrets — inline comments don't work in gitignore, so these must be
+# on their own lines. Track only .env.example (it's a template).
+.env
+.env.local
+.env.production
+.env.development
 
 # Databases / runtime artifacts
 *.db

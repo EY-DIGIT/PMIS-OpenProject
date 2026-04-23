@@ -1,0 +1,34 @@
+# Local development infrastructure for PMIS.
+#
+# Brings up Postgres 16 in a container with persistent storage. The monolith
+# (and any sibling microservices like pmis-user-service in the future) connect
+# to this single Postgres instance — that's the project's "shared DB" model.
+#
+# Usage:
+#   docker compose -f infra/docker-compose.yml up -d        # start
+#   docker compose -f infra/docker-compose.yml down         # stop (data preserved)
+#   docker compose -f infra/docker-compose.yml down -v      # stop + WIPE data
+#
+# Connection: postgresql://pmis:pmis_dev_password@localhost:5432/pmis
+services:
+  postgres:
+    image: postgres:16
+    container_name: pmis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pmis
+      POSTGRES_PASSWORD: pmis_dev_password
+      POSTGRES_DB: pmis
+    ports:
+      - "5432:5432"
+    volumes:
+      - pmis_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pmis -d pmis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pmis_postgres_data:
+    name: pmis_postgres_data
