@@ -18,7 +18,8 @@ from .services import (
     update_user,
     update_password,
     delete_user,
-    authenticate_user
+    authenticate_user,
+    logout_user,
 )
 from ....core.response import (
     format_user_response,
@@ -112,6 +113,39 @@ class UserController:
             )
             resp = BaseController.error(error_payload, status=404)
             return resp
+
+    @staticmethod
+    def logout(
+        request: Request,
+        db: Session
+    ) -> JSONResponse:
+        """
+        Hard logout: revoke the access token (jti blacklist) AND clear the
+        refresh-token jti on the user row. Idempotent.
+        """
+        user_id = get_current_user_id(request)
+        if not user_id:
+            error_payload = format_error_response(
+                error_type="authentication_error",
+                message="Not authenticated",
+            )
+            return BaseController.error(error_payload, status=401)
+
+        result = logout_user(
+            db=db,
+            user_id=user_id,
+            token_jti=getattr(request.state, "token_jti", None),
+            token_exp=getattr(request.state, "token_exp", None),
+        )
+        if result.is_success():
+            return BaseController.ok(
+                format_success_response(result.data["message"])
+            )
+        error_payload = format_error_response(
+            error_type=result.error_type,
+            message=result.error,
+        )
+        return BaseController.error(error_payload, status=500)
 
     @staticmethod
     def get_me(

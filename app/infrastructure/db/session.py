@@ -88,6 +88,7 @@ def init_db() -> None:
     from .models import (  # noqa: F401
         UserModel, ProjectModel, ProjectAuditLogModel, RoleModel, ProjectMemberModel,
         ProjectVendorModel, MilestoneVendorModel, VendorModel, ResourceTypeModel,
+        RevokedTokenModel,
         WorkPackageModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,
         MeetingAgendaItemModel,
         MilestoneModel,

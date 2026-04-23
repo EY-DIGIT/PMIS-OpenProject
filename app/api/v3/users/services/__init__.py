@@ -5,6 +5,7 @@ from .list import list_users
 from .update import update_user, update_password
 from .delete import delete_user
 from .authenticate import authenticate_user
+from .logout import logout_user
 
 __all__ = [
     "create_user",
@@ -15,4 +16,5 @@ __all__ = [
     "update_password",
     "delete_user",
     "authenticate_user",
+    "logout_user",
 ]

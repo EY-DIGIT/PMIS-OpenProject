@@ -50,6 +50,11 @@ def create_access_token(
     """
     Create a JWT access token.
 
+    Each token gets a unique ``jti`` (uuid4 hex) so it can be revoked via
+    the access-token blacklist (see ``RevokedTokenRepository``). The auth
+    middleware checks every authenticated request's jti against the
+    blacklist before letting the request through.
+
     Args:
         data: Payload data to encode in the token
         expires_delta: Optional token expiration time
@@ -68,7 +73,8 @@ def create_access_token(
 
     to_encode.update({
         "exp": expire,
-        "iat": datetime.now(timezone.utc)
+        "iat": datetime.now(timezone.utc),
+        "jti": uuid4().hex,
     })
 
     encoded_jwt = jwt.encode(

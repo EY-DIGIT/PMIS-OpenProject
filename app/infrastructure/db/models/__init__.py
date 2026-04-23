@@ -23,6 +23,7 @@ from .subtask_dependency import SubtaskDependencyModel
 from .subtask_resource import SubtaskResourceModel
 from .vendor import VendorModel
 from .resource_type import ResourceTypeModel
+from .revoked_token import RevokedTokenModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -35,4 +36,5 @@ __all__ = [
     "TaskModel", "TaskDependencyModel", "TaskResourceModel",
     "SubtaskModel", "SubtaskDependencyModel", "SubtaskResourceModel",
     "VendorModel", "ResourceTypeModel",
+    "RevokedTokenModel",
 ]

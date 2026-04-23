@@ -58,6 +58,26 @@ def login(
     return UserController.login(data, db)
 
 
+@router.post(
+    "/logout",
+    dependencies=[require_authenticated()],
+    summary="Logout",
+    description=(
+        "Hard logout. Revokes the access token (adds its jti to the "
+        "blacklist) AND clears the user's refresh-token jti. After this "
+        "call, the just-used access token will be rejected by the auth "
+        "middleware on every subsequent request, and the refresh token "
+        "can no longer mint new access tokens. Idempotent."
+    ),
+)
+def logout(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Revoke the current session. Requires authentication."""
+    return UserController.logout(request, db)
+
+
 @router.get(
     "/me",
     dependencies=[require_authenticated()],
