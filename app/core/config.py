@@ -8,7 +8,7 @@ from pydantic import ConfigDict, Field
 
 class Settings(BaseSettings):
     """Application settings."""
-    model_config = ConfigDict(env_file=".env", case_sensitive=True)
+    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     # Application
     APP_NAME: str = "PMIS API"
