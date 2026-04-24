@@ -1,30 +1,42 @@
-# Local development infrastructure for PMIS.
+# Local development infrastructure for PMIS — Postgres in a container.
 #
-# Brings up Postgres 16 in a container with persistent storage. The monolith
-# (and any sibling microservices like pmis-user-service in the future) connect
-# to this single Postgres instance — that's the project's "shared DB" model.
+# Alternative to running Postgres natively in WSL Ubuntu. Pick whichever
+# works on your machine; both target the same DATABASE_URL contract.
+#
+# Credentials are read from the project-root ``.env`` file via the
+# ``--env-file ../.env`` flag (recommended) so docker-compose and the app
+# never disagree. If you prefer to bring up the container directly without
+# the env file, the defaults below kick in.
 #
 # Usage:
-#   docker compose -f infra/docker-compose.yml up -d        # start
-#   docker compose -f infra/docker-compose.yml down         # stop (data preserved)
-#   docker compose -f infra/docker-compose.yml down -v      # stop + WIPE data
+#   # From project root (so .env is found):
+#   docker compose -f infra/docker-compose.yml --env-file .env up -d
+#   docker compose -f infra/docker-compose.yml --env-file .env down       # stop, keep data
+#   docker compose -f infra/docker-compose.yml --env-file .env down -v    # stop + WIPE data
 #
-# Connection: postgresql://pmis:pmis_dev_password@localhost:5432/pmis
+# Defaults (used only when .env doesn't override):
+#   user=pmis  password=admin123  db=pmis
+#
+# Required env vars (or rely on the defaults below):
+#   POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+#
+# Connection string the app uses (set in .env via DATABASE_URL):
+#   postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 services:
   postgres:
     image: postgres:16
     container_name: pmis-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: pmis
-      POSTGRES_PASSWORD: pmis_dev_password
-      POSTGRES_DB: pmis
+      POSTGRES_USER: ${POSTGRES_USER:-pmis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-pmis}
     ports:
       - "5432:5432"
     volumes:
       - pmis_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pmis -d pmis"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pmis} -d ${POSTGRES_DB:-pmis}"]
       interval: 5s
       timeout: 3s
       retries: 10
