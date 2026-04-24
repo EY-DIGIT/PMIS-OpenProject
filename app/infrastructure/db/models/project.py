@@ -56,6 +56,10 @@ class ProjectModel(Base):
     # When category == 'others', a free-text label is required and stored here.
     # NULL for all other categories.
     category_other = Column(String(255), nullable=True)
+    # Reason text explaining why 'others' was chosen instead of an existing
+    # category (MSAP/MSIP/BSP). Required when category == 'others'; NULL
+    # otherwise. Captured for governance / category-curation review.
+    category_other_reason = Column(String(1000), nullable=True)
     start_date = Column(DateTime, nullable=True, index=True)
     end_date = Column(DateTime, nullable=True, index=True)
     # Versions may record the project's actual end date; baselines leave it NULL.

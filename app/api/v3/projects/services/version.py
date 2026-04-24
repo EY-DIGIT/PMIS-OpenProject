@@ -82,6 +82,7 @@ def create_version(
             owner=source.owner,
             category=source.category,
             category_other=getattr(source, "category_other", None),
+            category_other_reason=getattr(source, "category_other_reason", None),
             start_date=source.start_date,
             end_date=source.end_date,
             actual_end_date=None,

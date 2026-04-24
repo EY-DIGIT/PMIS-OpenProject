@@ -169,6 +169,7 @@ def format_project_response(
         "owner": project_data.get("owner"),
         "category": project_data.get("category"),
         "categoryOther": project_data.get("category_other"),
+        "categoryOtherReason": project_data.get("category_other_reason"),
         "vendors": project_data.get("vendors", []),
         "startDate": project_data.get("start_date"),
         "endDate": project_data.get("end_date"),

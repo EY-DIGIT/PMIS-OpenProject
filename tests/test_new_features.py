@@ -52,7 +52,7 @@ def _future_iso(days: int) -> str:
 
 
 def _create_project(client, headers, *, name="Demo", category=None, category_other=None,
-                    vendor_ids=None):
+                    category_other_reason=None, vendor_ids=None):
     body = {
         "name": name,
         "owner": "admin",
@@ -63,6 +63,8 @@ def _create_project(client, headers, *, name="Demo", category=None, category_oth
         body["category"] = category
     if category_other is not None:
         body["categoryOther"] = category_other
+    if category_other_reason is not None:
+        body["categoryOtherReason"] = category_other_reason
     if vendor_ids is not None:
         body["vendorIds"] = vendor_ids
     return client.post("/api/v3/projects/create", json=body, headers=headers)
@@ -78,15 +80,27 @@ class TestCategoryOthers:
         assert resp.status_code == 422
         assert "categoryOther" in resp.json()["error"]["message"]
 
-    def test_others_accepts_category_other(self, client, admin_user, admin_headers):
+    def test_others_accepts_category_other_with_reason(self, client, admin_user, admin_headers):
         resp = _create_project(
             client, admin_headers,
-            category="others", category_other="Partner Engagement",
+            category="others",
+            category_other="Partner Engagement",
+            category_other_reason="Engagement spans multiple SBUs and doesn't fit MSAP/MSIP/BSP.",
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
         assert body["category"] == "others"
         assert body["categoryOther"] == "Partner Engagement"
+        assert body["categoryOtherReason"].startswith("Engagement spans")
+
+    def test_others_requires_category_other_reason(self, client, admin_user, admin_headers):
+        """category='others' now requires BOTH categoryOther AND categoryOtherReason."""
+        resp = _create_project(
+            client, admin_headers,
+            category="others", category_other="Partner Engagement",
+        )
+        assert resp.status_code == 422
+        assert "categoryOtherReason" in resp.json()["error"]["message"]
 
     def test_non_others_rejects_category_other(self, client, admin_user, admin_headers):
         resp = _create_project(
@@ -95,6 +109,14 @@ class TestCategoryOthers:
         )
         assert resp.status_code == 422
         assert "categoryOther" in resp.json()["error"]["message"]
+
+    def test_non_others_rejects_category_other_reason(self, client, admin_user, admin_headers):
+        resp = _create_project(
+            client, admin_headers,
+            category="MSIP", category_other_reason="stray reason",
+        )
+        assert resp.status_code == 422
+        assert "categoryOtherReason" in resp.json()["error"]["message"]
 
     def test_known_categories_still_valid(self, client, admin_user, admin_headers):
         for cat in ("MSIP", "MSAP", "BSP"):

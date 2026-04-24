@@ -60,7 +60,6 @@ def create_subtask(
     task_id: str,
     name: str,
     description: Optional[str],
-    type: str,
     start_date: datetime,
     end_date: datetime,
     actual_start_date: Optional[datetime],
@@ -71,6 +70,10 @@ def create_subtask(
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
     depends_on: Optional[List[str]] = None,
+    # ``type`` is no longer accepted via the API body — subtasks inherit
+    # type from the parent task. Service callers may still pass an
+    # explicit type to support a future cross-type-mapping endpoint.
+    type: Optional[str] = None,
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
     task = (
         db.query(TaskModel)
@@ -81,6 +84,53 @@ def create_subtask(
     if task is None:
         raise NotFoundError("The task could not be found.")
     assert_task_subtask_writable(db, task.project_id)
+
+    # Inherit type from the parent task when caller didn't pass one.
+    if type is None:
+        type = task.type
+    if type != SUBTASK_TYPE_RESOURCE:
+        if resource_mode is not None:
+            raise ValidationError(
+                "resourceMode is only valid when the parent task's type is "
+                f"'resource'. Parent task type here is '{task.type}'."
+            )
+        if resource_count is not None:
+            raise ValidationError(
+                "resourceCount is only valid when the parent task's type "
+                "is 'resource'."
+            )
+        if resource is not None:
+            raise ValidationError(
+                "resource details are only valid when the parent task's "
+                "type is 'resource'."
+            )
+    else:
+        if resource_mode is None:
+            raise ValidationError(
+                "resourceMode is required when the parent task is a "
+                "resource task. Use 'count' or 'details'."
+            )
+        if resource_mode == RESOURCE_MODE_COUNT:
+            if resource_count is None:
+                raise ValidationError(
+                    "resourceCount is required when resourceMode is 'count'."
+                )
+            if resource is not None:
+                raise ValidationError(
+                    "resource details should be omitted when resourceMode "
+                    "is 'count'."
+                )
+        else:
+            if resource is None:
+                raise ValidationError(
+                    "resource details are required when resourceMode is "
+                    "'details'."
+                )
+            if resource_count is not None:
+                raise ValidationError(
+                    "resourceCount should be omitted when resourceMode is "
+                    "'details'."
+                )
 
     project = db.query(ProjectModel).filter(ProjectModel.id == task.project_id).first()
     if project is None or project.start_date is None:

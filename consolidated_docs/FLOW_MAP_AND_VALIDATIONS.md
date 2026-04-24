@@ -233,15 +233,32 @@ The API surfaces dependencies through a `dependsOn` field (alias of `depends_on`
 - `status` ∈ `{new, draft, published, closed, suspended}` (default `new`)
 - `category` ∈ `{MSAP, MSIP, BSP, others}` if supplied
 - `categoryOther` required (non-empty ≤ 255 chars) **iff** `category='others'`; rejected otherwise
+- `categoryOtherReason` required (non-empty ≤ 1000 chars) **iff** `category='others'`; rejected otherwise (added in doc 15 — captures *why* "others" was chosen)
 - `vendorIds` list of UUID strings
 
-**Service-layer additions on create:** every vendor id must exist and be `active=True`; `owner` must reference an existing user login.
+**Service-layer additions on create:**
+- Every vendor id must exist and be `active=True`.
+- `status` is verified against the `project_status_transitions` catalog (see §3.3a). Returns `invalid_status` on a typo.
+- `owner` must reference an existing user login **and** be in the `project_owners` whitelist (when the whitelist is populated).
 
 ### 3.3 Project tree — [`app/api/v3/tree/routes.py`](app/api/v3/tree/routes.py)
 
 | Endpoint | Auth | Permission | Notes |
 |---|---|---|---|
 | `GET /projects/{uuid}/tree` | JWT | `PROJECTS_READ` | Nested M → A → T → S with resource blocks inlined on resource-type rows. Every A/T/S node carries a `dependsOn` list of target ids (pre-fetched in three bulk queries; no N+1). `includeDeleted=true` admin-practice; default filters soft-deleted. |
+
+### 3.3a Catalogs — project_status_transitions + project_owners (added in doc 15)
+
+| Endpoint | Auth | Permission | Body | Notes |
+|---|---|---|---|---|
+| `GET /project_status_transitions` | JWT | authenticated | — | Lists every active `(from_status, to_status)` edge from the `project_status_transitions` table. Includes the seed row `from_status=NULL, to_status=new` marking the initial status. Each row has `requiresAdmin` and `versionOnly` flags so the FE can build a context-aware next-step dropdown. |
+| `GET /project_owners` | JWT | authenticated | — | Lists active rows from the `project_owners` whitelist with backing `userId`, `login`, `email`, names, optional `displayName`. |
+| `POST /project_owners/create` | JWT | `PROJECTS_CREATE` (admin) | `{ userId? \| login?, displayName? }` | Adds a user to the owner whitelist. 404 if the user doesn't exist. Idempotent: re-adding an existing row reactivates it (sets `active=True`). |
+| `DELETE /project_owners/{user_id}` | JWT | `PROJECTS_CREATE` (admin) | — | Soft-deactivates the row (`active=False`); never hard-deletes — keeps the FK chain to historical projects intact. |
+
+**Validator wiring.** The create-project service now consults both catalogs:
+- `status` is checked against `ProjectStatusTransitionRepository.known_to_statuses()`. Returns `error_type="invalid_status"` on a value not in the catalog. Falls back to the in-code `PROJECT_STATUS_CHOICES` set when the catalog is empty (covers fresh in-memory test DBs).
+- `owner` is checked against `ProjectOwnerRepository.is_login_an_active_owner()`. Rejected as `validation_error` with a "not in the project_owners whitelist" message if the catalog has any rows but the owner isn't in it. Skipped silently when the catalog is empty.
 
 ### 3.4 Vendors — [`app/api/v3/vendors/routes.py`](app/api/v3/vendors/routes.py)
 
@@ -269,7 +286,7 @@ The API surfaces dependencies through a `dependsOn` field (alias of `depends_on`
 | `DELETE /milestones/{id}` | JWT | `MILESTONES_DELETE` | — | `assert_milestone_activity_writable` + subtree cascade + version cascade. |
 | `POST /milestones/{id}/restore` | JWT | `MILESTONES_RESTORE` (admin) | — | `assert_project_editable` (permissive — no baseline/version rule). |
 
-**Schema validations:** `name` 1-255, `startDate < endDate`, `status ∈ MILESTONE_STATUS_CHOICES` (`not_completed`, `completed`), `depends` list (pass-through), `vendorIds` list.
+**Schema validations:** `name` 1-255, `startDate < endDate`, `status ∈ MILESTONE_STATUS_CHOICES` (`not_completed`, `completed`), `depends` list (pass-through), `vendors` list (renamed from `vendorIds` in doc 15; the legacy `vendorIds` and `vendor_ids` aliases are still accepted on the input side via Pydantic `AliasChoices`).
 
 **Service validations:**
 - `start_date ≥ project.start_date`
@@ -322,6 +339,8 @@ The API surfaces dependencies through a `dependsOn` field (alias of `depends_on`
 
 **Shape rules:** same `type / resourceMode / resource` matrix as activities, **minus** `status` (tasks don't carry that). Date floor is `activity.start_date`. `dependsOn` is available on tasks with the extra **hierarchy rule**: the source's parent activity must already depend on the target's parent activity (per `activity_dependencies`), unless both tasks live under the same activity (which is always allowed). See §2.6.
 
+**Type field removed from create body (doc 15).** `TaskCreateRequest` no longer accepts a `type` field — the service derives the type from the parent activity (`activity.type`). The resource-mode shape (`resourceMode` / `resourceCount` / `resource`) is still validated against the inherited type: a task under a non-resource activity must omit them; a task under a resource activity must include `resourceMode` and the matching count/details body. The `type` column on the model is preserved, and `PATCH /tasks/{id}` still accepts an explicit `type` so a future cross-type-mapping endpoint can override the inheritance.
+
 **Tasks do NOT propagate** — they live only in versions. Task dependency edges live on the version alongside them.
 
 ### 3.9 Subtasks — [`app/api/v3/subtasks/routes.py`](app/api/v3/subtasks/routes.py)
@@ -336,6 +355,8 @@ The API surfaces dependencies through a `dependsOn` field (alias of `depends_on`
 | `POST /subtasks/{id}/restore` | JWT | `SUBTASKS_RESTORE` (admin) | — | `assert_project_editable`. |
 
 **Shape rules:** same `type / resourceMode / resource` matrix. Date floor is `task.start_date`. Classification columns (`typeOfResourceId`, `division`, `divisionOther`) currently scoped to **activity** resources only; subtask resources accept the base `ResourcePayload` shape without classification. `dependsOn` mirrors task behavior one level down: source's parent task must depend on target's parent task, unless both subtasks live under the same task. See §2.6.
+
+**Type field removed from create body (doc 15).** Same change as tasks — the subtask create body no longer accepts `type`; the service derives it from `task.type`. PATCH still accepts `type` for the future cross-type-mapping case.
 
 ---
 

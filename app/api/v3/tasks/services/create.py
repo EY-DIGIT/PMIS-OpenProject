@@ -63,7 +63,6 @@ def create_task(
     activity_id: str,
     name: str,
     description: Optional[str],
-    type: str,
     start_date: datetime,
     end_date: datetime,
     actual_start_date: Optional[datetime],
@@ -74,6 +73,11 @@ def create_task(
     resource: Optional[Dict[str, Any]],
     current_user_id: Optional[int],
     depends_on: Optional[List[str]] = None,
+    # ``type`` is no longer accepted in the API body — the task inherits its
+    # parent activity's type. Service callers may still pass an explicit
+    # ``type`` to support a future cross-type-mapping endpoint; when None,
+    # the parent activity's type is used.
+    type: Optional[str] = None,
 ) -> Tuple[Task, Optional[TaskResource]]:
     activity = (
         db.query(ActivityModel)
@@ -84,6 +88,61 @@ def create_task(
     if activity is None:
         raise NotFoundError("The activity could not be found.")
     assert_task_subtask_writable(db, activity.project_id)
+
+    # Inherit the type from the parent activity unless the caller (a future
+    # cross-type-mapping path) explicitly passes one. The body schema strips
+    # ``type`` so the only producer for now is the controller, which never
+    # passes it. The activity's stored type is the source of truth.
+    if type is None:
+        type = activity.type
+    # Cross-field validation: when the inherited type is non-resource, the
+    # caller must NOT have supplied resource-mode-only fields.
+    if type != TASK_TYPE_RESOURCE:
+        if resource_mode is not None:
+            raise ValidationError(
+                "resourceMode is only valid when the parent activity's type "
+                "is 'resource'. The parent activity here is "
+                f"'{activity.type}', so omit resourceMode."
+            )
+        if resource_count is not None:
+            raise ValidationError(
+                "resourceCount is only valid when the parent activity's type "
+                "is 'resource'."
+            )
+        if resource is not None:
+            raise ValidationError(
+                "resource details are only valid when the parent activity's "
+                "type is 'resource'."
+            )
+    else:
+        # Inherited type is 'resource' — caller must supply a mode + the
+        # matching shape.
+        if resource_mode is None:
+            raise ValidationError(
+                "resourceMode is required when the parent activity is a "
+                "resource activity. Use 'count' or 'details'."
+            )
+        if resource_mode == RESOURCE_MODE_COUNT:
+            if resource_count is None:
+                raise ValidationError(
+                    "resourceCount is required when resourceMode is 'count'."
+                )
+            if resource is not None:
+                raise ValidationError(
+                    "resource details should be omitted when resourceMode "
+                    "is 'count'."
+                )
+        else:  # RESOURCE_MODE_DETAILS
+            if resource is None:
+                raise ValidationError(
+                    "resource details are required when resourceMode is "
+                    "'details'."
+                )
+            if resource_count is not None:
+                raise ValidationError(
+                    "resourceCount should be omitted when resourceMode is "
+                    "'details'."
+                )
 
     project = db.query(ProjectModel).filter(ProjectModel.id == activity.project_id).first()
     if project is None or project.start_date is None:

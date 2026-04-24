@@ -63,7 +63,7 @@ class MilestoneController:
             current_user_id=current_user_id,
             status=data.status,
             depends=data.depends,
-            vendor_ids=data.vendorIds,
+            vendor_ids=data.vendors,
         )
         return BaseController.created(data=format_milestone_response(m.to_dict()))
 
@@ -107,7 +107,7 @@ class MilestoneController:
             current_user_id=current_user_id,
             status=data.status,
             depends=data.depends,
-            vendor_ids=data.vendorIds,
+            vendor_ids=data.vendors,
         )
         return BaseController.ok(data=format_milestone_response(m.to_dict()))
 

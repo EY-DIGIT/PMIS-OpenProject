@@ -480,3 +480,90 @@ def init_db() -> None:
         db.commit()
     finally:
         db.close()
+
+    # Seed project_status_transitions catalog from the in-code rules. Idempotent:
+    # only inserts edges that aren't already present (matched by from/to pair).
+    # The in-code constants in services.transitions remain the spec; this seed
+    # keeps the table in sync on every boot so DB-only callers (FE discovery)
+    # see the same picture.
+    db = SessionLocal()
+    try:
+        from .models.project_status_transition import ProjectStatusTransitionModel
+        from ...api.v3.projects.services.transitions import (
+            ADMIN_ONLY_TRANSITIONS,
+            STATUS_NEW,
+            VERSION_ONLY_TRANSITIONS,
+            _LEGAL_TRANSITIONS,
+        )
+
+        # Initial-status seed: an empty/None from_status means "valid initial
+        # value on a fresh create". We only allow 'new' as the initial value.
+        existing_initial = (
+            db.query(ProjectStatusTransitionModel)
+            .filter(ProjectStatusTransitionModel.from_status.is_(None))
+            .filter(ProjectStatusTransitionModel.to_status == STATUS_NEW)
+            .first()
+        )
+        if existing_initial is None:
+            db.add(ProjectStatusTransitionModel(
+                from_status=None,
+                to_status=STATUS_NEW,
+                requires_admin=False,
+                version_only=False,
+                active=True,
+                description="Default status assigned to a freshly created project.",
+            ))
+
+        for (from_s, to_s) in _LEGAL_TRANSITIONS:
+            existing = (
+                db.query(ProjectStatusTransitionModel)
+                .filter(ProjectStatusTransitionModel.from_status == from_s)
+                .filter(ProjectStatusTransitionModel.to_status == to_s)
+                .first()
+            )
+            if existing is None:
+                db.add(ProjectStatusTransitionModel(
+                    from_status=from_s,
+                    to_status=to_s,
+                    requires_admin=(from_s, to_s) in ADMIN_ONLY_TRANSITIONS,
+                    version_only=(from_s, to_s) in VERSION_ONLY_TRANSITIONS,
+                    active=True,
+                    description=(
+                        f"Transition {from_s} -> {to_s} (seeded from "
+                        f"in-code _LEGAL_TRANSITIONS)."
+                    ),
+                ))
+        db.commit()
+    except Exception:
+        # Bootstrap failures should not prevent app start.
+        db.rollback()
+    finally:
+        db.close()
+
+    # Seed project_owners catalog with the bootstrap admin so the master is
+    # never empty (the FE owner-picker has at least one row, and any bootstrap
+    # smoke-test that creates a project under 'admin' still works).
+    db = SessionLocal()
+    try:
+        from .models.project_owner import ProjectOwnerModel
+
+        admin = db.query(UserModel).filter(
+            UserModel.login == settings.BOOTSTRAP_ADMIN_LOGIN
+        ).first()
+        if admin is not None:
+            existing = (
+                db.query(ProjectOwnerModel)
+                .filter(ProjectOwnerModel.user_id == admin.id)
+                .first()
+            )
+            if existing is None:
+                db.add(ProjectOwnerModel(
+                    user_id=admin.id,
+                    display_name="Administrator",
+                    active=True,
+                ))
+                db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()

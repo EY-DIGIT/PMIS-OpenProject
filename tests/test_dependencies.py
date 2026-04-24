@@ -119,9 +119,11 @@ def _build_baseline_with_two_activities(client, admin_headers):
 
 def _create_task(client, admin_headers, activity_id, *, name="T", depends_on=None,
                  start_offset=4, end_offset=70):
+    # ``type`` is no longer accepted on the task create body (doc 15) — the
+    # task inherits it from the parent activity. The activities created by
+    # _create_activity above are 'standard', so the task is too.
     body = {
         "name": name,
-        "type": "standard",
         "startDate": _future_iso(start_offset),
         "endDate": _future_iso(end_offset),
     }
@@ -135,9 +137,9 @@ def _create_task(client, admin_headers, activity_id, *, name="T", depends_on=Non
 
 def _create_subtask(client, admin_headers, task_id, *, name="S", depends_on=None,
                     start_offset=5, end_offset=60):
+    # ``type`` removed from body (doc 15) — subtask inherits from parent task.
     body = {
         "name": name,
-        "type": "standard",
         "startDate": _future_iso(start_offset),
         "endDate": _future_iso(end_offset),
     }

@@ -28,15 +28,24 @@ class ResourcePayload(BaseModel):
 
 
 class TaskCreateRequest(BaseModel):
+    """POST /activities/{activity_id}/tasks/create.
+
+    ``type`` is no longer accepted in the body — tasks inherit it from the
+    parent activity. Cross-type mapping (overriding a task's type vs. its
+    parent's) is reserved as a future capability and stays available on
+    the PATCH endpoint, so the column is preserved.
+    """
     model_config = ConfigDict(populate_by_name=True)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=5000)
-    type: str = Field(...)
     start_date: datetime = Field(..., alias="startDate")
     end_date: datetime = Field(..., alias="endDate")
     actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
     position: Optional[int] = Field(None, ge=0)
+    # Resource mode + resource block apply only when the inherited type
+    # ends up being 'resource'. The service rejects them when the parent
+    # activity is non-resource.
     resource_mode: Optional[str] = Field(None, alias="resourceMode")
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
@@ -50,17 +59,6 @@ class TaskCreateRequest(BaseModel):
             "activity_dependencies)."
         ),
     )
-
-    @field_validator("type", mode="before")
-    @classmethod
-    def _validate_type(cls, v):
-        if isinstance(v, str):
-            v = v.strip().lower()
-        if v not in TASK_TYPES:
-            raise ValueError(
-                "Task type must be one of: standard, resource, transactional."
-            )
-        return v
 
     @field_validator("resource_mode", mode="before")
     @classmethod
@@ -80,39 +78,6 @@ class TaskCreateRequest(BaseModel):
         if s is not None and v < s:
             raise ValueError("End date cannot be before the start date.")
         return v
-
-    @model_validator(mode="after")
-    def _resource_shape(self):
-        is_resource_type = self.type == TASK_TYPE_RESOURCE
-        if not is_resource_type:
-            if self.resource_mode is not None:
-                raise ValueError(
-                    "Resource mode should only be provided when the task type is 'resource'."
-                )
-            if self.resource_count is not None:
-                raise ValueError(
-                    "Resource count should only be provided when the task type is 'resource'."
-                )
-            if self.resource is not None:
-                raise ValueError(
-                    "Resource details should only be provided when the task type is 'resource'."
-                )
-            return self
-        if self.resource_mode is None:
-            raise ValueError(
-                "Please choose a resource mode ('count' or 'details') for a resource-type task."
-            )
-        if self.resource_mode == RESOURCE_MODE_COUNT:
-            if self.resource_count is None:
-                raise ValueError("Resource count is required when resource mode is 'count'.")
-            if self.resource is not None:
-                raise ValueError("Resource details should be omitted when resource mode is 'count'.")
-        else:
-            if self.resource is None:
-                raise ValueError("Resource details are required when resource mode is 'details'.")
-            if self.resource_count is not None:
-                raise ValueError("Resource count should be omitted when resource mode is 'details'.")
-        return self
 
 
 class TaskUpdateRequest(BaseModel):

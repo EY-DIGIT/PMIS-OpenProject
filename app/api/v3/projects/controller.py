@@ -94,6 +94,7 @@ class ProjectController:
             owner=data.owner,
             category=data.category,
             category_other=data.categoryOther,
+            category_other_reason=data.categoryOtherReason,
             vendor_ids=data.vendorIds,
             start_date=data.start_date,
             end_date=data.end_date,
@@ -289,6 +290,8 @@ class ProjectController:
             status=data.status,
             owner=data.owner,
             category=data.category,
+            category_other=data.categoryOther,
+            category_other_reason=data.categoryOtherReason,
             start_date=data.start_date,
             end_date=data.end_date,
         )

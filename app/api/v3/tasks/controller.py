@@ -74,7 +74,9 @@ class TaskController:
         t, r = create_task(
             db,
             activity_id=activity_id,
-            name=data.name, description=data.description, type=data.type,
+            # ``type`` is no longer in the request body — the service derives
+            # it from the parent activity. See task create service.
+            name=data.name, description=data.description,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
             position=data.position,

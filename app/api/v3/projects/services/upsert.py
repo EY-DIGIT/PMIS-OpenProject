@@ -21,6 +21,8 @@ from .....domain.projects.project import Project
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
+from .transitions import CATEGORY_OTHERS
+
 
 def _verify_user_exists(db: Session, username: str) -> bool:
     return UserRepository(db).get_by_login(username) is not None
@@ -48,6 +50,8 @@ def upsert_project(
     status: str = "new",
     owner: Optional[str] = None,
     category: Optional[str] = None,
+    category_other: Optional[str] = None,
+    category_other_reason: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> ServiceResult[Tuple[Project, bool]]:
@@ -85,6 +89,46 @@ def upsert_project(
             error_type="validation_error",
         )
 
+    # 'others' idiom — symmetric with the create-project service.
+    if category == CATEGORY_OTHERS:
+        co = normalize_string(category_other) if category_other else ""
+        if not co:
+            return ServiceResult.fail(
+                error="categoryOther is required when category is 'others'.",
+                error_type="validation_error",
+            )
+        if len(co) > 255:
+            return ServiceResult.fail(
+                error="categoryOther must be 1-255 characters.",
+                error_type="validation_error",
+            )
+        category_other = co
+        cor = normalize_string(category_other_reason) if category_other_reason else ""
+        if not cor:
+            return ServiceResult.fail(
+                error="categoryOtherReason is required when category is 'others'.",
+                error_type="validation_error",
+            )
+        if len(cor) > 1000:
+            return ServiceResult.fail(
+                error="categoryOtherReason must be 1-1000 characters.",
+                error_type="validation_error",
+            )
+        category_other_reason = cor
+    else:
+        if category_other is not None and normalize_string(category_other) != "":
+            return ServiceResult.fail(
+                error="categoryOther may only be provided when category is 'others'.",
+                error_type="validation_error",
+            )
+        category_other = None
+        if category_other_reason is not None and normalize_string(category_other_reason) != "":
+            return ServiceResult.fail(
+                error="categoryOtherReason may only be provided when category is 'others'.",
+                error_type="validation_error",
+            )
+        category_other_reason = None
+
     repository = ProjectRepository(db)
 
     # Ownership gate on the update path.
@@ -117,6 +161,8 @@ def upsert_project(
             status=status,
             owner=owner,
             category=category,
+            category_other=category_other,
+            category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
         )

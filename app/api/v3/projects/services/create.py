@@ -7,7 +7,13 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from .....domain.projects.project import Project
+from .....infrastructure.db.repositories.project_owner_repository import (
+    ProjectOwnerRepository,
+)
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
+from .....infrastructure.db.repositories.project_status_transition_repository import (
+    ProjectStatusTransitionRepository,
+)
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.datetime import ensure_aware_utc
@@ -41,6 +47,7 @@ def create_project(
     owner: Optional[str] = None,
     category: Optional[str] = None,
     category_other: Optional[str] = None,
+    category_other_reason: Optional[str] = None,
     vendor_ids: Optional[List[str]] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -69,10 +76,18 @@ def create_project(
             error_type="validation_error",
         )
 
-    if status not in PROJECT_STATUS_CHOICES:
+    # Status validation against the project_status_transitions catalog. The
+    # in-code PROJECT_STATUS_CHOICES set still exists as a backstop for the
+    # case where the catalog hasn't been seeded (e.g. tests on a fresh
+    # in-memory DB before init_db has run); the table is the primary truth
+    # whenever it has rows.
+    transition_repo = ProjectStatusTransitionRepository(db)
+    catalog_statuses = transition_repo.known_to_statuses()
+    valid_statuses = catalog_statuses if catalog_statuses else list(PROJECT_STATUS_CHOICES)
+    if status not in valid_statuses:
         return ServiceResult.fail(
-            error=f"Invalid status '{status}'.",
-            error_type="validation_error",
+            error=f"Invalid status '{status}'. Allowed: {', '.join(valid_statuses)}",
+            error_type="invalid_status",
         )
 
     if category is not None and category not in PROJECT_CATEGORY_CHOICES:
@@ -97,6 +112,19 @@ def create_project(
                 error_type="validation_error",
             )
         category_other = co
+        # categoryOtherReason: required when category='others', max 1000.
+        cor = normalize_string(category_other_reason) if category_other_reason else ""
+        if not cor:
+            return ServiceResult.fail(
+                error="categoryOtherReason is required when category is 'others'.",
+                error_type="validation_error",
+            )
+        if len(cor) > 1000:
+            return ServiceResult.fail(
+                error="categoryOtherReason must be 1-1000 characters.",
+                error_type="validation_error",
+            )
+        category_other_reason = cor
     else:
         if category_other is not None and normalize_string(category_other) != "":
             return ServiceResult.fail(
@@ -104,6 +132,12 @@ def create_project(
                 error_type="validation_error",
             )
         category_other = None
+        if category_other_reason is not None and normalize_string(category_other_reason) != "":
+            return ServiceResult.fail(
+                error="categoryOtherReason may only be provided when category is 'others'.",
+                error_type="validation_error",
+            )
+        category_other_reason = None
 
     # "Must be in the future" is enforced by the Pydantic schema; skip the
     # duplicate check here to avoid naive/aware datetime comparison bugs.
@@ -115,11 +149,35 @@ def create_project(
             error_type="validation_error",
         )
 
-    if owner is not None and not _verify_user_exists(db, owner):
-        return ServiceResult.fail(
-            error=f"Owner user '{owner}' does not exist",
-            error_type="validation_error",
+    if owner is not None:
+        if not _verify_user_exists(db, owner):
+            return ServiceResult.fail(
+                error=f"Owner user '{owner}' does not exist",
+                error_type="validation_error",
+            )
+        # Validate against the project_owners master. Only users in the
+        # whitelist can be set as a project owner. Skipped silently if the
+        # catalog has no active rows (treated as "owner gating disabled" —
+        # the init_db seed adds at least the bootstrap admin, so an empty
+        # catalog only happens before init_db has run, e.g. fresh tests
+        # using a per-test in-memory DB).
+        from .....infrastructure.db.models.project_owner import ProjectOwnerModel
+        catalog_populated = (
+            db.query(ProjectOwnerModel.id)
+            .filter(ProjectOwnerModel.active.is_(True))
+            .first()
+            is not None
         )
+        if catalog_populated:
+            owner_repo = ProjectOwnerRepository(db)
+            if not owner_repo.is_login_an_active_owner(owner):
+                return ServiceResult.fail(
+                    error=(
+                        f"User '{owner}' is not in the project_owners whitelist. "
+                        f"Add them via POST /api/v3/project_owners/create first."
+                    ),
+                    error_type="validation_error",
+                )
 
     repo = ProjectRepository(db)
     vendor_repo = VendorRepository(db)
@@ -156,6 +214,7 @@ def create_project(
             owner=owner,
             category=category,
             category_other=category_other,
+            category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
             is_version=False,

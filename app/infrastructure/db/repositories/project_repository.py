@@ -73,6 +73,7 @@ class ProjectRepository:
             deleted_at=model.deleted_at,
             deleted_by=model.deleted_by,
             category_other=getattr(model, "category_other", None),
+            category_other_reason=getattr(model, "category_other_reason", None),
         )
         if with_vendors:
             # Lazy-load the vendor pairs. Cheap join; safe on every read path.
@@ -111,6 +112,7 @@ class ProjectRepository:
         # a unique one is generated at IST-seconds precision.
         project_code: Optional[str] = None,
         category_other: Optional[str] = None,
+        category_other_reason: Optional[str] = None,
     ) -> Project:
         if id is None:
             id = str(uuid4())
@@ -130,6 +132,7 @@ class ProjectRepository:
             owner=owner,
             category=category,
             category_other=category_other,
+            category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
             actual_end_date=actual_end_date,
@@ -160,6 +163,7 @@ class ProjectRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         category_other: Optional[str] = None,
+        category_other_reason: Optional[str] = None,
     ) -> Tuple[Project, bool]:
         """
         Insert a project if no row with this id exists; otherwise update the
@@ -200,6 +204,7 @@ class ProjectRepository:
             owner=owner,
             category=category,
             category_other=category_other,
+            category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
             created_at=now,
@@ -219,6 +224,7 @@ class ProjectRepository:
                 "owner": stmt.excluded.owner,
                 "category": stmt.excluded.category,
                 "category_other": stmt.excluded.category_other,
+                "category_other_reason": stmt.excluded.category_other_reason,
                 "start_date": stmt.excluded.start_date,
                 "end_date": stmt.excluded.end_date,
                 "updated_at": now,

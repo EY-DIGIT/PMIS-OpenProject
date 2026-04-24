@@ -210,7 +210,7 @@ class TestLogout:
     def test_logout_inserts_blacklist_row(self, client, admin_user, db_session):
         """A row appears in revoked_tokens with the access token's jti
         and a future expires_at."""
-        from datetime import datetime
+        from datetime import datetime, timezone
         from app.infrastructure.db.models.revoked_token import RevokedTokenModel
         access, _refresh, headers = self._login(client, "admin", "admin123")
 
@@ -220,8 +220,11 @@ class TestLogout:
         rows = db_session.query(RevokedTokenModel).filter_by(user_id=admin_user.id).all()
         assert len(rows) == 1
         row = rows[0]
-        # SQLite returns naive datetimes; compare in naive UTC.
-        assert row.expires_at > datetime.utcnow(), \
+        # SQLite returns naive datetimes; strip tz from "now" so the
+        # comparison is naive on both sides. Using timezone-aware now() +
+        # replace(tzinfo=None) avoids the deprecated datetime.utcnow().
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        assert row.expires_at > now_naive, \
             "blacklist row's expires_at must be in the future"
 
     def test_logout_idempotent(self, client, admin_user, admin_headers):

@@ -47,6 +47,16 @@ class ProjectCreateRequest(BaseModel):
             "Must be omitted / null for any other category."
         ),
     )
+    categoryOtherReason: Optional[str] = Field(
+        None,
+        alias="category_other_reason",
+        max_length=1000,
+        description=(
+            f"Required when category == '{CATEGORY_OTHERS}'. Free-text "
+            "explanation of why 'others' was picked instead of MSAP/MSIP/"
+            "BSP. Captured for governance / category-curation review."
+        ),
+    )
     vendorIds: Optional[List[str]] = Field(
         None,
         alias="vendor_ids",
@@ -112,6 +122,9 @@ class ProjectUpdateRequest(BaseModel):
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)
     categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
+    categoryOtherReason: Optional[str] = Field(
+        None, alias="category_other_reason", max_length=1000,
+    )
     vendorIds: Optional[List[str]] = Field(
         None,
         alias="vendor_ids",
@@ -197,6 +210,9 @@ class ProjectUpsertRequest(BaseModel):
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
     category: Optional[str] = Field(None)
     categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
+    categoryOtherReason: Optional[str] = Field(
+        None, alias="category_other_reason", max_length=1000,
+    )
     vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")

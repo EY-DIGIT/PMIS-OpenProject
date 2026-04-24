@@ -84,6 +84,18 @@ ac5a2d47-df49-4503-b27e-7f734e1c5ee9
 **Expect 200** with `rfp`, `asg`, `ccm`. Copy the `id` of `rfp` — you'll use it as `typeOfResourceId` on a resource activity later.
 c272a938-0dc7-4aa8-8593-ca217b845020
 
+### 1c. List status transitions catalog (added in doc 15)
+
+**`GET /project_status_transitions`** — Execute.
+
+**Expect 200**. The response lists every `(fromStatus, toStatus)` edge in the project lifecycle plus the seed row (`fromStatus: null, toStatus: "new"`) marking the initial status. Each row carries `requiresAdmin` and `versionOnly` flags so the FE can render context-aware next-step dropdowns. The create-project endpoint validates the `status` field against this catalog — sending `"status": "inprogress"` returns `error_type: invalid_status`.
+
+### 1d. List project owners catalog (added in doc 15)
+
+**`GET /project_owners`** — Execute.
+
+**Expect 200** with the bootstrap admin pre-seeded. Only users in this whitelist are accepted as a project's `owner`. To add a new owner, an admin calls `POST /api/v3/project_owners/create` with either `{"login": "..."}` or `{"userId": N}` and an optional `displayName`. `DELETE /api/v3/project_owners/{user_id}` soft-deactivates a row (toggles `active=False`; never hard-deletes).
+
 ---
 
 ## Step 2 — Create the baseline project
@@ -100,18 +112,25 @@ c272a938-0dc7-4aa8-8593-ca217b845020
   "category": "MSIP",
   "startDate": "2026-05-01T09:00:00Z",
   "endDate": "2026-12-31T17:00:00Z",
-  "vendorIds": ["<INFOSYS_VENDOR_ID>"ac5a2d47-df49-4503-b27e-7f734e1c5ee9]
+  "vendorIds": ["<INFOSYS_VENDOR_ID>87b1c7c6-a843-41ee-95c9-1ab0cdc34178"]
 }
 ```
 
 **Expect 201.** The response shows a fresh UUID `data.id`, `data.projectCode` starting with `UIDAI-PR`, `data.status: "new"`, `data.isVersion: false`, and `data.vendors` listing Infosys.
 
 **Save `data.id` as `PROJECT_UUID`** — every subsequent request will need it.
-3c407398-cffc-4c7b-9f1a-642354ef026f
+d09637f3-70db-4fe9-b1e1-1238cdc167b2
 
 ### Optional: try the "others" category
 
-Fire the same endpoint with `"category": "others"` and without `categoryOther` → **expect 422** with "categoryOther" mentioned in the error. Then retry with `"categoryOther": "Partnership Experiments"` → **expect 201**. Delete that project afterward (or ignore it for the rest of the demo; we'll focus on the first one).
+The full "others" pattern now requires THREE coordinated fields (`category` + `categoryOther` + `categoryOtherReason` — `categoryOtherReason` was added in doc 15).
+
+1. `"category": "others"` alone → **expect 422** with `categoryOther is required`.
+2. Add `"categoryOther": "Partnership Experiments"` and try again → **expect 422** with `categoryOtherReason is required`.
+3. Add `"categoryOtherReason": "Cross-SBU engagement that doesn't fit MSAP/MSIP/BSP."` and try again → **expect 201**. The response shows `data.categoryOther` and `data.categoryOtherReason`.
+4. To prove the symmetry: send `"category": "MSIP"` with `"categoryOtherReason": "stray reason"` → **expect 422** because the reason field is forbidden when category is anything other than `others`.
+
+Delete that project afterward or ignore it; we focus on the first one for the rest of the demo.
 
 ---
 
@@ -128,9 +147,11 @@ Fire the same endpoint with `"category": "others"` and without `categoryOther` �
   "startDate": "2026-05-05T09:00:00Z",
   "endDate": "2026-08-31T17:00:00Z",
   "status": "not_completed",
-  "vendorIds": ["<INFOSYS_VENDOR_ID>"ac5a2d47-df49-4503-b27e-7f734e1c5ee9]
+  "vendors": ["<INFOSYS_VENDOR_ID>"ac5a2d47-df49-4503-b27e-7f734e1c5ee9]
 }
 ```
+
+**Note (doc 15):** the milestone create body now uses `vendors` (was `vendorIds`). The legacy `vendorIds` and `vendor_ids` aliases are still accepted on input for back-compat — Swagger displays the canonical `vendors`.
 
 **Expect 201.** Copy `data.id` as `M1_ID`.
 c98cdfe5-e14a-4464-b190-49fe7ffde8a7
@@ -369,18 +390,19 @@ Tasks live only on versions.
 
 ### 12a. Add T1 under `VERSION_A1_ID` and T2 under `VERSION_A3_ID`
 
+**Note (doc 15 change):** the task create body no longer accepts `type`. The task inherits its parent activity's type. Since both VERSION_A1 and VERSION_A3 are `standard` activities here, T1 and T2 will both come back with `type: "standard"`.
+
 **`POST /activities/{VERSION_A1_ID}/tasks/create`**:
 
 ```json
 {
   "name": "T1 — Implement /versions endpoint",
-  "type": "standard",
   "startDate": "2026-05-15T09:00:00Z",
   "endDate": "2026-06-20T17:00:00Z"
 }
 ```
 
-**Expect 201.** Copy `data.id` as `T1_ID`.
+**Expect 201.** Copy `data.id` as `T1_ID`. `data.type` should read `"standard"` — inherited from the parent activity.
 6767ad13-684e-4936-a95d-382ad5b075a1
 
 **`POST /activities/{VERSION_A3_ID}/tasks/create`**:
@@ -388,7 +410,6 @@ Tasks live only on versions.
 ```json
 {
   "name": "T2 — Wire cascade helper",
-  "type": "standard",
   "startDate": "2026-05-20T09:00:00Z",
   "endDate": "2026-06-25T17:00:00Z"
 }
@@ -396,6 +417,8 @@ Tasks live only on versions.
 
 **Expect 201.** Copy `data.id` as `T2_ID`.
 d8c27bd7-137b-4ef7-9342-3ddc765ee75c
+
+If you tried to create a task under a `resource` activity without supplying `resourceMode`, you'd get **422** — the inherited type is `resource`, so `resourceMode` (and the matching count or details body) is required. Same constraint as activities, just applied per the parent's type.
 
 ### 12b. Task dependsOn with hierarchy check
 

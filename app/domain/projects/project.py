@@ -45,6 +45,9 @@ class Project:
     deleted_by: Optional[int] = None
     # Present when category == 'others'; otherwise None.
     category_other: Optional[str] = None
+    # Reason explaining why category='others' was chosen instead of one of
+    # the standard categories. Required when category='others'; None otherwise.
+    category_other_reason: Optional[str] = None
     # List of (vendor_id, vendor_name) pairs associated with this project.
     # Populated by the repository on read (left empty when not eagerly loaded).
     vendors: List[Tuple[str, str]] = field(default_factory=list)
@@ -76,6 +79,7 @@ class Project:
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by": self.deleted_by,
             "category_other": self.category_other,
+            "category_other_reason": self.category_other_reason,
             "vendors": [{"id": vid, "name": vname} for (vid, vname) in self.vendors],
         }
 

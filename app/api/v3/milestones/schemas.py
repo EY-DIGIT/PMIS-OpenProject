@@ -1,7 +1,7 @@
 """Milestone API schemas (request/response)."""
 from datetime import datetime
 from typing import Any, List, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from ....domain.milestones.milestone import (
     MILESTONE_STATUS_CHOICES,
@@ -30,7 +30,17 @@ class MilestoneCreateRequest(BaseModel):
     depends: Optional[List[Any]] = Field(None)
     # Optional subset of the project's vendors. Each id MUST also appear in
     # the project's vendor list (enforced by the service layer).
-    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
+    #
+    # The API field name is ``vendors`` (post-rename in doc 15). The legacy
+    # ``vendorIds`` and ``vendor_ids`` names are also accepted as input so
+    # callers built against the old contract keep working until they
+    # migrate. Responses use ``vendors`` only.
+    vendors: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("vendors", "vendorIds", "vendor_ids"),
+        serialization_alias="vendors",
+        description="List of vendor UUIDs to attach to this milestone.",
+    )
 
     @field_validator("end_date")
     @classmethod
@@ -65,7 +75,12 @@ class MilestoneUpdateRequest(BaseModel):
     position: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None
     depends: Optional[List[Any]] = None
-    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
+    # Same renaming + back-compat aliases as the create schema.
+    vendors: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("vendors", "vendorIds", "vendor_ids"),
+        serialization_alias="vendors",
+    )
 
     @field_validator("status", mode="before")
     @classmethod
