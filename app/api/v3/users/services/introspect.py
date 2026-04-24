@@ -74,9 +74,19 @@ def introspect_tokens(
             # Token reused or not matching
             return ServiceResult.fail(error="Refresh token invalid or reused", error_type="authentication_error")
 
-        # Check not expired according to stored_expires
-        if stored_expires and stored_expires < datetime.now(timezone.utc):
-            return ServiceResult.fail(error="Refresh token expired", error_type="authentication_error")
+        # Check not expired according to stored_expires.
+        # SQLite returns naive datetimes (tz stripped on retrieval); Postgres
+        # preserves tz-aware values. Normalize: if stored value is naive,
+        # treat it as UTC (which is what we write). Prevents
+        # "can't compare offset-naive and offset-aware datetimes" TypeError.
+        if stored_expires is not None:
+            stored_aware = (
+                stored_expires
+                if stored_expires.tzinfo is not None
+                else stored_expires.replace(tzinfo=timezone.utc)
+            )
+            if stored_aware < datetime.now(timezone.utc):
+                return ServiceResult.fail(error="Refresh token expired", error_type="authentication_error")
 
         # Issue new tokens (rotation)
         # Recreate subject data from payload
