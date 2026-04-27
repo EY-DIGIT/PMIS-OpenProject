@@ -95,6 +95,7 @@ def init_db() -> None:
         ActivityModel, ActivityDependencyModel, ActivityResourceModel,
         TaskModel, TaskDependencyModel, TaskResourceModel,
         SubtaskModel, SubtaskDependencyModel, SubtaskResourceModel,
+        CommentModel, AttachmentModel,
     )
     from ...core.security import hash_password
     from ...core.config import settings
@@ -567,3 +568,22 @@ def init_db() -> None:
         db.rollback()
     finally:
         db.close()
+
+    # ---- File storage readiness check --------------------------------------
+    # Verify the attachments storage path is reachable + writable. In prod
+    # this means the NFS mount is healthy; in dev it auto-creates the
+    # local folder. A failure here logs loud but does NOT crash the app —
+    # storage-dependent endpoints will return 503; everything else stays
+    # online. See ATTACHMENTS_ON_UNAVAILABLE setting.
+    try:
+        from ..storage import get_storage, StorageUnavailableError
+        try:
+            get_storage().ensure_ready()
+        except StorageUnavailableError as e:
+            logging.error(
+                "Attachments storage NOT ready: %s. "
+                "Comments/attachments endpoints will return 503 until fixed.",
+                e,
+            )
+    except Exception as e:  # noqa: BLE001
+        logging.error("Storage init unexpected error: %s", e)

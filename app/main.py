@@ -180,13 +180,36 @@ async def health_check():
     """
     Health check endpoint.
 
-    Returns:
-        Health status
+    Reports the status of subsystems the app depends on. Currently:
+      - the API process itself ("status")
+      - file-storage backend reachability (NFS mount in prod, local
+        folder in dev) — surfaced separately so ops can distinguish a
+        fully-healthy app from one that's serving but can't accept
+        attachment uploads.
+
+    The NFS server / export are reported back from settings (informational
+    — the app doesn't connect to them directly; the OS mount does). They
+    let ops verify which file store this instance is wired to.
     """
+    from .infrastructure.storage import get_storage
+
+    storage_healthy = False
+    try:
+        storage_healthy = get_storage().is_healthy()
+    except Exception:  # noqa: BLE001
+        storage_healthy = False
+
     return {
         "_type": "Health",
         "status": "healthy",
-        "version": settings.APP_VERSION
+        "version": settings.APP_VERSION,
+        "storage": {
+            "healthy": storage_healthy,
+            "base_path": settings.ATTACHMENTS_STORAGE_BASE_PATH,
+            "nfs_server": settings.ATTACHMENTS_NFS_SERVER or None,
+            "nfs_export": settings.ATTACHMENTS_NFS_EXPORT or None,
+            "max_bytes": settings.ATTACHMENTS_MAX_BYTES,
+        },
     }
 
 

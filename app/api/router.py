@@ -17,6 +17,8 @@ from .v3.tree import router as tree_router
 from .v3.vendors import router as vendors_router
 from .v3.resource_types import router as resource_types_router
 from .v3.catalogs import catalogs_router
+from .v3.comments import router as comments_router
+from .v3.attachments import router as attachments_router
 
 # Create API v3 router
 api_v3_router = APIRouter(prefix="/api/v3")
@@ -48,4 +50,8 @@ api_v3_router.include_router(tree_router)
 api_v3_router.include_router(vendors_router)
 api_v3_router.include_router(resource_types_router)
 api_v3_router.include_router(catalogs_router)
+
+# Comments + attachments (polymorphic across M/A/T/S targets)
+api_v3_router.include_router(comments_router)
+api_v3_router.include_router(attachments_router)
 

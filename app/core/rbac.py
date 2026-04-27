@@ -98,6 +98,17 @@ class Permission(str, Enum):
     SUBTASKS_DELETE = "subtasks:delete"
     SUBTASKS_RESTORE = "subtasks:restore"
 
+    # Comments permissions (apply to all M/A/T/S targets)
+    # Author-vs-admin gating for update/delete is enforced in the service.
+    COMMENTS_CREATE = "comments:create"
+    COMMENTS_READ = "comments:read"
+    COMMENTS_DELETE = "comments:delete"
+
+    # Attachments permissions (file uploads / downloads)
+    ATTACHMENTS_CREATE = "attachments:create"
+    ATTACHMENTS_DOWNLOAD = "attachments:download"
+    ATTACHMENTS_DELETE = "attachments:delete"
+
 
 # Role -> Permissions mapping
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
@@ -160,6 +171,12 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.SUBTASKS_UPDATE,
         Permission.SUBTASKS_DELETE,
         Permission.SUBTASKS_RESTORE,
+        Permission.COMMENTS_CREATE,
+        Permission.COMMENTS_READ,
+        Permission.COMMENTS_DELETE,
+        Permission.ATTACHMENTS_CREATE,
+        Permission.ATTACHMENTS_DOWNLOAD,
+        Permission.ATTACHMENTS_DELETE,
     },
     Role.MEMBER: {
         Permission.USERS_READ,
@@ -197,6 +214,12 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.SUBTASKS_READ,
         Permission.SUBTASKS_UPDATE,
         Permission.SUBTASKS_DELETE,
+        Permission.COMMENTS_CREATE,
+        Permission.COMMENTS_READ,
+        Permission.COMMENTS_DELETE,
+        Permission.ATTACHMENTS_CREATE,
+        Permission.ATTACHMENTS_DOWNLOAD,
+        Permission.ATTACHMENTS_DELETE,
     },
     Role.VIEWER: {
         Permission.USERS_READ,
@@ -210,6 +233,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.ACTIVITIES_READ,
         Permission.TASKS_READ,
         Permission.SUBTASKS_READ,
+        Permission.COMMENTS_READ,
+        Permission.ATTACHMENTS_DOWNLOAD,
     },
     Role.ANONYMOUS: set(),
 }

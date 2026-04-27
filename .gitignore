@@ -25,6 +25,9 @@ env/
 *.log
 logs/
 
+# Local attachments folder (dev fallback for ATTACHMENTS_STORAGE_BASE_PATH)
+local_uploads/
+
 # OS / IDE
 .DS_Store
 Thumbs.db

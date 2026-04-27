@@ -366,6 +366,87 @@ def format_agenda_item_response(
     # Controllers are responsible for assembling module-specific HAL responses.
 
 
+def format_comment_response(
+    comment_data: Dict[str, Any],
+    base_url: str = "/api/v3",
+) -> Dict[str, Any]:
+    """HAL+JSON shape for a single comment.
+
+    Author info comes embedded as a slim user object. Attachments
+    appear as a nested array (each formatted via
+    ``format_attachment_response``).
+    """
+    cid = comment_data.get("id")
+    target_kind = comment_data.get("target_kind")
+    target_id = comment_data.get("target_id")
+    author = comment_data.get("author") or {}
+    attachments = comment_data.get("attachments") or []
+
+    return {
+        "_type": "Comment",
+        "_links": {
+            "self": {"href": f"{base_url}/comments/{cid}"},
+            "target": {
+                "href": f"{base_url}/{target_kind}s/{target_id}",
+                "title": target_kind,
+            },
+        },
+        "id": cid,
+        "targetKind": target_kind,
+        "targetId": target_id,
+        "body": comment_data.get("body"),
+        "author": {
+            "id": author.get("id"),
+            "login": author.get("login"),
+            "firstName": author.get("first_name"),
+            "lastName": author.get("last_name"),
+            "email": author.get("email"),
+        },
+        "createdAt": comment_data.get("created_at"),
+        "updatedAt": comment_data.get("updated_at"),
+        "deletedAt": comment_data.get("deleted_at"),
+        "attachments": [
+            format_attachment_response(a, base_url) for a in attachments
+        ],
+    }
+
+
+def format_attachment_response(
+    attachment_data: Dict[str, Any],
+    base_url: str = "/api/v3",
+) -> Dict[str, Any]:
+    """HAL+JSON shape for a single attachment.
+
+    ``storage_key`` is intentionally NEVER returned to clients — it's
+    an internal detail of where the file lives on disk. Clients fetch
+    bytes via the ``download`` link.
+    """
+    aid = attachment_data.get("id")
+    uploader = attachment_data.get("uploaded_by") or {}
+    return {
+        "_type": "Attachment",
+        "_links": {
+            "self": {"href": f"{base_url}/attachments/{aid}"},
+            "download": {"href": f"{base_url}/attachments/{aid}/download"},
+        },
+        "id": aid,
+        "commentId": attachment_data.get("comment_id"),
+        "targetKind": attachment_data.get("target_kind"),
+        "targetId": attachment_data.get("target_id"),
+        "originalFilename": attachment_data.get("original_filename"),
+        "mimeType": attachment_data.get("mime_type"),
+        "sizeBytes": attachment_data.get("size_bytes"),
+        "uploadedBy": {
+            "id": uploader.get("id"),
+            "login": uploader.get("login"),
+            "firstName": uploader.get("first_name"),
+            "lastName": uploader.get("last_name"),
+        },
+        "uploadedAt": attachment_data.get("uploaded_at"),
+        "deletedAt": attachment_data.get("deleted_at"),
+    }
+
+
 def format_error_response(
     error_type: str,
     message: str,

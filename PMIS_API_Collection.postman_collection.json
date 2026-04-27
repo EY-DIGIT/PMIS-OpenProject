@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "942cf608-875c-4e7c-954c-d29013525345",
+    "_postman_id": "6463b13f-0e30-4610-a809-eb9e3d6a71ce",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -418,6 +418,416 @@
                 }
               }
             }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Attachments",
+      "item": [
+        {
+          "name": "Download an attachment's file bytes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/attachments/{attachment_id}/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "attachments",
+                ":attachment_id",
+                "download"
+              ],
+              "variable": [
+                {
+                  "key": "attachment_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Streams the file bytes back. Sets Content-Disposition so the browser saves with the original filename."
+          },
+          "response": []
+        },
+        {
+          "name": "List standalone attachments under a activity",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "activities",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List standalone attachments under a activity"
+          },
+          "response": []
+        },
+        {
+          "name": "List standalone attachments under a milestone",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "milestones",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List standalone attachments under a milestone"
+          },
+          "response": []
+        },
+        {
+          "name": "List standalone attachments under a subtask",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "subtasks",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List standalone attachments under a subtask"
+          },
+          "response": []
+        },
+        {
+          "name": "List standalone attachments under a task",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "tasks",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List standalone attachments under a task"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete an attachment (uploader or admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/attachments/{attachment_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "attachments",
+                ":attachment_id"
+              ],
+              "variable": [
+                {
+                  "key": "attachment_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-delete an attachment (uploader or admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload a standalone attachment to a activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "activities",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload a standalone attachment to a milestone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "milestones",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload a standalone attachment to a subtask",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "subtasks",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload a standalone attachment to a task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{target_id}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "tasks",
+                ":target_id",
+                "attachments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
           },
           "response": []
         }
@@ -939,6 +1349,381 @@
       ]
     },
     {
+      "name": "Comments",
+      "item": [
+        {
+          "name": "Create a comment on a activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "activities",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required."
+          },
+          "response": []
+        },
+        {
+          "name": "Create a comment on a milestone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "milestones",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required."
+          },
+          "response": []
+        },
+        {
+          "name": "Create a comment on a subtask",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "subtasks",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required."
+          },
+          "response": []
+        },
+        {
+          "name": "Create a comment on a task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "tasks",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required."
+          },
+          "response": []
+        },
+        {
+          "name": "List comments under a activity (newest first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/activities/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "activities",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List comments under a activity (newest first)"
+          },
+          "response": []
+        },
+        {
+          "name": "List comments under a milestone (newest first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/milestones/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "milestones",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List comments under a milestone (newest first)"
+          },
+          "response": []
+        },
+        {
+          "name": "List comments under a subtask (newest first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "subtasks",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List comments under a subtask (newest first)"
+          },
+          "response": []
+        },
+        {
+          "name": "List comments under a task (newest first)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/tasks/{target_id}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "tasks",
+                ":target_id",
+                "comments"
+              ],
+              "variable": [
+                {
+                  "key": "target_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List comments under a task (newest first)"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a comment (author or admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/comments/{comment_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "comments",
+                ":comment_id"
+              ],
+              "variable": [
+                {
+                  "key": "comment_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-delete a comment (author or admin only)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Health & Root",
       "item": [
         {
@@ -955,7 +1740,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint.\n\nReturns:\n    Health status"
+            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
           },
           "response": []
         }

@@ -26,6 +26,8 @@ from .resource_type import ResourceTypeModel
 from .revoked_token import RevokedTokenModel
 from .project_status_transition import ProjectStatusTransitionModel
 from .project_owner import ProjectOwnerModel
+from .comment import CommentModel
+from .attachment import AttachmentModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -41,4 +43,6 @@ __all__ = [
     "RevokedTokenModel",
     "ProjectStatusTransitionModel",
     "ProjectOwnerModel",
+    "CommentModel",
+    "AttachmentModel",
 ]
