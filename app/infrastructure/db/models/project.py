@@ -62,7 +62,11 @@ class ProjectModel(Base):
     category_other_reason = Column(String(1000), nullable=True)
     start_date = Column(DateTime, nullable=True, index=True)
     end_date = Column(DateTime, nullable=True, index=True)
-    # Versions may record the project's actual end date; baselines leave it NULL.
+    # Actual dates — recorded when work actually begins / ends. Both are
+    # version-only editable per project lifecycle rules; baselines leave
+    # them NULL. Mirrors the design's "Actual Start Date" / "Actual End
+    # Date" fields on the project details panel.
+    actual_start_date = Column(DateTime, nullable=True)
     actual_end_date = Column(DateTime, nullable=True)
 
     # Versioning marker.

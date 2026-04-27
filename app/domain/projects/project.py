@@ -34,6 +34,7 @@ class Project:
     category: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    actual_start_date: Optional[datetime] = None
     actual_end_date: Optional[datetime] = None
     is_version: bool = False
     version_of: Optional[str] = None
@@ -66,6 +67,7 @@ class Project:
             "category": self.category,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
+            "actual_start_date": self.actual_start_date.isoformat() if self.actual_start_date else None,
             "actual_end_date": self.actual_end_date.isoformat() if self.actual_end_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

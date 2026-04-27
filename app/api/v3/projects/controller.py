@@ -158,6 +158,7 @@ class ProjectController:
             "category": data.category,
             "start_date": data.start_date,
             "end_date": data.end_date,
+            "actual_start_date": data.actual_start_date,
             "actual_end_date": data.actual_end_date,
         }
         # vendor_ids is an Optional[List[str]]. None means "don't touch the

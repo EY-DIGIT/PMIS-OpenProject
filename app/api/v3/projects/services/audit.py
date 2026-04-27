@@ -37,6 +37,9 @@ def project_snapshot(project: Project) -> Dict[str, Any]:
         "public": project.public,
         "start_date": project.start_date.isoformat() if project.start_date else None,
         "end_date": project.end_date.isoformat() if project.end_date else None,
+        "actual_start_date": (
+            project.actual_start_date.isoformat() if project.actual_start_date else None
+        ),
         "actual_end_date": (
             project.actual_end_date.isoformat() if project.actual_end_date else None
         ),

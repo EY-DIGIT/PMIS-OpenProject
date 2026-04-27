@@ -173,6 +173,7 @@ def format_project_response(
         "vendors": project_data.get("vendors", []),
         "startDate": project_data.get("start_date"),
         "endDate": project_data.get("end_date"),
+        "actualStartDate": project_data.get("actual_start_date"),
         "actualEndDate": project_data.get("actual_end_date"),
         "isVersion": project_data.get("is_version", False),
         "versionOf": project_data.get("version_of"),    # UUID of parent version

@@ -85,6 +85,7 @@ def create_version(
             category_other_reason=getattr(source, "category_other_reason", None),
             start_date=source.start_date,
             end_date=source.end_date,
+            actual_start_date=None,
             actual_end_date=None,
             is_version=True,
             version_of=source.id,

@@ -135,6 +135,7 @@ class ProjectUpdateRequest(BaseModel):
     )
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
+    actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
 
     @field_validator("status")

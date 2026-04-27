@@ -78,10 +78,12 @@ EDITABLE_FIELDS_BASELINE_UNPUBLISHED: Set[str] = {
 EDITABLE_FIELDS_BASELINE_PUBLISHED: Set[str] = EDITABLE_FIELDS_BASELINE_UNPUBLISHED
 
 # Versions allow editing a small subset; published versions remain editable
-# on these fields (owner / public / actual_end_date) per the mockup.
+# on these fields (owner / public / actual dates / status_explanation) per
+# the mockup. Both actual_start_date and actual_end_date are version-only.
 EDITABLE_FIELDS_VERSION: Set[str] = {
     "owner",
     "public",
+    "actual_start_date",
     "actual_end_date",
     "status_explanation",
 }
