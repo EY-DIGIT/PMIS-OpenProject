@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "f2b5fe8e-aba0-413f-89f9-fb9312b7322e",
+    "_postman_id": "942cf608-875c-4e7c-954c-d29013525345",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -2446,7 +2446,7 @@
             "description": "Update project",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
