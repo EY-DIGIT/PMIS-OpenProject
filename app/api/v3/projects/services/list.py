@@ -17,19 +17,14 @@ def list_projects(
     page_size: int = 20,
     active: Optional[bool] = None,
     public: Optional[bool] = None,
+    include_deleted: bool = False,
 ) -> ServiceResult[PaginatedResult[Project]]:
     """
     List projects with pagination and optional filtering.
 
-    Args:
-        db: Database session
-        page: Page number (1-indexed)
-        page_size: Number of items per page
-        active: Filter by active status
-        public: Filter by public status
-
-    Returns:
-        ServiceResult with paginated projects or error
+    ``include_deleted=False`` (default) returns only live rows — backs the
+    Search Project view. ``include_deleted=True`` returns every row including
+    soft-deleted ones — backs the admin "all projects" audit view.
     """
     # Validate pagination parameters
     if page < 1:
@@ -42,9 +37,11 @@ def list_projects(
     repository = ProjectRepository(db)
     offset = calculate_offset(page, page_size)
 
-    # Build query with filters (exclude soft-deleted rows)
+    # Build query with filters
     try:
-        query = db.query(ProjectModel).filter(ProjectModel.deleted_at.is_(None))
+        query = db.query(ProjectModel)
+        if not include_deleted:
+            query = query.filter(ProjectModel.deleted_at.is_(None))
 
         if active is not None:
             query = query.filter(ProjectModel.active == active)
@@ -53,6 +50,15 @@ def list_projects(
 
         # Get total count
         total = query.count()
+
+        # Newest-first ordering. The Search Project table reads top-down, so
+        # the most recently created project should land at row 0. Tie-break on
+        # id to keep pagination stable when two rows share a created_at
+        # timestamp (possible on bulk seeds).
+        query = query.order_by(
+            ProjectModel.created_at.desc(),
+            ProjectModel.id.desc(),
+        )
 
         # Get paginated results
         models = query.offset(offset).limit(page_size).all()

@@ -112,6 +112,7 @@ class ProjectController:
             page_size=query.pageSize,
             active=query.active,
             public=query.public,
+            include_deleted=query.includeDeleted,
         )
         if not result.is_success():
             return _error_response(result, default_status=500)

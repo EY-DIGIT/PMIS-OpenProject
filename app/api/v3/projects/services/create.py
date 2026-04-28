@@ -143,9 +143,10 @@ def create_project(
     # duplicate check here to avoid naive/aware datetime comparison bugs.
     start_utc = ensure_aware_utc(start_date)
     end_utc = ensure_aware_utc(end_date)
-    if start_utc is not None and end_utc is not None and end_utc <= start_utc:
+    # Inclusive: end_date == start_date is allowed (single-day projects).
+    if start_utc is not None and end_utc is not None and end_utc < start_utc:
         return ServiceResult.fail(
-            error="end_date must be after start_date",
+            error="end_date cannot be before start_date",
             error_type="validation_error",
         )
 

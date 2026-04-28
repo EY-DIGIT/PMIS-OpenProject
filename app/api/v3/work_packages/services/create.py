@@ -165,9 +165,10 @@ def create_work_package(
             )
 
     if start_date is not None and end_date is not None:
-        if end_date <= start_date:
+        # Inclusive: end_date == start_date is allowed.
+        if end_date < start_date:
             return ServiceResult.fail(
-                error="end_date must be after start_date.",
+                error="end_date cannot be before start_date.",
                 error_type="validation_error"
             )
 

@@ -72,7 +72,12 @@ def upsert_project_by_uuid(
 @router.get(
     "",
     dependencies=[require_permission(PROJECTS_READ)],
-    summary="List projects",
+    summary="List live projects (excludes soft-deleted)",
+    description=(
+        "Default Search Project listing. Soft-deleted projects are filtered "
+        "out; results are newest-first (createdAt descending). For the "
+        "admin view that includes deleted rows, see GET /projects/all."
+    ),
 )
 def list_projects(
     request: Request,
@@ -82,7 +87,36 @@ def list_projects(
     public: bool = Query(None),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    query = ProjectListQuery(offset=offset, pageSize=pageSize, active=active, public=public)
+    query = ProjectListQuery(
+        offset=offset, pageSize=pageSize, active=active, public=public,
+        includeDeleted=False,
+    )
+    return ProjectController.list(request, query, db)
+
+
+@router.get(
+    "/all",
+    dependencies=[require_permission(PROJECTS_READ)],
+    summary="List all projects including soft-deleted",
+    description=(
+        "Admin / audit view. Returns every project row, including those that "
+        "have been soft-deleted. Each row carries a `deletedAt` field — NULL "
+        "for live projects, populated for deleted ones. Sort order is the "
+        "same newest-first ordering used by GET /projects."
+    ),
+)
+def list_all_projects(
+    request: Request,
+    offset: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+    active: bool = Query(None),
+    public: bool = Query(None),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    query = ProjectListQuery(
+        offset=offset, pageSize=pageSize, active=active, public=public,
+        includeDeleted=True,
+    )
     return ProjectController.list(request, query, db)
 
 

@@ -97,8 +97,10 @@ class ProjectCreateRequest(BaseModel):
     @classmethod
     def validate_end_date_after_start_date(cls, v, info):
         if v is not None and "start_date" in info.data and info.data["start_date"] is not None:
-            if v <= info.data["start_date"]:
-                raise ValueError("end_date must be after start_date")
+            # Inclusive: end_date == start_date is allowed (one-day projects /
+            # milestones / activities). Only reject when end is strictly before.
+            if v < info.data["start_date"]:
+                raise ValueError("end_date cannot be before start_date")
         return v
 
 
@@ -170,8 +172,9 @@ class ProjectUpdateRequest(BaseModel):
     @classmethod
     def validate_end_date_after_start_date(cls, v, info):
         if v is not None and "start_date" in info.data and info.data["start_date"] is not None:
-            if v <= info.data["start_date"]:
-                raise ValueError("end_date must be after start_date")
+            # Inclusive: end_date == start_date is allowed.
+            if v < info.data["start_date"]:
+                raise ValueError("end_date cannot be before start_date")
         return v
 
 
@@ -182,6 +185,10 @@ class ProjectListQuery(BaseModel):
     pageSize: int = Field(20, ge=1, le=100)
     active: Optional[bool] = None
     public: Optional[bool] = None
+    # When True, the response includes soft-deleted rows (the "All projects"
+    # admin view). The default GET /projects endpoint pins this False; the
+    # GET /projects/all endpoint pins it True.
+    includeDeleted: bool = Field(False)
 
 
 class ProjectCloseRequest(BaseModel):
@@ -250,6 +257,7 @@ class ProjectUpsertRequest(BaseModel):
     @classmethod
     def validate_end_date_after_start_date(cls, v, info):
         if v is not None and "start_date" in info.data and info.data["start_date"] is not None:
-            if v <= info.data["start_date"]:
-                raise ValueError("end_date must be after start_date")
+            # Inclusive: end_date == start_date is allowed.
+            if v < info.data["start_date"]:
+                raise ValueError("end_date cannot be before start_date")
         return v

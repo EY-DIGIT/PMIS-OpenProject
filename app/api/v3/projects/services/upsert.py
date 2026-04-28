@@ -78,9 +78,9 @@ def upsert_project(
             error="Status explanation too long. Maximum 5000 characters.",
             error_type="validation_error",
         )
-    if start_date is not None and end_date is not None and end_date <= start_date:
+    if start_date is not None and end_date is not None and end_date < start_date:
         return ServiceResult.fail(
-            error="end_date must be after start_date",
+            error="end_date cannot be before start_date",
             error_type="validation_error",
         )
     if owner is not None and not _verify_user_exists(db, owner):

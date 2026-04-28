@@ -119,9 +119,10 @@ def update_work_package(
     effective_end = end_date if end_date is not _UNSET else wp.end_date
 
     if effective_start is not None and effective_end is not None:
-        if effective_end <= effective_start:
+        # Inclusive: end_date == start_date is allowed.
+        if effective_end < effective_start:
             return ServiceResult.fail(
-                error="end_date must be after start_date.",
+                error="end_date cannot be before start_date.",
                 error_type="validation_error"
             )
 

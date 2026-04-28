@@ -125,10 +125,10 @@ def update_project(
     if (
         effective_start is not None
         and effective_end is not None
-        and effective_end <= effective_start
+        and effective_end < effective_start
     ):
         return ServiceResult.fail(
-            error="end_date must be after start_date",
+            error="end_date cannot be before start_date",
             error_type="validation_error",
         )
 

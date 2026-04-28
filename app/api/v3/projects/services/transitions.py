@@ -141,8 +141,17 @@ def assert_transition_allowed(
     to_status: str,
     actor_is_admin: bool,
     project_is_version: bool,
+    db: Optional[Session] = None,
 ) -> None:
-    """Raise ValidationError if the requested status transition is illegal."""
+    """Raise ValidationError if the requested status transition is illegal.
+
+    Consults the ``project_status_transitions`` catalog table when ``db`` is
+    supplied — that table is the runtime source of truth for legal edges,
+    admin-gating, and version-gating, and ops can edit it without a code
+    change. Falls back to the in-code constants when ``db`` is missing or the
+    catalog has no rows for the edge (covers tests on a fresh in-memory DB
+    before init_db has seeded the catalog).
+    """
     from_status = (from_status or "").lower()
     to_status = (to_status or "").lower()
 
@@ -159,17 +168,37 @@ def assert_transition_allowed(
         )
 
     edge = (from_status, to_status)
-    if edge not in _LEGAL_TRANSITIONS:
-        raise ValidationError(
-            f"Illegal status transition: {from_status} -> {to_status}",
-            details={
-                "errorIdentifier": "invalid_transition",
-                "from": from_status,
-                "to": to_status,
-            },
+
+    # Catalog-driven path. Find the active row for this edge; if present, it
+    # wins over the in-code constants.
+    catalog_row = None
+    if db is not None:
+        from .....infrastructure.db.repositories.project_status_transition_repository import (
+            ProjectStatusTransitionRepository,
+        )
+        catalog_row = ProjectStatusTransitionRepository(db).find_edge(
+            from_status, to_status,
         )
 
-    if edge in ADMIN_ONLY_TRANSITIONS and not actor_is_admin:
+    if catalog_row is not None:
+        requires_admin = bool(catalog_row.requires_admin)
+        version_only = bool(catalog_row.version_only)
+    else:
+        # Fallback: in-code constants. Used when the table hasn't been
+        # seeded (e.g. fresh test DB) or no `db` was passed.
+        if edge not in _LEGAL_TRANSITIONS:
+            raise ValidationError(
+                f"Illegal status transition: {from_status} -> {to_status}",
+                details={
+                    "errorIdentifier": "invalid_transition",
+                    "from": from_status,
+                    "to": to_status,
+                },
+            )
+        requires_admin = edge in ADMIN_ONLY_TRANSITIONS
+        version_only = edge in VERSION_ONLY_TRANSITIONS
+
+    if requires_admin and not actor_is_admin:
         raise ValidationError(
             f"Transition {from_status} -> {to_status} requires admin privileges",
             details={
@@ -180,7 +209,7 @@ def assert_transition_allowed(
             },
         )
 
-    if edge in VERSION_ONLY_TRANSITIONS and not project_is_version:
+    if version_only and not project_is_version:
         raise ValidationError(
             f"Transition {from_status} -> {to_status} is only allowed on version projects",
             details={

@@ -184,6 +184,10 @@ def format_project_response(
         "updatedBy": project_data.get("updated_by"),
         "createdAt": project_data.get("created_at"),
         "updatedAt": project_data.get("updated_at"),
+        # Soft-delete marker. NULL on live projects; set on rows surfaced by
+        # the GET /projects/all endpoint.
+        "deletedAt": project_data.get("deleted_at"),
+        "deletedBy": project_data.get("deleted_by"),
     }
 
     # Parent / baseline links, derived from the UUID refs we emit above.

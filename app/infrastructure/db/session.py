@@ -287,6 +287,36 @@ def init_db() -> None:
                     except Exception as e:
                         logging.warning("Failed to backfill %s.resource_mode: %s", main_table, e)
 
+                # ---- NEW: vendors.deleted_at + vendors.deleted_by --------
+                # Legacy on-disk dev DBs predate the vendor soft-delete
+                # feature. Add the columns + index in-place so the new
+                # repository code finds the schema it expects.
+                try:
+                    res = conn.execute(text("PRAGMA table_info('vendors')"))
+                    vcols = {r[1] for r in res.fetchall()}
+                    for col, stmt in (
+                        ("deleted_at", "ALTER TABLE vendors ADD COLUMN deleted_at DATETIME"),
+                        ("deleted_by", "ALTER TABLE vendors ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                    ):
+                        if col not in vcols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add vendors.%s: %s", col, e)
+                    try:
+                        conn.execute(text(
+                            "CREATE INDEX IF NOT EXISTS idx_vendors_deleted_at "
+                            "ON vendors(deleted_at)"
+                        ))
+                        conn.execute(text(
+                            "CREATE INDEX IF NOT EXISTS idx_vendors_created_at "
+                            "ON vendors(created_at)"
+                        ))
+                    except Exception as e:
+                        logging.warning("Failed to create vendors indexes: %s", e)
+                except Exception:
+                    pass
+
                 # ---- NEW: milestones.status + milestones.depends ---------
                 try:
                     res = conn.execute(text("PRAGMA table_info('milestones')"))

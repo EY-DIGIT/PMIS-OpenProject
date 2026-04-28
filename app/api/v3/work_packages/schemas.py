@@ -59,8 +59,9 @@ class WorkPackageCreateRequest(BaseModel):
     @classmethod
     def validate_end_after_start(cls, v, info):
         if v is not None and "startDate" in info.data and info.data["startDate"] is not None:
-            if v <= info.data["startDate"]:
-                raise ValueError("endDate must be after startDate")
+            # Inclusive: endDate == startDate is allowed.
+            if v < info.data["startDate"]:
+                raise ValueError("endDate cannot be before startDate")
         return v
 
 

@@ -50,6 +50,7 @@ def suspend_version(
             to_status=STATUS_SUSPENDED,
             actor_is_admin=actor_is_admin,
             project_is_version=True,
+            db=db,
         )
     except ValidationError as e:
         return ServiceResult.fail(

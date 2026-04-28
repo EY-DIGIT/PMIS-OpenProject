@@ -43,6 +43,7 @@ def close_project(
             to_status=STATUS_CLOSED,
             actor_is_admin=actor_is_admin,
             project_is_version=project.is_version,
+            db=db,
         )
     except ValidationError as e:
         return ServiceResult.fail(
