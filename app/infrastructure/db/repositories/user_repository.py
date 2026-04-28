@@ -1,35 +1,51 @@
 """
 User repository for database operations.
+
+Soft-delete is the default — every read filters ``deleted_at IS NULL``
+unless ``include_deleted=True`` is passed (admin/audit paths only).
+
+The list/get-by-id paths also LEFT JOIN ``vendors`` for the embedded
+vendor name, and run a follow-up query against ``project_members ⋈
+projects`` to embed the user's mapped projects (excluding closed and
+soft-deleted projects) without N+1 lookups in the controller layer.
 """
-from typing import Optional, List, Tuple
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple
+
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from ...db.models.user import UserModel
+
 from ....domain.users.user import User
+from ...db.models.project import ProjectModel
+from ...db.models.project_member import ProjectMemberModel
+from ...db.models.user import UserModel
+from ...db.models.vendor import VendorModel
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# Project statuses that are FILTERED OUT of the user's mapped-projects
+# list in API responses. Closed projects are "history"; soft-deleted ones
+# never appear in the UI. The mapping rows themselves stay in the DB.
+_HIDDEN_PROJECT_STATUSES = ("closed",)
 
 
 class UserRepository:
     """Repository for User database operations."""
 
     def __init__(self, db: Session):
-        """
-        Initialize repository.
-
-        Args:
-            db: Database session
-        """
         self.db = db
 
-    def _to_domain(self, model: UserModel) -> User:
-        """
-        Convert database model to domain model.
+    # ---- Conversion helpers --------------------------------------------
 
-        Args:
-            model: Database model
-
-        Returns:
-            Domain model
-        """
+    def _to_domain(
+        self,
+        model: UserModel,
+        vendor: Optional[VendorModel] = None,
+        projects: Optional[List[dict]] = None,
+    ) -> User:
         return User(
             id=model.id,
             login=model.login,
@@ -40,7 +56,58 @@ class UserRepository:
             status=model.status,
             created_at=model.created_at,
             updated_at=model.updated_at,
+            vendor_id=getattr(model, "vendor_id", None),
+            vendor_name=vendor.name if vendor else None,
+            division=getattr(model, "division", None),
+            division_other=getattr(model, "division_other", None),
+            deleted_at=getattr(model, "deleted_at", None),
+            deleted_by=getattr(model, "deleted_by", None),
+            projects=projects or [],
         )
+
+    def _load_projects_for_user(self, user_id: int) -> List[dict]:
+        """Return slim project dicts for embedding in user responses.
+
+        Joins project_members → projects, filters out hidden statuses
+        (closed) and soft-deleted projects. Ordered newest first.
+        """
+        rows = (
+            self.db.query(
+                ProjectModel.id,
+                ProjectModel.project_code,
+                ProjectModel.name,
+                ProjectModel.status,
+            )
+            .join(
+                ProjectMemberModel,
+                ProjectMemberModel.project_id == ProjectModel.id,
+            )
+            .filter(ProjectMemberModel.user_id == user_id)
+            .filter(ProjectModel.deleted_at.is_(None))
+            .filter(~ProjectModel.status.in_(_HIDDEN_PROJECT_STATUSES))
+            .order_by(desc(ProjectModel.created_at), desc(ProjectModel.id))
+            .all()
+        )
+        return [
+            {
+                "id": pid,
+                "project_code": pcode,
+                "name": pname,
+                "status": pstatus,
+            }
+            for (pid, pcode, pname, pstatus) in rows
+        ]
+
+    def _load_vendor(self, vendor_id: Optional[str]) -> Optional[VendorModel]:
+        if not vendor_id:
+            return None
+        return (
+            self.db.query(VendorModel)
+            .filter(VendorModel.id == vendor_id)
+            .first()
+        )
+
+    # ---- Create --------------------------------------------------------
 
     def create(
         self,
@@ -50,23 +117,12 @@ class UserRepository:
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         admin: bool = False,
-        status: str = "active"
+        status: str = "active",
+        vendor_id: Optional[str] = None,
+        division: Optional[str] = None,
+        division_other: Optional[str] = None,
     ) -> User:
-        """
-        Create a new user.
-
-        Args:
-            login: User login
-            email: User email
-            hashed_password: Hashed password
-            first_name: First name
-            last_name: Last name
-            admin: Admin flag
-            status: User status
-
-        Returns:
-            Created user domain model
-        """
+        """Create a new user. Caller is responsible for committing."""
         user_model = UserModel(
             login=login,
             email=email,
@@ -75,127 +131,122 @@ class UserRepository:
             last_name=last_name,
             admin=admin,
             status=status,
+            vendor_id=vendor_id,
+            division=division,
+            division_other=division_other,
         )
-
         self.db.add(user_model)
-        self.db.commit()
-        self.db.refresh(user_model)
+        self.db.flush()
+        vendor = self._load_vendor(user_model.vendor_id)
+        return self._to_domain(user_model, vendor=vendor, projects=[])
 
-        return self._to_domain(user_model)
+    # ---- Read ----------------------------------------------------------
 
-    def get_by_id(self, user_id: int) -> Optional[User]:
-        """
-        Get user by ID.
+    def get_by_id(
+        self, user_id: int, *, include_deleted: bool = False,
+    ) -> Optional[User]:
+        q = self.db.query(UserModel).filter(UserModel.id == user_id)
+        if not include_deleted:
+            q = q.filter(UserModel.deleted_at.is_(None))
+        model = q.first()
+        if not model:
+            return None
+        vendor = self._load_vendor(model.vendor_id)
+        projects = self._load_projects_for_user(model.id)
+        return self._to_domain(model, vendor=vendor, projects=projects)
 
-        Args:
-            user_id: User ID
+    def get_by_login(
+        self, login: str, *, include_deleted: bool = False,
+    ) -> Optional[User]:
+        q = self.db.query(UserModel).filter(UserModel.login == login)
+        if not include_deleted:
+            q = q.filter(UserModel.deleted_at.is_(None))
+        model = q.first()
+        if not model:
+            return None
+        vendor = self._load_vendor(model.vendor_id)
+        projects = self._load_projects_for_user(model.id)
+        return self._to_domain(model, vendor=vendor, projects=projects)
 
-        Returns:
-            User domain model if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-
-        if user_model:
-            return self._to_domain(user_model)
-
-        return None
-
-    def get_by_login(self, login: str) -> Optional[User]:
-        """
-        Get user by login.
-
-        Args:
-            login: User login
-
-        Returns:
-            User domain model if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.login == login).first()
-
-        if user_model:
-            return self._to_domain(user_model)
-
-        return None
-
-    def get_by_email(self, email: str) -> Optional[User]:
-        """
-        Get user by email.
-
-        Args:
-            email: User email
-
-        Returns:
-            User domain model if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.email == email).first()
-
-        if user_model:
-            return self._to_domain(user_model)
-
-        return None
+    def get_by_email(
+        self, email: str, *, include_deleted: bool = False,
+    ) -> Optional[User]:
+        q = self.db.query(UserModel).filter(UserModel.email == email)
+        if not include_deleted:
+            q = q.filter(UserModel.deleted_at.is_(None))
+        model = q.first()
+        if not model:
+            return None
+        vendor = self._load_vendor(model.vendor_id)
+        projects = self._load_projects_for_user(model.id)
+        return self._to_domain(model, vendor=vendor, projects=projects)
 
     def get_password_hash(self, user_id: int) -> Optional[str]:
-        """
-        Get user password hash.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            Password hash if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-
-        if user_model:
-            return user_model.hashed_password
-
-        return None
+        """Used by login/auth — bypasses soft-delete filter (we want to
+        reject login for inactive/deleted users with a dedicated message)."""
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        return model.hashed_password if model else None
 
     def get_password_hash_by_login(self, login: str) -> Optional[str]:
-        """
-        Get user password hash by login.
-
-        Args:
-            login: User login
-
-        Returns:
-            Password hash if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.login == login).first()
-
-        if user_model:
-            return user_model.hashed_password
-
-        return None
+        """Used by login flow. Bypasses soft-delete filter."""
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.login == login)
+            .first()
+        )
+        return model.hashed_password if model else None
 
     def list(
         self,
         offset: int = 0,
         limit: int = 20,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        *,
+        include_deleted: bool = False,
     ) -> Tuple[List[User], int]:
-        """
-        List users with pagination.
-
-        Args:
-            offset: Number of records to skip
-            limit: Maximum number of records to return
-            status: Optional status filter
-
-        Returns:
-            Tuple of (list of users, total count)
-        """
+        """List users — newest first, soft-deleted hidden by default."""
         query = self.db.query(UserModel)
-
+        if not include_deleted:
+            query = query.filter(UserModel.deleted_at.is_(None))
         if status:
             query = query.filter(UserModel.status == status)
 
         total = query.count()
 
-        user_models = query.offset(offset).limit(limit).all()
-        users = [self._to_domain(model) for model in user_models]
+        # Newest-first ordering. The id-DESC tiebreaker keeps pagination
+        # stable when two rows share a created_at timestamp.
+        models = (
+            query.order_by(desc(UserModel.created_at), desc(UserModel.id))
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        users = []
+        for m in models:
+            vendor = self._load_vendor(m.vendor_id)
+            projects = self._load_projects_for_user(m.id)
+            users.append(self._to_domain(m, vendor=vendor, projects=projects))
 
         return users, total
+
+    def exists_by_login(self, login: str) -> bool:
+        """Existence check — INCLUDES soft-deleted rows so we don't allow
+        recycling a login that's still occupied by a tombstoned user."""
+        return self.db.query(
+            self.db.query(UserModel).filter(UserModel.login == login).exists()
+        ).scalar()
+
+    def exists_by_email(self, email: str) -> bool:
+        return self.db.query(
+            self.db.query(UserModel).filter(UserModel.email == email).exists()
+        ).scalar()
+
+    # ---- Update --------------------------------------------------------
 
     def update(
         self,
@@ -204,146 +255,120 @@ class UserRepository:
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         admin: Optional[bool] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        vendor_id: Optional[str] = None,
+        division: Optional[str] = None,
+        division_other: Optional[str] = None,
+        clear_division_other: bool = False,
+        restore: bool = False,
     ) -> Optional[User]:
+        """Apply a field patch.
+
+        ``restore=True`` clears ``deleted_at`` / ``deleted_by`` — used when
+        the service detects an admin setting status='active' on a
+        currently-soft-deleted user.
+
+        ``clear_division_other=True`` explicitly NULLs the division_other
+        column (needed when division changes from 'others' to anything else
+        — None means "leave as-is").
         """
-        Update user.
-
-        Args:
-            user_id: User ID
-            email: New email
-            first_name: New first name
-            last_name: New last name
-            admin: New admin flag
-            status: New status
-
-        Returns:
-            Updated user domain model if found, None otherwise
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-
-        if not user_model:
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
             return None
 
         if email is not None:
-            user_model.email = email
+            model.email = email
         if first_name is not None:
-            user_model.first_name = first_name
+            model.first_name = first_name
         if last_name is not None:
-            user_model.last_name = last_name
+            model.last_name = last_name
         if admin is not None:
-            user_model.admin = admin
+            model.admin = admin
         if status is not None:
-            user_model.status = status
+            model.status = status
+        if vendor_id is not None:
+            model.vendor_id = vendor_id
+        if division is not None:
+            model.division = division
+        if division_other is not None:
+            model.division_other = division_other
+        if clear_division_other:
+            model.division_other = None
+        if restore:
+            model.deleted_at = None
+            model.deleted_by = None
 
-        self.db.commit()
-        self.db.refresh(user_model)
-
-        return self._to_domain(user_model)
+        self.db.flush()
+        vendor = self._load_vendor(model.vendor_id)
+        projects = self._load_projects_for_user(model.id)
+        return self._to_domain(model, vendor=vendor, projects=projects)
 
     def update_password(self, user_id: int, hashed_password: str) -> bool:
-        """
-        Update user password.
-
-        Args:
-            user_id: User ID
-            hashed_password: New hashed password
-
-        Returns:
-            True if updated, False if user not found
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-
-        if not user_model:
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
             return False
-
-        user_model.hashed_password = hashed_password
-        self.db.commit()
-
+        model.hashed_password = hashed_password
+        self.db.flush()
         return True
 
-    def update_refresh_token_metadata(self, user_id: int, jti: str, expires_at, expected_old_jti: Optional[str] = None) -> bool:
-        """
-        Atomically update stored refresh token JTI and expiry for a user.
-
-        If `expected_old_jti` is provided, the update will only succeed when the
-        current stored JTI equals `expected_old_jti`. This prevents race
-        conditions and prevents silent overwrite of a rotated token.
-
-        Returns True when the row was updated, False otherwise.
-        """
+    def update_refresh_token_metadata(
+        self,
+        user_id: int,
+        jti: Optional[str],
+        expires_at,
+        expected_old_jti: Optional[str] = None,
+    ) -> bool:
         query = self.db.query(UserModel).filter(UserModel.id == user_id)
         if expected_old_jti is not None:
             query = query.filter(UserModel.refresh_token_jti == expected_old_jti)
 
-        # Use bulk update to ensure atomic SQL WHERE check and update
         rows_updated = query.update({
             UserModel.refresh_token_jti: jti,
-            UserModel.refresh_token_expires_at: expires_at
+            UserModel.refresh_token_expires_at: expires_at,
         }, synchronize_session=False)
 
         if rows_updated:
             self.db.commit()
             return True
-
-        # No rows updated: either user not found or expected_old_jti mismatch
         return False
 
     def get_refresh_metadata(self, user_id: int):
-        """
-        Retrieve stored refresh token metadata for a user.
-
-        Returns tuple (jti, expires_at) or (None, None)
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-        if not user_model:
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
             return None, None
-        return user_model.refresh_token_jti, user_model.refresh_token_expires_at
+        return model.refresh_token_jti, model.refresh_token_expires_at
 
-    def delete(self, user_id: int) -> bool:
-        """
-        Delete user.
+    # ---- Soft delete ---------------------------------------------------
 
-        Args:
-            user_id: User ID
-
-        Returns:
-            True if deleted, False if user not found
-        """
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-
-        if not user_model:
+    def soft_delete(self, user_id: int, actor_id: Optional[int]) -> bool:
+        """Idempotent soft-delete. Sets deleted_at + deleted_by + status='inactive'.
+        Returns True if a row was updated, False if user not found."""
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
             return False
-
-        self.db.delete(user_model)
-        self.db.commit()
-
+        if model.deleted_at is None:
+            model.deleted_at = _utcnow()
+            model.deleted_by = actor_id
+            model.status = "inactive"
+            self.db.flush()
         return True
 
-    def exists_by_login(self, login: str) -> bool:
-        """
-        Check if user exists by login.
-
-        Args:
-            login: User login
-
-        Returns:
-            True if user exists, False otherwise
-        """
-        return self.db.query(
-            self.db.query(UserModel).filter(UserModel.login == login).exists()
-        ).scalar()
-
-    def exists_by_email(self, email: str) -> bool:
-        """
-        Check if user exists by email.
-
-        Args:
-            email: User email
-
-        Returns:
-            True if user exists, False otherwise
-        """
-        return self.db.query(
-            self.db.query(UserModel).filter(UserModel.email == email).exists()
-        ).scalar()
+    # Legacy method kept for backward compat — now delegates to soft_delete.
+    def delete(self, user_id: int) -> bool:
+        return self.soft_delete(user_id, actor_id=None)

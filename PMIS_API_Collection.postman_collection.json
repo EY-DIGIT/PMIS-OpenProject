@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "6463b13f-0e30-4610-a809-eb9e3d6a71ce",
+    "_postman_id": "c1be9d79-feb9-45d3-b6d2-b3ed81a88f4f",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -903,7 +903,7 @@
             "description": "Create a new user",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"login\": \"\",\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false\n}",
+              "raw": "{\n  \"login\": \"\",\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1155,7 +1155,7 @@
             "description": "Update user details",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\"\n}",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3003,7 +3003,60 @@
           "response": []
         },
         {
-          "name": "List projects",
+          "name": "List all projects including soft-deleted",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/projects/all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "projects",
+                "all"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "active",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "public",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field \u2014 NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects."
+          },
+          "response": []
+        },
+        {
+          "name": "List live projects (excludes soft-deleted)",
           "request": {
             "method": "GET",
             "header": [
@@ -3050,7 +3103,7 @@
                 }
               ]
             },
-            "description": "List projects"
+            "description": "Default Search Project listing. Soft-deleted projects are filtered out; results are newest-first (createdAt descending). For the admin view that includes deleted rows, see GET /projects/all."
           },
           "response": []
         },
@@ -4105,7 +4158,7 @@
           "response": []
         },
         {
-          "name": "List active vendors",
+          "name": "List live vendors (newest first)",
           "request": {
             "method": "GET",
             "header": [
@@ -4126,7 +4179,111 @@
                 "vendors"
               ]
             },
-            "description": "List active vendors"
+            "description": "Returns vendors that are not soft-deleted, ordered by createdAt descending so the latest vendor is row 0 in Search Vendor."
+          },
+          "response": []
+        },
+        {
+          "name": "List projects mapped to this vendor (excluding closed/completed)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors/{vendor_id}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "vendors",
+                ":vendor_id",
+                "projects"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out \u2014 they're preserved on disk but no longer presented in the vendor's project list per product rule."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-deleted vendor (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors/{vendor_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "vendors",
+                ":vendor_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Clears deletedAt and flips active=True. All previously-existing project / milestone associations are preserved on disk and re-surface automatically. Note: the vendor's projects list (GET /vendors/{id}/projects) filters out closed/completed projects."
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a vendor (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "vendors",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Marks the vendor as deleted (stamps deletedAt, flips active=False). The vendor disappears from GET /vendors and from picker validation, but its project_vendors / milestone_vendors mapping rows are kept so a later restore brings the associations back."
           },
           "response": []
         },

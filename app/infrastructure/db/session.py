@@ -407,6 +407,40 @@ def init_db() -> None:
                 except Exception:
                     pass
 
+                # ---- NEW: users.vendor_id / division / division_other / ---
+                # ---- deleted_at / deleted_by + indexes -------------------
+                # Legacy on-disk dev DBs predate the User-management
+                # feature batch. Add columns in-place so existing rows
+                # (e.g. the bootstrap admin) stay valid (NULLs are fine
+                # because the API enforces "required at create" via the
+                # Pydantic schema, not at the DB layer).
+                try:
+                    res = conn.execute(text("PRAGMA table_info('users')"))
+                    ucols = {r[1] for r in res.fetchall()}
+                    for col, stmt in (
+                        ("vendor_id", "ALTER TABLE users ADD COLUMN vendor_id VARCHAR(36) REFERENCES vendors(id)"),
+                        ("division", "ALTER TABLE users ADD COLUMN division VARCHAR(32)"),
+                        ("division_other", "ALTER TABLE users ADD COLUMN division_other VARCHAR(255)"),
+                        ("deleted_at", "ALTER TABLE users ADD COLUMN deleted_at DATETIME"),
+                        ("deleted_by", "ALTER TABLE users ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                    ):
+                        if col not in ucols:
+                            try:
+                                conn.execute(text(stmt))
+                            except Exception as e:
+                                logging.warning("Failed to add users.%s: %s", col, e)
+                    for stmt in (
+                        "CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_users_vendor_id ON users(vendor_id)",
+                    ):
+                        try:
+                            conn.execute(text(stmt))
+                        except Exception as e:
+                            logging.warning("Failed to create users index: %s", e)
+                except Exception:
+                    pass
+
                 # ---- NEW: milestones.status + milestones.depends ---------
                 try:
                     res = conn.execute(text("PRAGMA table_info('milestones')"))
