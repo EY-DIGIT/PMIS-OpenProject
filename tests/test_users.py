@@ -195,17 +195,37 @@ class TestLogout:
 
     def test_logout_invalidates_refresh_endpoint(self, client, admin_user):
         """After logout, the refresh token can no longer mint new access
-        tokens via /users/introspect (refresh flow rejects it)."""
+        tokens via /users/refresh (the user row's stored jti is cleared,
+        so the rotation guard rejects it)."""
         _access, refresh, headers = self._login(client, "admin", "admin123")
 
         client.post("/api/v3/users/logout", headers=headers)
 
         # Try to refresh using the now-revoked refresh token.
+        ref = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": refresh},
+        )
+        assert ref.status_code == 401, ref.text
+
+    def test_logout_does_not_rotate_via_introspect(self, client, admin_user):
+        """Introspect is RFC 7662 read-only and never rotates. Posting a
+        valid refresh token to /users/introspect returns metadata, never
+        a new access token. (Regression guard for the Option-C migration.)"""
+        _access, refresh, _headers = self._login(client, "admin", "admin123")
+
         intro = client.post(
             "/api/v3/users/introspect",
             json={"refresh_token": refresh},
         )
-        assert intro.status_code == 401, intro.text
+        assert intro.status_code == 200, intro.text
+        body = intro.json()["data"]
+        assert body["active"] is True
+        assert body["tokenType"] == "refresh"
+        # The legacy rotation response would have included these — assert
+        # they are absent so a future regression jumps out.
+        assert "access_token" not in body
+        assert "refresh_token" not in body
 
     def test_logout_inserts_blacklist_row(self, client, admin_user, db_session):
         """A row appears in revoked_tokens with the access token's jti

@@ -1,4 +1,4 @@
-"""Catalog routes — project_status_transitions + project_owners."""
+"""Catalog routes — project_status_transitions + project_owners + divisions + project_categories."""
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Request
@@ -10,6 +10,10 @@ from ....core.base_controller import BaseController
 from ....core.errors import NotFoundError, ValidationError
 from ....core.middleware.rbac import require_authenticated, require_permission
 from ....core.rbac import Permission
+from ....domain.resource_types.resource_type import (
+    DIVISION_CHOICES,
+    DIVISION_OTHERS,
+)
 from ....infrastructure.db.models.user import UserModel
 from ....infrastructure.db.repositories.project_owner_repository import (
     ProjectOwnerRepository,
@@ -21,6 +25,61 @@ from ....infrastructure.db.session import get_db
 
 
 router = APIRouter(tags=["catalogs"])
+
+
+# ---------------------------------------------------------------------------
+# Divisions
+# ---------------------------------------------------------------------------
+#
+# Division values back the activity-resource classification picker AND are
+# reused by the FE as the project-owner / division picker (see HTML
+# `buildDivisionField` — same dropdown serves both purposes). The list is a
+# static in-code constant in `app.domain.resource_types.resource_type`; this
+# endpoint surfaces it so the FE doesn't have to hard-code labels.
+#
+# Display labels (TMD1 / TMD2 / Others) are uppercase per the design;
+# stored / wire codes are lowercase (`tmd1` / `tmd2` / `others`). The FE
+# sends the lowercase code back in `division` fields.
+
+_DIVISION_LABELS = {
+    "tmd1": "TMD1",
+    "tmd2": "TMD2",
+    "others": "Others",
+}
+
+
+@router.get(
+    "/divisions",
+    dependencies=[require_authenticated()],
+    summary="List the division catalog",
+    description=(
+        "Returns the division choices that back the activity-resource "
+        "classification picker. The same list is reused by the FE as the "
+        "project-owner / division picker. Each entry has a `code` (the wire "
+        "value the API expects in `division` fields) and a `label` (the "
+        "display string). The `requiresOther` flag on the 'others' entry "
+        "tells the FE to show the free-text 'Specify' input."
+    ),
+)
+def list_divisions(
+    request: Request, db: Session = Depends(get_db),
+) -> JSONResponse:
+    items = [
+        {
+            "_type": "Division",
+            "code": code,
+            "label": _DIVISION_LABELS.get(code, code),
+            "requiresOther": code == DIVISION_OTHERS,
+        }
+        for code in DIVISION_CHOICES
+    ]
+    return BaseController.ok(data={
+        "_type": "Collection",
+        "_links": {"self": {"href": "/api/v3/divisions"}},
+        "total": len(items),
+        "count": len(items),
+        "_embedded": {"elements": items},
+    })
 
 
 # ---------------------------------------------------------------------------

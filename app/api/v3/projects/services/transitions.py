@@ -66,20 +66,30 @@ EDITABLE_FIELDS_BASELINE_UNPUBLISHED: Set[str] = {
     "owner",
     "start_date",
     "end_date",
+    "actual_start_date",
+    "actual_end_date",
     "public",
     "active",
     "status_explanation",
+    "category",
+    "category_other",
+    "category_other_reason",
 }
 
 # Published baselines remain editable on the same fields as unpublished
 # baselines. Baseline edits are propagated to active versions via the
 # baseline_version_sync cascade for M/A writes; project-level edits are
-# scoped to the baseline itself.
+# scoped to the baseline itself. Per the HTML edit flow ("This is a
+# published baseline project. You can still edit it — all changes will
+# automatically be mirrored to every version created from this baseline."),
+# both unpublished and published baselines share the same editable surface.
 EDITABLE_FIELDS_BASELINE_PUBLISHED: Set[str] = EDITABLE_FIELDS_BASELINE_UNPUBLISHED
 
-# Versions allow editing a small subset; published versions remain editable
-# on these fields (owner / public / actual dates / status_explanation) per
-# the mockup. Both actual_start_date and actual_end_date are version-only.
+# Versions allow editing a small subset per the HTML edit flow:
+# owner, isPublic, actualStartDate, actualEndDate, vendors. Project ID
+# (project_code), baseline ID, and status are read-only — status changes
+# go through the dedicated publish/close/suspend transition endpoints,
+# project_code + baseline_id are immutable system identifiers.
 EDITABLE_FIELDS_VERSION: Set[str] = {
     "owner",
     "public",
@@ -87,6 +97,11 @@ EDITABLE_FIELDS_VERSION: Set[str] = {
     "actual_end_date",
     "status_explanation",
 }
+
+# Status changes never flow through PATCH — they go through
+# /publish, /close, /suspend, /save which apply the transition state
+# machine. PATCHing `status` returns 422 invalid_field with a hint
+# pointing at the dedicated endpoints.
 
 
 def editable_fields_for(project: Project) -> Set[str]:

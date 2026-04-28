@@ -157,6 +157,8 @@ class ProjectController:
             "status": data.status,
             "owner": data.owner,
             "category": data.category,
+            "category_other": data.categoryOther,
+            "category_other_reason": data.categoryOtherReason,
             "start_date": data.start_date,
             "end_date": data.end_date,
             "actual_start_date": data.actual_start_date,
@@ -167,7 +169,10 @@ class ProjectController:
         # "replace". The service handles it outside the column-whitelist path
         # because vendors live in an association table.
         result = update_project(
-            db, pid, actor_id=actor_id, patch=patch, vendor_ids=data.vendorIds,
+            db, pid,
+            actor_id=actor_id,
+            patch=patch,
+            vendor_ids=data.vendorIds,
         )
         if not result.is_success():
             return _error_response(result)

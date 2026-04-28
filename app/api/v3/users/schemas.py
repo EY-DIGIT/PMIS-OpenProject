@@ -57,7 +57,23 @@ class UserListQuery(BaseModel):
 
 
 class IntrospectRequest(BaseModel):
-    """Request schema for token introspection."""
+    """Request schema for token introspection.
+
+    RFC 7662-style: pure read-only metadata lookup, never rotates tokens.
+    Provide either or both fields. Both → response shape becomes
+    ``{access: {...}, refresh: {...}}``.
+    """
 
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    """Request schema for POST /users/refresh.
+
+    Takes only a refresh token. Successful rotation returns a new
+    access + refresh pair plus expiry metadata so the FE can schedule
+    the next preemptive refresh without decoding the JWT.
+    """
+
+    refresh_token: str

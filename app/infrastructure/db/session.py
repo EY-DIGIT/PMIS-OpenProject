@@ -22,6 +22,80 @@ class Base(DeclarativeBase):
     pass
 
 
+def _heal_sqlite_column_drift(conn, metadata) -> list:
+    """Generic auto-healer: add any model column missing from the SQLite DB.
+
+    Iterates ``metadata.tables`` and, for each table that already exists,
+    compares the model's columns against the actual table's columns via
+    PRAGMA. Missing columns are added with ``ALTER TABLE ADD COLUMN``,
+    using the SQLAlchemy column's compiled type and (when present) its
+    default. NOT NULL columns are skipped unless they have a default,
+    because SQLite can't add a NOT NULL column without a default.
+
+    Returns the list of ``(table.column)`` strings that were added (for
+    logging/tests). No-op on non-SQLite dialects.
+
+    This is a defensive backstop — explicit ALTER blocks above this still
+    run first (and handle index creation, partial-index DDL, etc.). This
+    pass catches columns that landed in a model after the explicit blocks
+    were last hand-maintained, so the next post-doc-N feature drop doesn't
+    silently break the SQLite dev environment.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.schema import CreateColumn
+
+    added: list = []
+    dialect = conn.dialect
+    if dialect.name != "sqlite":
+        return added
+
+    for table in metadata.sorted_tables:
+        try:
+            res = conn.execute(text(f"PRAGMA table_info('{table.name}')"))
+            existing = {r[1] for r in res.fetchall()}
+        except Exception:
+            # Table doesn't exist yet; create_all will build it.
+            continue
+        if not existing:
+            continue
+
+        for column in table.columns:
+            if column.name in existing:
+                continue
+            # SQLite can't add a NOT NULL column without a default value.
+            # Skip those — they'd need a manual data-migration plan.
+            has_default = column.default is not None or column.server_default is not None
+            if not column.nullable and not has_default:
+                logging.warning(
+                    "Cannot auto-heal %s.%s on SQLite: column is NOT NULL "
+                    "without a default. Add an explicit ALTER above.",
+                    table.name, column.name,
+                )
+                continue
+            try:
+                # Compile the column DDL fragment (type + nullability +
+                # default) for the active dialect, then wrap it in
+                # ALTER TABLE ADD COLUMN.
+                ddl_fragment = str(
+                    CreateColumn(column).compile(dialect=dialect)
+                )
+                conn.execute(text(
+                    f"ALTER TABLE {table.name} ADD COLUMN {ddl_fragment}"
+                ))
+                added.append(f"{table.name}.{column.name}")
+                logging.info(
+                    "Auto-healed SQLite drift: added %s.%s",
+                    table.name, column.name,
+                )
+            except Exception as e:
+                logging.warning(
+                    "Failed to auto-heal %s.%s: %s",
+                    table.name, column.name, e,
+                )
+
+    return added
+
+
 def _heal_legacy_dep_tables(conn) -> list:
     """Drop any dep table still using the v1 schema.
 
@@ -199,16 +273,19 @@ def init_db() -> None:
                     # work). All NEW additions tied to the UUID migration are
                     # expressed in the SQLAlchemy models themselves.
                     project_column_ddl = [
-                        ("actual_end_date",   "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
-                        ("is_version",        "ALTER TABLE projects ADD COLUMN is_version BOOLEAN NOT NULL DEFAULT 0"),
-                        ("version_no",        "ALTER TABLE projects ADD COLUMN version_no INTEGER"),
-                        ("created_by",        "ALTER TABLE projects ADD COLUMN created_by INTEGER REFERENCES users(id)"),
-                        ("updated_by",        "ALTER TABLE projects ADD COLUMN updated_by INTEGER REFERENCES users(id)"),
-                        ("deleted_at",        "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
-                        ("deleted_by",        "ALTER TABLE projects ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
-                        ("project_code",      "ALTER TABLE projects ADD COLUMN project_code VARCHAR(30)"),
-                        # NEW: free-text label when category == 'others'.
-                        ("category_other",    "ALTER TABLE projects ADD COLUMN category_other VARCHAR(255)"),
+                        ("actual_end_date",        "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
+                        ("actual_start_date",      "ALTER TABLE projects ADD COLUMN actual_start_date DATETIME"),
+                        ("is_version",             "ALTER TABLE projects ADD COLUMN is_version BOOLEAN NOT NULL DEFAULT 0"),
+                        ("version_no",             "ALTER TABLE projects ADD COLUMN version_no INTEGER"),
+                        ("created_by",             "ALTER TABLE projects ADD COLUMN created_by INTEGER REFERENCES users(id)"),
+                        ("updated_by",             "ALTER TABLE projects ADD COLUMN updated_by INTEGER REFERENCES users(id)"),
+                        ("deleted_at",             "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
+                        ("deleted_by",             "ALTER TABLE projects ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                        ("project_code",           "ALTER TABLE projects ADD COLUMN project_code VARCHAR(30)"),
+                        # Free-text label when category == 'others'.
+                        ("category_other",         "ALTER TABLE projects ADD COLUMN category_other VARCHAR(255)"),
+                        # Reason text when category == 'others' (added in doc-15 catalogs migration).
+                        ("category_other_reason",  "ALTER TABLE projects ADD COLUMN category_other_reason VARCHAR(1000)"),
                     ]
                     for col, ddl in project_column_ddl:
                         if col not in project_cols:
@@ -375,6 +452,17 @@ def init_db() -> None:
                 # rebuilds it fresh. Extracted into a module-level helper so
                 # tests can exercise it directly.
                 _heal_legacy_dep_tables(conn)
+
+                # Generic backstop: any nullable model column that is missing
+                # from the SQLite DB gets auto-added. Catches drift introduced
+                # in future feature drops where the explicit ALTER blocks
+                # above weren't updated. NOT NULL columns without defaults
+                # still need an explicit block above this — they get logged
+                # loud here so devs notice.
+                try:
+                    _heal_sqlite_column_drift(conn, Base.metadata)
+                except Exception as e:
+                    logging.warning("Generic SQLite drift heal failed: %s", e)
 
                 # ---- NEW: activity_resources classification columns ------
                 try:

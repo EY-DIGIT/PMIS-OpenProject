@@ -408,13 +408,30 @@ class UserController:
 
         if result.is_success():
             token_data = result.data
+            # Decode the freshly-minted tokens to surface their expiry /
+            # issued-at timestamps to the FE. Lets the client schedule a
+            # preemptive refresh without having to decode the JWT itself.
+            from .services.refresh import _exp_metadata
+            access_meta = _exp_metadata(token_data["access_token"])
+            refresh_meta = (
+                _exp_metadata(token_data["refresh_token"])
+                if token_data.get("refresh_token") else {}
+            )
             # Keep HAL+JSON for the user inside the `data` payload.
             response_payload = {
                 "_type": "Login",
                 "access_token": token_data["access_token"],
                 "refresh_token": token_data.get("refresh_token"),
                 "token_type": token_data["token_type"],
-                "user": format_user_response(token_data["user"].to_dict())
+                "accessTokenExpiresAt": access_meta.get("expiresAt"),
+                "accessTokenIssuedAt": access_meta.get("issuedAt"),
+                "refreshTokenExpiresAt": refresh_meta.get("expiresAt"),
+                "refreshTokenIssuedAt": refresh_meta.get("issuedAt"),
+                "expiresInSeconds": (
+                    int(access_meta["exp"] - access_meta["iat"])
+                    if access_meta.get("exp") and access_meta.get("iat") else None
+                ),
+                "user": format_user_response(token_data["user"].to_dict()),
             }
             # Opt-in envelope using BaseController helper which calls `api_response()` internally.
             resp = BaseController.ok(response_payload)
@@ -434,31 +451,63 @@ class UserController:
         db: Session
     ) -> JSONResponse:
         """
-        Public introspection endpoint. No auth middleware.
+        Public introspection endpoint. No auth middleware. RFC 7662-style
+        read-only: returns token metadata without ever rotating. Use
+        POST /users/refresh to rotate.
         """
         from .services.introspect import introspect_tokens
 
-        result = introspect_tokens(db=db, access_token=data.access_token, refresh_token=data.refresh_token)
+        result = introspect_tokens(
+            db=db,
+            access_token=data.access_token,
+            refresh_token=data.refresh_token,
+        )
 
-        if result.is_success():
-            payload = result.data
-            # When active-only response
-            if payload.get("active"):
-                resp_payload = {"_type": "Introspect", "active": True, "user": format_user_response(payload["user"].to_dict())}
-                return BaseController.ok(resp_payload)
-
-            # When rotation issued new tokens
-            resp_payload = {
-                "_type": "Introspect",
-                "access_token": payload.get("access_token"),
-                "refresh_token": payload.get("refresh_token"),
-                "token_type": payload.get("token_type"),
-                "user": format_user_response(payload["user"].to_dict())
-            }
-            return BaseController.ok(resp_payload)
-        else:
+        if not result.is_success():
+            # Only happens for "no token provided" — a 422 from the schema
+            # would be cleaner but the body is well-formed JSON, so the
+            # service-layer 400 is appropriate.
             error_payload = format_error_response(
                 error_type=result.error_type,
-                message=result.error
+                message=result.error,
             )
-            return BaseController.error(error_payload, status=401)
+            status = 422 if result.error_type == "validation_error" else 401
+            return BaseController.error(error_payload, status=status)
+
+        payload = result.data
+        payload["_type"] = "Introspect"
+        return BaseController.ok(payload)
+
+    @staticmethod
+    def refresh(
+        data,
+        db: Session,
+    ) -> JSONResponse:
+        """Public refresh endpoint. Validates a refresh token and returns
+        a freshly-rotated access + refresh pair plus expiry metadata.
+        """
+        from .services.refresh import refresh_tokens
+
+        result = refresh_tokens(db=db, refresh_token=data.refresh_token)
+
+        if not result.is_success():
+            error_payload = format_error_response(
+                error_type=result.error_type,
+                message=result.error,
+            )
+            status = 422 if result.error_type == "validation_error" else 401
+            return BaseController.error(error_payload, status=status)
+
+        payload = result.data
+        return BaseController.ok({
+            "_type": "Refresh",
+            "access_token": payload["access_token"],
+            "refresh_token": payload["refresh_token"],
+            "token_type": payload["token_type"],
+            "accessTokenExpiresAt": payload.get("accessTokenExpiresAt"),
+            "accessTokenIssuedAt": payload.get("accessTokenIssuedAt"),
+            "refreshTokenExpiresAt": payload.get("refreshTokenExpiresAt"),
+            "refreshTokenIssuedAt": payload.get("refreshTokenIssuedAt"),
+            "expiresInSeconds": payload.get("expiresInSeconds"),
+            "user": format_user_response(payload["user"].to_dict()),
+        })

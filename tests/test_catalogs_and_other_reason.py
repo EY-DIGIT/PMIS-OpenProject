@@ -200,6 +200,149 @@ class TestCategoryOtherReason:
 
 
 # ---------------------------------------------------------------------------
+# Divisions catalog
+# ---------------------------------------------------------------------------
+
+
+class TestDivisionsCatalog:
+    """GET /divisions surfaces the in-code DIVISION_CHOICES so the FE can
+    populate dropdowns without hard-coding labels."""
+
+    def test_endpoint_returns_three_divisions_with_labels(self, client, admin_headers):
+        resp = client.get("/api/v3/divisions", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        items = body["_embedded"]["elements"]
+        assert len(items) == 3
+        codes = [i["code"] for i in items]
+        assert codes == ["tmd1", "tmd2", "others"]
+        labels = {i["code"]: i["label"] for i in items}
+        assert labels == {"tmd1": "TMD1", "tmd2": "TMD2", "others": "Others"}
+        # Only the 'others' entry should advertise the free-text follow-up.
+        requires_other = {i["code"]: i["requiresOther"] for i in items}
+        assert requires_other == {"tmd1": False, "tmd2": False, "others": True}
+
+    def test_endpoint_requires_authentication(self, client):
+        resp = client.get("/api/v3/divisions")
+        assert resp.status_code == 401, resp.text
+
+
+# ---------------------------------------------------------------------------
+# PATCH editable-field whitelist (doc 18 expansion)
+# ---------------------------------------------------------------------------
+
+
+class TestPatchEditableFields:
+    """The PATCH whitelist now matches the HTML edit-project flow: baselines
+    can edit category + categoryOther + categoryOtherReason + actual dates;
+    versions can NOT edit name / start_date / category. Status is rejected
+    on both — clients use the dedicated publish/close/suspend endpoints."""
+
+    def _create_baseline(self, client, admin_user, admin_headers, db_session, **overrides):
+        _add_admin_owner(db_session, admin_user)
+        _seed_status_transitions(db_session)
+        body = _create_project_body(**overrides)
+        resp = client.post(
+            "/api/v3/projects/create", json=body, headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()["data"]
+
+    def test_baseline_can_patch_category(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        p = self._create_baseline(
+            client, admin_user, admin_headers, db_session, category="MSAP",
+        )
+        resp = client.patch(
+            f"/api/v3/projects/{p['id']}",
+            json={"category": "MSIP"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["category"] == "MSIP"
+
+    def test_baseline_can_patch_to_others_with_reason(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        p = self._create_baseline(
+            client, admin_user, admin_headers, db_session, category="MSAP",
+        )
+        resp = client.patch(
+            f"/api/v3/projects/{p['id']}",
+            json={
+                "category": "others",
+                "categoryOther": "Internal R&D",
+                "categoryOtherReason": "Pilot bucket pending approval.",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["category"] == "others"
+        assert d["categoryOther"] == "Internal R&D"
+        assert d["categoryOtherReason"] == "Pilot bucket pending approval."
+
+    def test_baseline_patch_to_others_without_reason_rejected(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        p = self._create_baseline(
+            client, admin_user, admin_headers, db_session, category="MSAP",
+        )
+        resp = client.patch(
+            f"/api/v3/projects/{p['id']}",
+            json={"category": "others", "categoryOther": "X"},
+            headers=admin_headers,
+        )
+        # Missing categoryOtherReason → 422 from the symmetric check.
+        assert resp.status_code == 422, resp.text
+
+    def test_baseline_status_patch_rejected(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Status changes go through publish/close/suspend, not PATCH."""
+        p = self._create_baseline(
+            client, admin_user, admin_headers, db_session,
+        )
+        resp = client.patch(
+            f"/api/v3/projects/{p['id']}",
+            json={"status": "published"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()["error"]
+        assert body["errorIdentifier"] == "invalid_field"
+        assert "status" in body["_embedded"]["details"]["rejected"]
+
+    def test_version_status_patch_rejected(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Versions also reject PATCH on status (and on category /
+        project_code / baseline_id, which were never editable)."""
+        p = self._create_baseline(
+            client, admin_user, admin_headers, db_session,
+        )
+        client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
+        v = client.post(
+            f"/api/v3/projects/{p['id']}/versions/create", headers=admin_headers,
+        ).json()["data"]
+        for field, value in (
+            ("status", "closed"),
+            ("category", "MSIP"),
+            ("name", "should-not-work"),
+            ("start_date", _iso(99)),
+        ):
+            resp = client.patch(
+                f"/api/v3/projects/{v['id']}",
+                json={field: value},
+                headers=admin_headers,
+            )
+            assert resp.status_code == 422, (field, resp.text)
+            body = resp.json()["error"]
+            assert body["errorIdentifier"] == "invalid_field", (field, body)
+
+
+# ---------------------------------------------------------------------------
 # Task / subtask type inheritance
 # ---------------------------------------------------------------------------
 

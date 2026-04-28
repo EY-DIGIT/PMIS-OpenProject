@@ -12,10 +12,18 @@ Returns:
     "access_token": "eyJhbGc...",
     "token_type": "bearer",
     "refresh_token": "eyJhbGc...",
+    "accessTokenExpiresAt":  "2026-04-28T18:15:00+00:00",
+    "accessTokenIssuedAt":   "2026-04-28T18:00:00+00:00",
+    "refreshTokenExpiresAt": "2026-05-05T18:00:00+00:00",
+    "refreshTokenIssuedAt":  "2026-04-28T18:00:00+00:00",
+    "expiresInSeconds": 900,
     "user": { "_type": "User", ... }
   }
 }
 ```
+
+The `*ExpiresAt` / `expiresInSeconds` fields let the FE schedule a
+preemptive call to `/users/refresh` without having to decode the JWT.
 
 ### Using Tokens
 Include in all protected requests: `Authorization: Bearer <access_token>`
@@ -24,11 +32,72 @@ Include in all protected requests: `Authorization: Bearer <access_token>`
 - Algorithm: HS256
 - Access Token TTL: 15 minutes (configurable)
 - Refresh Token TTL: 7 days
-- JWT Payload: user_id, sub (login), role, is_admin, exp, iat
-- Refresh token tracked via JTI stored in users table
+- JWT Payload: user_id, sub (login), role, is_admin, exp, iat, jti
+- Refresh token tracked via JTI stored in users table — single-active-jti rotation
 
-### Token Introspection
-POST /api/v3/users/introspect - Check token validity, optionally refresh
+### Token Introspection (RFC 7662, read-only)
+**`POST /api/v3/users/introspect`** — pure metadata lookup. NEVER rotates.
+
+Body: `{access_token?: string, refresh_token?: string}` (provide at least one).
+
+Single-token response (flat):
+```json
+{
+  "_type": "Introspect",
+  "active": true,
+  "tokenType": "access",
+  "exp": 1714323300, "iat": 1714322400,
+  "expiresAt": "2026-04-28T18:15:00+00:00",
+  "issuedAt":  "2026-04-28T18:00:00+00:00",
+  "jti": "...", "sub": "admin", "username": "admin",
+  "userId": 1, "email": "admin@example.com",
+  "role": "admin", "isAdmin": true
+}
+```
+
+Both-token response (split):
+```json
+{
+  "_type": "Introspect",
+  "access":  { "active": true,  "tokenType": "access",  ... },
+  "refresh": { "active": true,  "tokenType": "refresh", ... }
+}
+```
+
+Inactive / expired / revoked / unparseable token → `{"active": false, "tokenType": ...}` (200, not 401).
+
+### Token Refresh (rotation)
+**`POST /api/v3/users/refresh`** — validates the refresh token, swaps the
+user row's stored jti atomically, and returns a fresh access + refresh pair.
+
+Body: `{refresh_token: string}`
+
+Response:
+```json
+{
+  "_type": "Refresh",
+  "access_token":  "eyJhbGc...",
+  "refresh_token": "eyJhbGc...",
+  "token_type": "bearer",
+  "accessTokenExpiresAt":  "2026-04-28T18:30:00+00:00",
+  "accessTokenIssuedAt":   "2026-04-28T18:15:00+00:00",
+  "refreshTokenExpiresAt": "2026-05-05T18:15:00+00:00",
+  "refreshTokenIssuedAt":  "2026-04-28T18:15:00+00:00",
+  "expiresInSeconds": 900,
+  "user": { "_type": "User", ... }
+}
+```
+
+After a successful refresh, the OLD refresh token is rejected on next
+use (jti rotated out). Two concurrent refresh attempts can only
+succeed once — the rotation uses a conditional UPDATE that requires
+the old jti to still match.
+
+Failure modes (401):
+- Invalid / expired refresh token
+- Refresh token already rotated (jti no longer matches user row)
+- User has been logged out (jti cleared on logout)
+- Posting an access token where the refresh token is expected
 
 ## Password Security
 - Hashing: Argon2id (with bcrypt fallback)

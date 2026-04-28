@@ -17,7 +17,11 @@ from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
 from .audit import ACTION_UPDATE, project_snapshot, record_audit
-from .transitions import editable_fields_for
+from .transitions import (
+    CATEGORY_OTHERS,
+    PROJECT_CATEGORY_CHOICES,
+    editable_fields_for,
+)
 
 
 def _verify_user_exists(db: Session, username: str) -> bool:
@@ -137,6 +141,79 @@ def update_project(
             error=f"Owner user '{supplied['owner']}' does not exist",
             error_type="validation_error",
         )
+
+    # Category 'others' idiom — symmetric with create_project / upsert_project.
+    # Effective values combine the patch with the existing row so a partial
+    # PATCH (e.g. only categoryOtherReason) doesn't false-trigger the rules.
+    if "category" in supplied or "category_other" in supplied or "category_other_reason" in supplied:
+        eff_category = supplied.get("category", project.category)
+        eff_other = supplied.get("category_other", project.category_other)
+        eff_reason = supplied.get("category_other_reason", project.category_other_reason)
+
+        if eff_category is not None and eff_category not in PROJECT_CATEGORY_CHOICES:
+            return ServiceResult.fail(
+                error=f"Invalid category '{eff_category}'.",
+                error_type="validation_error",
+            )
+
+        if eff_category == CATEGORY_OTHERS:
+            normalised_other = normalize_string(eff_other) if eff_other else ""
+            if not normalised_other:
+                return ServiceResult.fail(
+                    error="categoryOther is required when category is 'others'.",
+                    error_type="validation_error",
+                )
+            if len(normalised_other) > 255:
+                return ServiceResult.fail(
+                    error="categoryOther must be 1-255 characters.",
+                    error_type="validation_error",
+                )
+            normalised_reason = normalize_string(eff_reason) if eff_reason else ""
+            if not normalised_reason:
+                return ServiceResult.fail(
+                    error="categoryOtherReason is required when category is 'others'.",
+                    error_type="validation_error",
+                )
+            if len(normalised_reason) > 1000:
+                return ServiceResult.fail(
+                    error="categoryOtherReason must be 1-1000 characters.",
+                    error_type="validation_error",
+                )
+            if "category_other" in supplied:
+                supplied["category_other"] = normalised_other
+            if "category_other_reason" in supplied:
+                supplied["category_other_reason"] = normalised_reason
+        else:
+            # Non-'others' category MUST NOT carry these fields. Reject
+            # them with a clear error rather than silently dropping the
+            # supplied value (the repo's None-skip semantics would prevent
+            # the caller from clearing them via a PATCH anyway). FE must
+            # null them out explicitly via a follow-up administrative
+            # operation if they were previously set — see the TODO below.
+            if (
+                "category_other" in supplied
+                and supplied["category_other"] is not None
+                and normalize_string(supplied["category_other"]) != ""
+            ):
+                return ServiceResult.fail(
+                    error="categoryOther may only be provided when category is 'others'.",
+                    error_type="validation_error",
+                )
+            if (
+                "category_other_reason" in supplied
+                and supplied["category_other_reason"] is not None
+                and normalize_string(supplied["category_other_reason"]) != ""
+            ):
+                return ServiceResult.fail(
+                    error="categoryOtherReason may only be provided when category is 'others'.",
+                    error_type="validation_error",
+                )
+            # TODO: when switching away from 'others' the previously-stored
+            # category_other / category_other_reason rows are left in place.
+            # Repo.update treats None as "leave unchanged" so we can't clear
+            # them here; needs a small repo extension (sentinel for explicit
+            # null) to fix cleanly. Low priority — affects display only,
+            # never validation.
 
     # Vendor-list replacement. Handled outside the column whitelist.
     vendor_repo = VendorRepository(db)

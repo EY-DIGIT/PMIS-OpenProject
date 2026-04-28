@@ -12,7 +12,7 @@ from .schemas import (
     LoginRequest,
     UserListQuery
 )
-from .schemas import IntrospectRequest
+from .schemas import IntrospectRequest, RefreshRequest
 from .permissions import (
     USERS_CREATE,
     USERS_READ,
@@ -28,17 +28,42 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.post(
     "/introspect",
-    summary="Introspect tokens",
-    description="Public token introspection endpoint"
+    summary="Introspect tokens (RFC 7662 read-only metadata)",
+    description=(
+        "Public token introspection. Returns metadata (active, exp, iat, "
+        "jti, sub, userId, role, isAdmin) for the supplied access_token "
+        "and/or refresh_token. NEVER rotates — use POST /users/refresh "
+        "to mint a fresh access + refresh pair from a valid refresh token. "
+        "When both tokens are supplied, the response shape becomes "
+        "{access: {...}, refresh: {...}}."
+    ),
 )
 def introspect(
     data: IntrospectRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Public introspection endpoint. Accepts tokens in request body.
-    """
+    """Public introspection endpoint. Accepts tokens in request body."""
     return UserController.introspect(data, db)
+
+
+@router.post(
+    "/refresh",
+    summary="Refresh access token (rotates the refresh token too)",
+    description=(
+        "Validates the supplied refresh token and issues a fresh access + "
+        "refresh pair. The user row's stored refresh_token_jti is rotated "
+        "atomically — concurrent refreshes with the same token can only "
+        "succeed once. Response includes accessTokenExpiresAt + "
+        "refreshTokenExpiresAt so the client can schedule the next "
+        "preemptive refresh."
+    ),
+)
+def refresh(
+    data: RefreshRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Public refresh endpoint."""
+    return UserController.refresh(data, db)
 
 
 @router.post(
