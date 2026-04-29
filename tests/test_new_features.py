@@ -1,13 +1,18 @@
-"""Tests for the feature additions:
+"""Tests for the feature additions across docs 12-18:
 
-- Task 2: project category 'others' + category_other
-- Task 3: project vendors (and /vendors endpoint)
-- Task 4: milestone status
-- Task 5: milestone vendors (subset of project vendors)
-- Task 6: milestone depends (pass-through)
-- Task 7: activity (standard) status (dependsOn is covered by test_dependencies.py)
-- Task 8: activity (resource) type_of_resource_id
-- Task 9: activity (resource) division + division_other
+Doc 12-14:
+- ``TestCategoryOthers``           — project category 'others' + categoryOther
+- ``TestVendorsAndProjectVendors`` — vendor catalog + project_vendors mapping
+- ``TestMilestoneFields``          — milestone status / depends / vendors
+- ``TestStandardActivityFields``   — standard activity status
+- ``TestResourceActivityFields``   — resource activity typeOfResourceId +
+                                     division + divisionOther
+
+Doc 17-18:
+- ``TestVendorContactDetails``     — email / contactPerson / phoneNumber
+                                     columns + GET /vendors/{id} detail
+                                     endpoint + mapped projects on the
+                                     vendor responses
 """
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -340,6 +345,402 @@ class TestVendorContactDetails:
         assert len(match) == 1
         assert match[0]["email"] == "on-list@example.com"
         assert match[0]["phoneNumber"] == "555-9999"
+
+
+class TestVendorLifecycleContracts:
+    """Doc 17 vendor lifecycle contracts that weren't otherwise covered:
+    newest-first sort, soft-delete name collision, the dedicated
+    /vendors/{id}/projects endpoint, and closed/completed project
+    filtering on the embedded `projects` array."""
+
+    def test_list_vendors_newest_first(self, client, admin_headers):
+        first  = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "ZZZ-First-V"}, headers=admin_headers,
+        ).json()["data"]
+        second = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "AAA-Second-V"}, headers=admin_headers,
+        ).json()["data"]
+        third  = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "MMM-Third-V"}, headers=admin_headers,
+        ).json()["data"]
+
+        items = client.get(
+            "/api/v3/vendors", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]
+        ids = [v["id"] for v in items if v["id"] in (first["id"], second["id"], third["id"])]
+        # Newest-first: third came last → first in the list.
+        assert ids == [third["id"], second["id"], first["id"]]
+
+    def test_create_vendor_with_soft_deleted_name_returns_409(
+        self, client, admin_headers,
+    ):
+        """`POST /vendors/create` against a name that exists but is
+        soft-deleted should 409 with a hint to restore (doc 17 §4)."""
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Recyclable Vendor"},
+            headers=admin_headers,
+        ).json()["data"]
+        client.delete(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+
+        # Same name → 409 with the restore hint.
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Recyclable Vendor"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 409, resp.text
+        msg = resp.json()["error"]["message"].lower()
+        assert "restore" in msg
+
+    def test_get_vendor_projects_endpoint(
+        self, client, admin_headers, db_session,
+    ):
+        """Dedicated `GET /vendors/{id}/projects` returns the live mapped
+        projects (doc 17 §4)."""
+        v1, _v2 = _seed_vendors(db_session)
+        p = _create_project(client, admin_headers, name="VP-1", vendor_ids=[v1])
+        assert p.status_code == 201
+        resp = client.get(
+            f"/api/v3/vendors/{v1}/projects", headers=admin_headers,
+        )
+        assert resp.status_code == 200
+        items = resp.json()["data"]["_embedded"]["elements"]
+        names = [x["name"] for x in items]
+        assert "VP-1" in names
+
+    def test_vendor_projects_excludes_closed_projects(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Both `GET /vendors/{id}/projects` and the embedded `projects`
+        array on `GET /vendors` filter out closed (and soft-deleted)
+        projects (doc 17 §4 + §7). Soft-deleting a project flips its
+        status to 'closed' AND drops the project_vendors mapping, so
+        the project disappears from the vendor's view via either
+        mechanism."""
+        v1, _v2 = _seed_vendors(db_session)
+
+        # Two live projects mapped to v1.
+        live = _create_project(
+            client, admin_headers, name="Live VP", vendor_ids=[v1],
+        ).json()["data"]
+        gone = _create_project(
+            client, admin_headers, name="Soon-Closed VP", vendor_ids=[v1],
+        ).json()["data"]
+
+        # Soft-delete one (flips status to 'closed' + drops mapping).
+        client.delete(f"/api/v3/projects/{gone['id']}", headers=admin_headers)
+
+        # /vendors/{id}/projects: only the live one remains.
+        scope = client.get(
+            f"/api/v3/vendors/{v1}/projects", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]
+        scope_ids = {x["id"] for x in scope}
+        assert live["id"] in scope_ids
+        assert gone["id"] not in scope_ids
+
+        # /vendors: same filter applies on the embedded `projects` array.
+        list_items = client.get(
+            "/api/v3/vendors", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]
+        v_row = [x for x in list_items if x["id"] == v1][0]
+        embedded_ids = {p["id"] for p in v_row["projects"]}
+        assert live["id"] in embedded_ids
+        assert gone["id"] not in embedded_ids
+
+    def test_restore_vendor_is_idempotent_on_live_vendor(
+        self, client, admin_headers,
+    ):
+        """Restoring an already-live vendor returns 200 + the current
+        snapshot rather than 409 (doc 17 §4 — idempotent)."""
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Already Live"},
+            headers=admin_headers,
+        ).json()["data"]
+        resp = client.post(
+            f"/api/v3/vendors/{c['id']}/restore", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["id"] == c["id"]
+        assert resp.json()["data"]["deletedAt"] is None
+
+
+class TestVendorProjectionShape:
+    """The `projects` array must carry the same fields across all three
+    vendor endpoints (GET /vendors, GET /vendors/{id}, GET /vendors/{id}/projects).
+    Doc-18 §8 fix: previously the embedded array on /vendors and
+    /vendors/{id} returned only {id, projectCode, name}; the dedicated
+    /vendors/{id}/projects endpoint returned {_type, id, projectCode,
+    name, status, createdAt}. The shape is now unified to include
+    status, isVersion, versionOf, createdAt — so the FE can render
+    badges + group versions without a follow-up call."""
+
+    def _setup(self, client, admin_headers, db_session):
+        v1, _v2 = _seed_vendors(db_session)
+        p = _create_project(client, admin_headers, name="Shape-Probe", vendor_ids=[v1])
+        assert p.status_code == 201, p.text
+        return v1, p.json()["data"]
+
+    def test_embedded_projects_on_list_carries_full_shape(
+        self, client, admin_headers, db_session,
+    ):
+        v1, p = self._setup(client, admin_headers, db_session)
+        items = client.get(
+            "/api/v3/vendors", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]
+        v_row = [x for x in items if x["id"] == v1][0]
+        proj_row = v_row["projects"][0]
+        # New fields the FE needs.
+        assert proj_row["_type"] == "Project"
+        assert proj_row["status"] == "new"
+        assert proj_row["isVersion"] is False
+        assert proj_row["versionOf"] is None
+        assert proj_row["createdAt"] and "T" in proj_row["createdAt"]
+
+    def test_embedded_projects_on_detail_carries_full_shape(
+        self, client, admin_headers, db_session,
+    ):
+        v1, p = self._setup(client, admin_headers, db_session)
+        d = client.get(
+            f"/api/v3/vendors/{v1}", headers=admin_headers,
+        ).json()["data"]
+        proj_row = d["projects"][0]
+        assert proj_row["status"] == "new"
+        assert proj_row["isVersion"] is False
+        assert proj_row["createdAt"]
+
+    def test_dedicated_projects_endpoint_uses_same_shape(
+        self, client, admin_headers, db_session,
+    ):
+        v1, p = self._setup(client, admin_headers, db_session)
+        emb = client.get(
+            f"/api/v3/vendors/{v1}", headers=admin_headers,
+        ).json()["data"]["projects"][0]
+        scoped = client.get(
+            f"/api/v3/vendors/{v1}/projects", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"][0]
+        # Identical key sets across the two surfaces.
+        assert set(emb.keys()) == set(scoped.keys())
+
+    def test_version_appears_with_isVersion_true_and_versionOf_set(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Baseline + version both show up for the vendor; the version
+        carries `isVersion=True` and `versionOf=<baseline_id>` so the
+        FE can group them visually."""
+        v1, p = self._setup(client, admin_headers, db_session)
+        # Publish + create a version of the baseline.
+        client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
+        v_resp = client.post(
+            f"/api/v3/projects/{p['id']}/versions/create", headers=admin_headers,
+        )
+        assert v_resp.status_code == 201, v_resp.text
+        version = v_resp.json()["data"]
+
+        items = client.get(
+            f"/api/v3/vendors/{v1}", headers=admin_headers,
+        ).json()["data"]["projects"]
+        # Both baseline + version are mapped (version inherits the vendor).
+        ids = {x["id"] for x in items}
+        assert p["id"] in ids
+        assert version["id"] in ids
+        # Identify each row.
+        baseline_row = [x for x in items if x["id"] == p["id"]][0]
+        version_row  = [x for x in items if x["id"] == version["id"]][0]
+        assert baseline_row["isVersion"] is False
+        assert baseline_row["versionOf"] is None
+        assert version_row["isVersion"] is True
+        assert version_row["versionOf"] == p["id"]
+
+
+class TestCreateVendorWithProjects:
+    """`POST /vendors/create` accepts `projectIds` to assign mappings
+    from the vendor side at creation time (doc 18 §9).  Each id is
+    validated: must exist, not be soft-deleted, not be closed/completed."""
+
+    def _make_active_project(self, client, admin_headers, *, name):
+        return _create_project(client, admin_headers, name=name).json()["data"]
+
+    def test_create_with_projectIds_attaches_mapping(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        p1 = self._make_active_project(client, admin_headers, name="VP-A")
+        p2 = self._make_active_project(client, admin_headers, name="VP-B")
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-with-projects", "projectIds": [p1["id"], p2["id"]]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        d = resp.json()["data"]
+        names = sorted(p["name"] for p in d["projects"])
+        assert names == ["VP-A", "VP-B"]
+
+    def test_create_with_empty_projectIds_attaches_nothing(
+        self, client, admin_headers,
+    ):
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-empty-list", "projectIds": []},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["projects"] == []
+
+    def test_create_with_unknown_project_id_returns_422(
+        self, client, admin_headers,
+    ):
+        from uuid import uuid4
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-bad-id", "projectIds": [str(uuid4())]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        assert "unknown project" in resp.json()["error"]["message"].lower()
+
+    def test_create_rejects_closed_project_id(
+        self, client, admin_user, admin_headers,
+    ):
+        """Closed projects are not 'active' — the FE picker should never
+        offer them but we double-check on the BE."""
+        p = self._make_active_project(client, admin_headers, name="VP-Soon-Closed")
+        # Drive the project to 'closed' status.
+        client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
+        cl = client.post(
+            f"/api/v3/projects/{p['id']}/close", headers=admin_headers,
+        )
+        assert cl.status_code == 200, cl.text
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-tries-closed", "projectIds": [p["id"]]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        assert "closed" in resp.json()["error"]["message"].lower()
+
+    def test_create_rejects_soft_deleted_project_id(
+        self, client, admin_user, admin_headers,
+    ):
+        p = self._make_active_project(client, admin_headers, name="VP-Soon-Deleted")
+        client.delete(f"/api/v3/projects/{p['id']}", headers=admin_headers)
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-tries-deleted", "projectIds": [p["id"]]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+
+    def test_create_dedupes_repeated_project_ids(
+        self, client, admin_user, admin_headers,
+    ):
+        p = self._make_active_project(client, admin_headers, name="VP-Once")
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-dupe", "projectIds": [p["id"], p["id"], p["id"]]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        # Only one mapping row.
+        assert len(resp.json()["data"]["projects"]) == 1
+
+    def test_create_then_project_side_query_sees_the_mapping(
+        self, client, admin_user, admin_headers,
+    ):
+        """Bidirectional: a vendor created with projectIds should also
+        show up on the project's `vendors` field via GET /projects/{id}."""
+        p = self._make_active_project(client, admin_headers, name="VP-Bidir")
+        v = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-bidir", "projectIds": [p["id"]]},
+            headers=admin_headers,
+        ).json()["data"]
+        proj_resp = client.get(
+            f"/api/v3/projects/{p['id']}", headers=admin_headers,
+        )
+        assert proj_resp.status_code == 200
+        vendors = proj_resp.json()["data"]["vendors"]
+        assert any(x["id"] == v["id"] for x in vendors)
+
+
+class TestPatchVendorWithProjects:
+    """PATCH semantics for `projectIds`: omitted leaves mapping unchanged;
+    [] clears; non-empty list replaces."""
+
+    def test_patch_replaces_full_project_list(
+        self, client, admin_user, admin_headers,
+    ):
+        p1 = _create_project(client, admin_headers, name="VP-1").json()["data"]
+        p2 = _create_project(client, admin_headers, name="VP-2").json()["data"]
+        v = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-replace", "projectIds": [p1["id"]]},
+            headers=admin_headers,
+        ).json()["data"]
+        # Replace with a different project.
+        resp = client.patch(
+            f"/api/v3/vendors/{v['id']}",
+            json={"projectIds": [p2["id"]]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        names = [x["name"] for x in resp.json()["data"]["projects"]]
+        assert names == ["VP-2"]
+
+    def test_patch_empty_list_clears_projects(
+        self, client, admin_user, admin_headers,
+    ):
+        p = _create_project(client, admin_headers, name="VP-clear").json()["data"]
+        v = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-clear", "projectIds": [p["id"]]},
+            headers=admin_headers,
+        ).json()["data"]
+        resp = client.patch(
+            f"/api/v3/vendors/{v['id']}",
+            json={"projectIds": []},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["projects"] == []
+
+    def test_patch_omitting_projectIds_leaves_mapping_unchanged(
+        self, client, admin_user, admin_headers,
+    ):
+        p = _create_project(client, admin_headers, name="VP-keep").json()["data"]
+        v = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-keep", "projectIds": [p["id"]]},
+            headers=admin_headers,
+        ).json()["data"]
+        # PATCH some other field; mapping should survive.
+        resp = client.patch(
+            f"/api/v3/vendors/{v['id']}",
+            json={"description": "new description"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["data"]["projects"]) == 1
+
+    def test_patch_invalid_project_id_returns_422(
+        self, client, admin_user, admin_headers,
+    ):
+        from uuid import uuid4
+        v = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "V-bad-patch"},
+            headers=admin_headers,
+        ).json()["data"]
+        resp = client.patch(
+            f"/api/v3/vendors/{v['id']}",
+            json={"projectIds": [str(uuid4())]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
 
 
 # ---------------------------------------------------------------------------

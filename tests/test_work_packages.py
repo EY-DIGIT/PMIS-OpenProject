@@ -117,3 +117,37 @@ class TestDeleteWorkPackage:
         wp_id = create.json()["data"]["id"]
         resp = client.delete(f"/api/v3/work_packages/{wp_id}", headers=admin_headers)
         assert resp.status_code in [200, 204]
+
+
+class TestWorkPackageInclusiveDateValidation:
+    """`endDate == startDate` is now allowed on work packages (doc 17 §2;
+    inclusive boundary, not exclusive). Backwards-end is still rejected."""
+
+    def test_create_with_equal_start_and_end_succeeds(
+        self, client, admin_user, admin_headers, sample_project, builtin_wp_types,
+    ):
+        same_date = _future(10)
+        resp = client.post(
+            f"/api/v3/projects/{sample_project.id}/work_packages/create",
+            json={
+                "subject": "One-day milestone",
+                "startDate": same_date,
+                "endDate": same_date,
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_create_with_end_before_start_still_rejected(
+        self, client, admin_user, admin_headers, sample_project, builtin_wp_types,
+    ):
+        resp = client.post(
+            f"/api/v3/projects/{sample_project.id}/work_packages/create",
+            json={
+                "subject": "Backwards",
+                "startDate": _future(20),
+                "endDate":   _future(10),
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422

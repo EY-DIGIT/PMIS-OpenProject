@@ -61,14 +61,96 @@ def _vendor_to_response(v, projects: List[Dict[str, Any]] | None = None) -> Dict
     }
 
 
+def _project_entry(*, id, project_code, name, status, created_at,
+                   is_version, version_of) -> Dict[str, Any]:
+    """Single source of truth for the per-project shape returned by every
+    vendor endpoint. Used by both ``_projects_by_vendor`` (the embedded
+    array on /vendors and /vendors/{id}) and the dedicated
+    /vendors/{id}/projects endpoint, so all three return identical entries.
+
+    The new fields vs the original three (id, projectCode, name):
+
+    - ``status``      — lets the FE render an "Active / Closed / Suspended"
+                        badge without a follow-up GET.
+    - ``isVersion``   — distinguishes a baseline from a version row.
+                        Critical because version projects inherit the
+                        baseline's name and would otherwise look like a
+                        duplicate row in the vendor's project list.
+    - ``versionOf``   — for version rows, the baseline UUID. The FE can
+                        group `[baseline, ...versions]` together, or hide
+                        versions altogether and only show baselines.
+    - ``createdAt``   — ISO 8601 timestamp the FE can use for sub-sort.
+    """
+    return {
+        "_type": "Project",
+        "id": id,
+        "projectCode": project_code,
+        "name": name,
+        "status": status,
+        "isVersion": bool(is_version),
+        "versionOf": version_of,
+        "createdAt": created_at.isoformat() if created_at else None,
+    }
+
+
+def _validate_assignable_project_ids(
+    db: Session, project_ids: List[str],
+) -> List[str]:
+    """De-dupe + validate project ids before mapping them to a vendor.
+
+    A project is assignable when:
+      - it exists,
+      - it is not soft-deleted,
+      - its status is not in ``_HIDDEN_PROJECT_STATUSES`` (closed / completed).
+
+    Raises ``ValidationError`` listing the offending ids on first failure;
+    returns the unique, ordered list on success.
+    """
+    from ....core.errors import ValidationError
+    if not project_ids:
+        return []
+    unique = list(dict.fromkeys(project_ids))
+    rows = (
+        db.query(ProjectModel.id, ProjectModel.status, ProjectModel.deleted_at)
+        .filter(ProjectModel.id.in_(unique))
+        .all()
+    )
+    # Map id → (status, deleted_at). Missing rows fall through to the
+    # `missing` check below.
+    by_id = {pid: (status, deleted_at) for (pid, status, deleted_at) in rows}
+
+    missing = [pid for pid in unique if pid not in by_id]
+    if missing:
+        raise ValidationError(
+            f"Unknown project(s): {', '.join(missing)}",
+        )
+    deleted = [pid for pid in unique if by_id[pid][1] is not None]
+    if deleted:
+        raise ValidationError(
+            f"Project(s) are soft-deleted and cannot be assigned to a "
+            f"vendor: {', '.join(deleted)}",
+        )
+    bad_status = [
+        pid for pid in unique
+        if by_id[pid][0] in _HIDDEN_PROJECT_STATUSES
+    ]
+    if bad_status:
+        raise ValidationError(
+            f"Project(s) are closed/completed and cannot be assigned to "
+            f"a vendor: {', '.join(bad_status)}",
+        )
+    return unique
+
+
 def _projects_by_vendor(
     db: Session, vendor_ids: Iterable[str],
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Return ``{vendor_id: [{id, projectCode, name}, ...]}`` for the given vendors.
+    """Return ``{vendor_id: [project_entry, ...]}`` for the given vendors.
 
     One batched query — no N+1. Filters out closed/completed and
     soft-deleted projects so the response matches the rule used by
-    GET /vendors/{id}/projects.
+    GET /vendors/{id}/projects. Each entry uses ``_project_entry`` so
+    the embedded shape matches the dedicated endpoint exactly.
     """
     vendor_ids = list(vendor_ids)
     if not vendor_ids:
@@ -79,6 +161,9 @@ def _projects_by_vendor(
             ProjectModel.id,
             ProjectModel.project_code,
             ProjectModel.name,
+            ProjectModel.status,
+            ProjectModel.is_version,
+            ProjectModel.version_of,
             ProjectModel.created_at,
         )
         .join(ProjectModel, ProjectModel.id == ProjectVendorModel.project_id)
@@ -89,12 +174,17 @@ def _projects_by_vendor(
         .all()
     )
     grouped: Dict[str, List[Dict[str, Any]]] = {}
-    for vendor_id, project_id, project_code, project_name, _created in rows:
-        grouped.setdefault(vendor_id, []).append({
-            "id": project_id,
-            "projectCode": project_code,
-            "name": project_name,
-        })
+    for (vendor_id, project_id, project_code, project_name,
+         status, is_version, version_of, created_at) in rows:
+        grouped.setdefault(vendor_id, []).append(_project_entry(
+            id=project_id,
+            project_code=project_code,
+            name=project_name,
+            status=status,
+            created_at=created_at,
+            is_version=is_version,
+            version_of=version_of,
+        ))
     return grouped
 
 
@@ -169,6 +259,10 @@ def create_vendor(
             f"A vendor named '{data.name}' already exists "
             "(it may be soft-deleted; restore it via POST /vendors/{id}/restore)."
         )
+    # Validate projectIds BEFORE inserting the vendor row so we don't
+    # leave a half-committed vendor when an id is bad. ValidationError
+    # bubbles up to a 422.
+    project_ids = _validate_assignable_project_ids(db, data.projectIds or [])
     vendor = repo.create(
         name=data.name,
         description=data.description,
@@ -177,8 +271,11 @@ def create_vendor(
         contact_person=data.contactPerson,
         phone_number=data.phoneNumber,
     )
+    if project_ids:
+        repo.set_vendor_projects(vendor.id, project_ids)
     db.commit()
-    return BaseController.created(data=_vendor_to_response(vendor))
+    projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
+    return BaseController.created(data=_vendor_to_response(vendor, projects))
 
 
 @router.patch(
@@ -196,6 +293,14 @@ def update_vendor(
     m = repo.get_model_by_id(vendor_id)
     if m is None:
         raise NotFoundError("Vendor not found.")
+    # If projectIds is supplied, validate BEFORE applying any field changes
+    # so a bad id doesn't leave the row half-updated. None means "leave the
+    # mapping unchanged"; [] clears it; non-empty list replaces it.
+    will_replace_projects = data.projectIds is not None
+    project_ids: List[str] = []
+    if will_replace_projects:
+        project_ids = _validate_assignable_project_ids(db, data.projectIds or [])
+
     if data.name is not None:
         m.name = data.name
     if data.description is not None:
@@ -209,6 +314,8 @@ def update_vendor(
     if data.phoneNumber is not None:
         m.phone_number = data.phoneNumber
     db.flush()
+    if will_replace_projects:
+        repo.set_vendor_projects(m.id, project_ids)
     db.commit()
     from ....domain.vendors.vendor import Vendor
     domain = Vendor(
@@ -301,26 +408,10 @@ def list_vendor_projects(
     repo = VendorRepository(db)
     if repo.get_by_id(vendor_id, include_deleted=True) is None:
         raise NotFoundError("Vendor not found.")
-    rows = (
-        db.query(ProjectModel)
-        .join(ProjectVendorModel, ProjectVendorModel.project_id == ProjectModel.id)
-        .filter(ProjectVendorModel.vendor_id == vendor_id)
-        .filter(ProjectModel.deleted_at.is_(None))
-        .filter(~ProjectModel.status.in_(_HIDDEN_PROJECT_STATUSES))
-        .order_by(ProjectModel.created_at.desc(), ProjectModel.id.desc())
-        .all()
-    )
-    items: List[Dict[str, Any]] = [
-        {
-            "_type": "Project",
-            "id": p.id,
-            "projectCode": p.project_code,
-            "name": p.name,
-            "status": p.status,
-            "createdAt": p.created_at.isoformat() if p.created_at else None,
-        }
-        for p in rows
-    ]
+    # Reuse the batched helper so this endpoint and the embedded
+    # projects array on /vendors and /vendors/{id} return identical
+    # entries (same fields, same filter, same order).
+    items = _projects_by_vendor(db, [vendor_id]).get(vendor_id, [])
     return BaseController.ok(data={
         "_type": "Collection",
         "total": len(items),

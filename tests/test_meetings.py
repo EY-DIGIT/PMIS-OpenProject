@@ -114,7 +114,14 @@ class TestMeetingParticipants:
     to the controller. These tests verify the expected behavior once fixed.
     """
 
-    @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
+    @pytest.mark.skip(reason=(
+        "Pre-existing bug: routes /meetings/{id}/participants(/...) and "
+        "/meetings/{id}/agenda_items(/...) call MeetingController methods "
+        "that require a project_id positional argument the route doesn't "
+        "supply (controller.py:243, :369). Fix: route should fetch the "
+        "meeting via MeetingRepository to derive project_id, OR controller "
+        "should derive it internally. Tracked separately from doc 17/18."
+    ))
     def test_add_and_list_participant(self, client, admin_user, member_user, admin_headers, sample_project):
         create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Participant Test",
@@ -133,7 +140,14 @@ class TestMeetingParticipants:
         assert list_resp.status_code == 200
         assert list_resp.json()["data"]["total"] >= 1
 
-    @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
+    @pytest.mark.skip(reason=(
+        "Pre-existing bug: routes /meetings/{id}/participants(/...) and "
+        "/meetings/{id}/agenda_items(/...) call MeetingController methods "
+        "that require a project_id positional argument the route doesn't "
+        "supply (controller.py:243, :369). Fix: route should fetch the "
+        "meeting via MeetingRepository to derive project_id, OR controller "
+        "should derive it internally. Tracked separately from doc 17/18."
+    ))
     def test_remove_participant(self, client, admin_user, member_user, admin_headers, sample_project):
         create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Remove Test",
@@ -153,7 +167,14 @@ class TestMeetingParticipants:
 class TestAgendaItems:
     """Meeting agenda item management."""
 
-    @pytest.mark.skip(reason="Route missing project_id parameter - pre-existing bug")
+    @pytest.mark.skip(reason=(
+        "Pre-existing bug: routes /meetings/{id}/participants(/...) and "
+        "/meetings/{id}/agenda_items(/...) call MeetingController methods "
+        "that require a project_id positional argument the route doesn't "
+        "supply (controller.py:243, :369). Fix: route should fetch the "
+        "meeting via MeetingRepository to derive project_id, OR controller "
+        "should derive it internally. Tracked separately from doc 17/18."
+    ))
     def test_create_and_list_agenda_item(self, client, admin_user, admin_headers, sample_project):
         create = client.post(f"/api/v3/projects/{sample_project.id}/meetings/create", json={
             "title": "Agenda Test",

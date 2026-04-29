@@ -201,6 +201,25 @@ class VendorRepository:
         )
         return [r[0] for r in rows]
 
+    # ---- Vendor-side: assign / replace a vendor's project list -------
+
+    def set_vendor_projects(self, vendor_id: str, project_ids: List[str]) -> None:
+        """Replace the full project-mapping set for a vendor.
+
+        Symmetric with ``set_project_vendors`` — both write to the same
+        ``project_vendors`` association table, just from opposite sides.
+        Used by POST /vendors/create + PATCH /vendors/{id} when the
+        caller supplies ``projectIds`` (vendor-side assignment, the
+        FE flow where you pick a vendor and attach projects to it).
+        Does NOT commit.
+        """
+        self.db.query(ProjectVendorModel).filter(
+            ProjectVendorModel.vendor_id == vendor_id
+        ).delete(synchronize_session=False)
+        for pid in project_ids:
+            self.db.add(ProjectVendorModel(project_id=pid, vendor_id=vendor_id))
+        self.db.flush()
+
     # ---- Milestone-Vendor associations --------------------------------
 
     def set_milestone_vendors(self, milestone_id: str, vendor_ids: List[str]) -> None:

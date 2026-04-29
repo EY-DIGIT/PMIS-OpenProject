@@ -1,18 +1,28 @@
-"""Tests for the new catalog endpoints + categoryOtherReason validation
-+ task/subtask type inheritance.
+"""Tests for the catalog + master-data endpoints introduced across
+docs 15-18.
 
-Three groups of tests for the doc-15 work:
-
-- ``TestStatusTransitionsCatalog`` — GET /project_status_transitions and the
-  invalid_status guard on project create.
-- ``TestProjectOwnersCatalog``     — GET /project_owners, POST /project_owners/create,
-  DELETE /project_owners/{user_id}, and owner-whitelist enforcement on
-  project create.
+- ``TestStatusTransitionsCatalog`` — GET /project_status_transitions and
+  the invalid_status guard on project create (doc 15).
+- ``TestProjectOwnersCatalog``     — GET / POST / DELETE on the project_owners
+  master. NOTE: per doc 18 §4 this catalog NO LONGER gates project create
+  (owner is a division code now); the catalog endpoints remain available
+  for any future per-user enforcement layer.
 - ``TestCategoryOtherReason``      — categoryOtherReason required when
-  category='others' and forbidden otherwise (covers create + upsert).
-- ``TestTaskSubtaskTypeInheritance`` — type field is no longer on the create
-  body; the service derives it from the parent activity / parent task and
-  enforces the resource-mode shape against the inherited type.
+  category='others' (one upsert-path test; create-path coverage lives in
+  test_new_features.py::TestCategoryOthers).
+- ``TestOwnerStrictDivisionOnly``  — owner is a strict division code
+  (doc 18 §4); user logins are no longer accepted.
+- ``TestOwnerOthers``              — owner='others' requires `ownerOther`
+  (doc 18 §5).
+- ``TestDivisionsCatalog``         — GET /divisions returns built-ins +
+  user-added rows (doc 18 §6).
+- ``TestDivisionsPersistedFromOwnerOther`` — `ownerOther` labels are
+  slugified and inserted into the divisions table on project save.
+- ``TestPatchEditableFields``      — PATCH whitelist matches the HTML
+  edit-project flow; status PATCH is rejected (use the dedicated
+  publish/close/suspend endpoints).
+- ``TestTaskSubtaskTypeInheritance`` — type field derived from the parent
+  activity / parent task (doc 15).
 """
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -116,7 +126,6 @@ class TestStatusTransitionsCatalog:
         self, client, admin_user, admin_headers, db_session,
     ):
         _seed_status_transitions(db_session)
-        _add_admin_owner(db_session, admin_user)
         resp = client.post(
             "/api/v3/projects/create",
             json=_create_project_body(status="new"),
@@ -323,15 +332,14 @@ class TestOwnerStrictDivisionOnly:
 
 
 class TestOwnerOthers:
-    """The `'others'` value is a first-class division code — same shape
-    as `'tmd1'` / `'tmd2'` on the wire. There is no `ownerOther` follow-up
-    field today (unlike the activity-resource division picker, which DOES
-    require ``divisionOther`` when ``division == 'others'``); a bare
-    ``'others'`` is the full owner value. The HTML mockup's "Specify
-    owner" free-text input is FE-side scaffolding that isn't yet sent
-    over the wire — when product wires the FE to send it, this class
-    will need to grow `ownerOther` validation symmetric with the
-    `divisionOther` activity-resource rules."""
+    """`owner='others'` requires a non-empty `ownerOther` follow-up label
+    (per doc 18 §5; symmetric with `categoryOther`/`categoryOtherReason`).
+    Non-`others` owners must NOT carry `ownerOther`. PATCH cleanly handles
+    the cross-validation when switching owner away from 'others' without
+    explicitly clearing the stale `ownerOther` (treats it as empty).
+    Casing/whitespace on both fields is normalised on the way in.
+    `ownerOther` labels also flow into the divisions catalog (see
+    `TestDivisionsPersistedFromOwnerOther`)."""
 
     def _seed(self, db_session):
         _seed_status_transitions(db_session)
@@ -772,7 +780,6 @@ class TestPatchEditableFields:
     on both — clients use the dedicated publish/close/suspend endpoints."""
 
     def _create_baseline(self, client, admin_user, admin_headers, db_session, **overrides):
-        _add_admin_owner(db_session, admin_user)
         _seed_status_transitions(db_session)
         body = _create_project_body(**overrides)
         resp = client.post(

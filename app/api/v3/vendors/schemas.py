@@ -1,5 +1,5 @@
 """Vendor request/response schemas."""
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -30,10 +30,28 @@ class VendorCreateRequest(BaseModel):
             "formats vary; FE may apply its own client-side mask."
         ),
     )
+    projectIds: Optional[List[str]] = Field(
+        None,
+        alias="project_ids",
+        description=(
+            "Optional list of project UUIDs to attach to this vendor at "
+            "creation time. Each id must reference a live project that is "
+            "not closed/completed and not soft-deleted. Symmetric with the "
+            "project-side `vendorIds` field — same association table is "
+            "written either way. Omit / null to create a vendor with no "
+            "projects (the typical case)."
+        ),
+    )
 
 
 class VendorUpdateRequest(BaseModel):
-    """Body for PATCH /vendors/{id}. Same fields as create, all optional."""
+    """Body for PATCH /vendors/{id}. Same fields as create, all optional.
+
+    `projectIds` semantics on PATCH: ``None`` (omitted) leaves the existing
+    vendor-project mappings unchanged; ``[]`` clears them; a non-empty list
+    REPLACES the full mapping with exactly those project ids. Mirror of
+    the existing project-side ``vendorIds`` semantics.
+    """
     model_config = ConfigDict(populate_by_name=True)
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -45,4 +63,7 @@ class VendorUpdateRequest(BaseModel):
     )
     phoneNumber: Optional[str] = Field(
         None, alias="phone_number", max_length=50,
+    )
+    projectIds: Optional[List[str]] = Field(
+        None, alias="project_ids",
     )
