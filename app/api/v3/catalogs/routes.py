@@ -10,11 +10,10 @@ from ....core.base_controller import BaseController
 from ....core.errors import NotFoundError, ValidationError
 from ....core.middleware.rbac import require_authenticated, require_permission
 from ....core.rbac import Permission
-from ....domain.resource_types.resource_type import (
-    DIVISION_CHOICES,
-    DIVISION_OTHERS,
-)
 from ....infrastructure.db.models.user import UserModel
+from ....infrastructure.db.repositories.division_repository import (
+    DivisionRepository,
+)
 from ....infrastructure.db.repositories.project_owner_repository import (
     ProjectOwnerRepository,
 )
@@ -32,20 +31,16 @@ router = APIRouter(tags=["catalogs"])
 # ---------------------------------------------------------------------------
 #
 # Division values back the activity-resource classification picker AND are
-# reused by the FE as the project-owner / division picker (see HTML
-# `buildDivisionField` — same dropdown serves both purposes). The list is a
-# static in-code constant in `app.domain.resource_types.resource_type`; this
-# endpoint surfaces it so the FE doesn't have to hard-code labels.
+# reused by the FE as the project-owner picker (see HTML `buildDivisionField`
+# — same dropdown serves both purposes). Three rows are seeded by init_db:
+# `tmd1` / `tmd2` / `others`. Additional rows appear when a user creates a
+# project with `owner='others'` and supplies a free-text `ownerOther` label
+# — the project create / upsert services slugify the label and insert a row
+# here, so the next project-owner dropdown shows the new option.
 #
 # Display labels (TMD1 / TMD2 / Others) are uppercase per the design;
-# stored / wire codes are lowercase (`tmd1` / `tmd2` / `others`). The FE
-# sends the lowercase code back in `division` fields.
-
-_DIVISION_LABELS = {
-    "tmd1": "TMD1",
-    "tmd2": "TMD2",
-    "others": "Others",
-}
+# stored / wire codes are lowercase. The FE sends the lowercase code back
+# in `owner` and `division` fields.
 
 
 @router.get(
@@ -53,26 +48,52 @@ _DIVISION_LABELS = {
     dependencies=[require_authenticated()],
     summary="List the division catalog",
     description=(
-        "Returns the division choices that back the activity-resource "
-        "classification picker. The same list is reused by the FE as the "
-        "project-owner / division picker. Each entry has a `code` (the wire "
-        "value the API expects in `division` fields) and a `label` (the "
-        "display string). The `requiresOther` flag on the 'others' entry "
-        "tells the FE to show the free-text 'Specify' input."
+        "Returns the active division entries (built-in + user-added). Each "
+        "entry has a `code` (the wire value the API accepts in `owner` / "
+        "`division` fields), a `label` (display string), an `isBuiltin` "
+        "flag (true for the seeded `tmd1` / `tmd2` / `others` rows), and "
+        "a `requiresOther` flag (true only on `others` — tells the FE to "
+        "show the free-text 'Specify' input)."
     ),
 )
 def list_divisions(
     request: Request, db: Session = Depends(get_db),
 ) -> JSONResponse:
-    items = [
-        {
+    # Always-present built-ins. The catalog's own seed (in init_db) writes
+    # the same three rows; this fallback covers test DBs that skip the
+    # seed and ensures the FE never sees an empty divisions list.
+    builtin_definitions = (
+        ("tmd1",   "TMD1",   False),
+        ("tmd2",   "TMD2",   False),
+        ("others", "Others", True),
+    )
+    rows = DivisionRepository(db).list_active()
+    by_code = {r.code: r for r in rows}
+
+    items = []
+    seen = set()
+    for code, label, requires_other in builtin_definitions:
+        seen.add(code)
+        row = by_code.get(code)
+        items.append({
             "_type": "Division",
             "code": code,
-            "label": _DIVISION_LABELS.get(code, code),
-            "requiresOther": code == DIVISION_OTHERS,
-        }
-        for code in DIVISION_CHOICES
-    ]
+            "label": (row.label if row else label),
+            "isBuiltin": True,
+            "requiresOther": requires_other,
+        })
+    # Append user-added rows (anything in the table that isn't a built-in).
+    for r in rows:
+        if r.code in seen:
+            continue
+        items.append({
+            "_type": "Division",
+            "code": r.code,
+            "label": r.label,
+            "isBuiltin": bool(r.is_builtin),
+            "requiresOther": bool(r.requires_other),
+        })
+
     return BaseController.ok(data={
         "_type": "Collection",
         "_links": {"self": {"href": "/api/v3/divisions"}},

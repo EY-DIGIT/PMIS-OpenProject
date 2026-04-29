@@ -7,14 +7,10 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from .....domain.projects.project import Project
-from .....infrastructure.db.repositories.project_owner_repository import (
-    ProjectOwnerRepository,
-)
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....infrastructure.db.repositories.project_status_transition_repository import (
     ProjectStatusTransitionRepository,
 )
-from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.datetime import ensure_aware_utc
 from .....shared.service_result import ServiceResult
@@ -23,14 +19,12 @@ from .....shared.utils import normalize_string
 from .audit import ACTION_CREATE, project_snapshot, record_audit
 from .transitions import (
     CATEGORY_OTHERS,
+    OWNER_OTHERS,
     PROJECT_CATEGORY_CHOICES,
     PROJECT_STATUS_CHOICES,
     STATUS_NEW,
+    validate_owner_pair,
 )
-
-
-def _verify_user_exists(db: Session, username: str) -> bool:
-    return UserRepository(db).get_by_login(username) is not None
 
 
 def create_project(
@@ -45,6 +39,7 @@ def create_project(
     parent_id: Optional[str] = None,
     status: str = STATUS_NEW,
     owner: Optional[str] = None,
+    owner_other: Optional[str] = None,
     category: Optional[str] = None,
     category_other: Optional[str] = None,
     category_other_reason: Optional[str] = None,
@@ -150,35 +145,16 @@ def create_project(
             error_type="validation_error",
         )
 
-    if owner is not None:
-        if not _verify_user_exists(db, owner):
-            return ServiceResult.fail(
-                error=f"Owner user '{owner}' does not exist",
-                error_type="validation_error",
-            )
-        # Validate against the project_owners master. Only users in the
-        # whitelist can be set as a project owner. Skipped silently if the
-        # catalog has no active rows (treated as "owner gating disabled" —
-        # the init_db seed adds at least the bootstrap admin, so an empty
-        # catalog only happens before init_db has run, e.g. fresh tests
-        # using a per-test in-memory DB).
-        from .....infrastructure.db.models.project_owner import ProjectOwnerModel
-        catalog_populated = (
-            db.query(ProjectOwnerModel.id)
-            .filter(ProjectOwnerModel.active.is_(True))
-            .first()
-            is not None
-        )
-        if catalog_populated:
-            owner_repo = ProjectOwnerRepository(db)
-            if not owner_repo.is_login_an_active_owner(owner):
-                return ServiceResult.fail(
-                    error=(
-                        f"User '{owner}' is not in the project_owners whitelist. "
-                        f"Add them via POST /api/v3/project_owners/create first."
-                    ),
-                    error_type="validation_error",
-                )
+    # Owner is a DIVISION code (built-in or user-added) supplied by the
+    # FE division picker. REQUIRED on create. When owner == 'others' the
+    # FE captures a free-text label and sends it as `ownerOther`; that
+    # label is validated here and persisted into the divisions catalog
+    # below (so the next project-owner dropdown shows the new option).
+    owner, owner_other, owner_err = validate_owner_pair(
+        owner, owner_other, require_owner=True, db=db,
+    )
+    if owner_err:
+        return ServiceResult.fail(error=owner_err, error_type="validation_error")
 
     repo = ProjectRepository(db)
     vendor_repo = VendorRepository(db)
@@ -213,6 +189,7 @@ def create_project(
             parent_id=parent_id,
             status=status,
             owner=owner,
+            owner_other=owner_other,
             category=category,
             category_other=category_other,
             category_other_reason=category_other_reason,
@@ -227,6 +204,16 @@ def create_project(
             vendor_repo.set_project_vendors(project.id, vendor_ids)
             # Refresh the domain object's vendor list for the response.
             project.vendors = vendor_repo.list_project_vendors(project.id)
+
+        # When owner is 'others' + a free-text label was supplied, mint
+        # a new division row from the label (or no-op if its slug
+        # already exists). Inside the same transaction so a project
+        # rollback also rolls back the division insert.
+        if owner == OWNER_OTHERS and owner_other:
+            from .....infrastructure.db.repositories.division_repository import (
+                DivisionRepository,
+            )
+            DivisionRepository(db).upsert_user_division(owner_other)
 
         record_audit(
             db,

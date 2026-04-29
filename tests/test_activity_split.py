@@ -26,7 +26,7 @@ def _setup_project_and_milestone(client, headers):
         "/api/v3/projects/create",
         json={
             "name": "SplitTest",
-            "owner": "admin",
+            "owner": "tmd1",
             "startDate": _iso(1),
             "endDate": _iso(120),
         },

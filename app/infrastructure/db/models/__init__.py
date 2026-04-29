@@ -28,6 +28,7 @@ from .project_status_transition import ProjectStatusTransitionModel
 from .project_owner import ProjectOwnerModel
 from .comment import CommentModel
 from .attachment import AttachmentModel
+from .division import DivisionModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -45,4 +46,5 @@ __all__ = [
     "ProjectOwnerModel",
     "CommentModel",
     "AttachmentModel",
+    "DivisionModel",
 ]

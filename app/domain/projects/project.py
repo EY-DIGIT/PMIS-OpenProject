@@ -49,6 +49,10 @@ class Project:
     # Reason explaining why category='others' was chosen instead of one of
     # the standard categories. Required when category='others'; None otherwise.
     category_other_reason: Optional[str] = None
+    # Free-text owner label captured when ``owner == 'others'``. Required
+    # in that case (validated at the service layer); MUST be NULL for any
+    # other owner value.
+    owner_other: Optional[str] = None
     # List of (vendor_id, vendor_name) pairs associated with this project.
     # Populated by the repository on read (left empty when not eagerly loaded).
     vendors: List[Tuple[str, str]] = field(default_factory=list)
@@ -82,6 +86,7 @@ class Project:
             "deleted_by": self.deleted_by,
             "category_other": self.category_other,
             "category_other_reason": self.category_other_reason,
+            "owner_other": self.owner_other,
             "vendors": [{"id": vid, "name": vname} for (vid, vname) in self.vendors],
         }
 

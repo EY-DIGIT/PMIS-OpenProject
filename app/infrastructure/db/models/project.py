@@ -50,7 +50,13 @@ class ProjectModel(Base):
 
     # Status: lowercase values. Allowed: new, draft, published, closed, suspended.
     status = Column(String(50), default="new", nullable=False, index=True)
+    # Owner is a division code: 'tmd1' / 'tmd2' / 'others'. Stored
+    # lowercase. When `owner == 'others'` the FE captures a free-text
+    # label and supplies it as `ownerOther`; that value lands in
+    # ``owner_other`` below. NULL on baselines whose owner was set
+    # before this column existed (auto-healed via the SQLite drift pass).
     owner = Column(String(255), nullable=True, index=True)
+    owner_other = Column(String(255), nullable=True)
     # Category: MSAP, MSIP, BSP, or 'others'. Immutable after create.
     category = Column(String(50), nullable=True, index=True)
     # When category == 'others', a free-text label is required and stored here.

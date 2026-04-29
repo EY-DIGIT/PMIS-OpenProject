@@ -27,7 +27,7 @@ def _create_baseline_with_n_activities(client, admin_headers, n: int):
         "/api/v3/projects/create",
         json={
             "name": "LongCycle",
-            "owner": "admin",
+            "owner": "tmd1",
             "startDate": _iso(2),
             "endDate": _iso(120),
         },

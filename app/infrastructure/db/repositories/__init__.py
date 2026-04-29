@@ -7,6 +7,7 @@ from .work_package_type_repository import WorkPackageTypeRepository
 from .vendor_repository import VendorRepository
 from .resource_type_repository import ResourceTypeRepository
 from .revoked_token_repository import RevokedTokenRepository
+from .division_repository import DivisionRepository
 
 __all__ = [
     "DependencyRepository",
@@ -17,4 +18,5 @@ __all__ = [
     "VendorRepository",
     "ResourceTypeRepository",
     "RevokedTokenRepository",
+    "DivisionRepository",
 ]

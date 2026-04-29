@@ -170,6 +170,7 @@ def init_db() -> None:
         TaskModel, TaskDependencyModel, TaskResourceModel,
         SubtaskModel, SubtaskDependencyModel, SubtaskResourceModel,
         CommentModel, AttachmentModel,
+        DivisionModel,
     )
     from ...core.security import hash_password
     from ...core.config import settings
@@ -286,6 +287,8 @@ def init_db() -> None:
                         ("category_other",         "ALTER TABLE projects ADD COLUMN category_other VARCHAR(255)"),
                         # Reason text when category == 'others' (added in doc-15 catalogs migration).
                         ("category_other_reason",  "ALTER TABLE projects ADD COLUMN category_other_reason VARCHAR(1000)"),
+                        # Free-text owner label when owner == 'others' (added in doc-18 owner-as-division migration).
+                        ("owner_other",            "ALTER TABLE projects ADD COLUMN owner_other VARCHAR(255)"),
                     ]
                     for col, ddl in project_column_ddl:
                         if col not in project_cols:
@@ -597,6 +600,37 @@ def init_db() -> None:
             except Exception:
                 pass
         db.commit()
+    finally:
+        db.close()
+
+    # Seed divisions catalog with the three built-in rows. Idempotent:
+    # only inserts the rows that aren't already present (matched by code).
+    # User-added divisions (created on the fly when a project is saved
+    # with owner='others' + a free-text ownerOther) coexist with the
+    # built-ins as is_builtin=False rows.
+    db = SessionLocal()
+    try:
+        from .models.division import DivisionModel
+        for code, label, requires_other in (
+            ("tmd1",   "TMD1",   False),
+            ("tmd2",   "TMD2",   False),
+            ("others", "Others", True),
+        ):
+            existing = (
+                db.query(DivisionModel)
+                .filter(DivisionModel.code == code)
+                .first()
+            )
+            if existing is None:
+                db.add(DivisionModel(
+                    code=code, label=label,
+                    is_builtin=True,
+                    requires_other=requires_other,
+                    active=True,
+                ))
+        db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 

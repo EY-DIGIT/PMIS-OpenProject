@@ -55,7 +55,7 @@ def _create_project(client, headers, *, name="Demo", category=None, category_oth
                     category_other_reason=None, vendor_ids=None):
     body = {
         "name": name,
-        "owner": "admin",
+        "owner": "tmd1",
         "startDate": _future_iso(2),
         "endDate": _future_iso(90),
     }

@@ -38,7 +38,7 @@ def _create_project(client, admin_headers, *, name="Dep Demo"):
         "/api/v3/projects/create",
         json={
             "name": name,
-            "owner": "admin",
+            "owner": "tmd1",
             "startDate": _future_iso(1),
             "endDate": _future_iso(120),
         },

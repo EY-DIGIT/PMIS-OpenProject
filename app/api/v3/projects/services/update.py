@@ -10,7 +10,6 @@ from .....core.errors import AuthorizationError, DomainError, NotFoundError, Val
 from .....core.project_lock import assert_project_editable
 from .....domain.projects.project import Project
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
-from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.datetime import ensure_aware_utc
 from .....shared.service_result import ServiceResult
@@ -19,13 +18,19 @@ from .....shared.utils import normalize_string
 from .audit import ACTION_UPDATE, project_snapshot, record_audit
 from .transitions import (
     CATEGORY_OTHERS,
+    OWNER_OTHERS,
     PROJECT_CATEGORY_CHOICES,
     editable_fields_for,
+    validate_owner_pair,
 )
 
 
-def _verify_user_exists(db: Session, username: str) -> bool:
-    return UserRepository(db).get_by_login(username) is not None
+def normalize_string_or_none(s):
+    """Strip + lowercase a string for comparison; return None on empty / None."""
+    if s is None:
+        return None
+    s = s.strip()
+    return s.lower() if s else None
 
 
 def update_project(
@@ -136,11 +141,46 @@ def update_project(
             error_type="validation_error",
         )
 
-    if "owner" in supplied and not _verify_user_exists(db, supplied["owner"]):
-        return ServiceResult.fail(
-            error=f"Owner user '{supplied['owner']}' does not exist",
-            error_type="validation_error",
+    # Owner / ownerOther on PATCH. Effective values (patch ∪ existing row)
+    # are run through the shared validator so the 'others' idiom is
+    # enforced consistently with create / upsert.
+    if "owner" in supplied or "owner_other" in supplied:
+        eff_owner = supplied.get("owner", project.owner)
+        # If the caller is moving owner AWAY from 'others' without
+        # explicitly touching owner_other, the existing owner_other on
+        # the row becomes vestigial — don't fail the cross-check on
+        # stale data. (Cleanup of the stale column itself needs a repo
+        # extension; same TODO as categoryOther.)
+        if "owner_other" in supplied:
+            eff_owner_other = supplied["owner_other"]
+        elif normalize_string_or_none(eff_owner) == OWNER_OTHERS:
+            eff_owner_other = project.owner_other
+        else:
+            eff_owner_other = None
+        # On PATCH, owner is "not required" only when the field is absent
+        # from the supplied dict. If the caller sent a key for owner, we
+        # require it to resolve to a value (require_owner=True).
+        norm_owner, norm_owner_other, owner_err = validate_owner_pair(
+            eff_owner, eff_owner_other,
+            require_owner=("owner" in supplied),
+            db=db,
         )
+        if owner_err:
+            return ServiceResult.fail(
+                error=owner_err, error_type="validation_error",
+            )
+        if "owner" in supplied:
+            if norm_owner is None:
+                del supplied["owner"]
+            else:
+                supplied["owner"] = norm_owner
+        if "owner_other" in supplied:
+            if norm_owner_other is None:
+                # Repo treats None as "leave unchanged"; same TODO as
+                # categoryOther below.
+                del supplied["owner_other"]
+            else:
+                supplied["owner_other"] = norm_owner_other
 
     # Category 'others' idiom — symmetric with create_project / upsert_project.
     # Effective values combine the patch with the existing row so a partial
@@ -248,6 +288,15 @@ def update_project(
         if will_replace_vendors:
             vendor_repo.set_project_vendors(project_id, clean_vendor_ids)
             updated.vendors = vendor_repo.list_project_vendors(project_id)
+
+        # If the PATCH carried a fresh ownerOther label (owner is or is
+        # being moved to 'others'), mint the corresponding divisions row
+        # so it appears in future picker calls.
+        if updated.owner == OWNER_OTHERS and updated.owner_other:
+            from .....infrastructure.db.repositories.division_repository import (
+                DivisionRepository,
+            )
+            DivisionRepository(db).upsert_user_division(updated.owner_other)
 
         record_audit(
             db,

@@ -75,6 +75,7 @@ class ProjectRepository:
             deleted_by=model.deleted_by,
             category_other=getattr(model, "category_other", None),
             category_other_reason=getattr(model, "category_other_reason", None),
+            owner_other=getattr(model, "owner_other", None),
         )
         if with_vendors:
             # Lazy-load the vendor pairs. Cheap join; safe on every read path.
@@ -115,6 +116,7 @@ class ProjectRepository:
         project_code: Optional[str] = None,
         category_other: Optional[str] = None,
         category_other_reason: Optional[str] = None,
+        owner_other: Optional[str] = None,
     ) -> Project:
         if id is None:
             id = str(uuid4())
@@ -132,6 +134,7 @@ class ProjectRepository:
             parent_id=parent_id,
             status=status,
             owner=owner,
+            owner_other=owner_other,
             category=category,
             category_other=category_other,
             category_other_reason=category_other_reason,
@@ -167,6 +170,7 @@ class ProjectRepository:
         end_date: Optional[datetime] = None,
         category_other: Optional[str] = None,
         category_other_reason: Optional[str] = None,
+        owner_other: Optional[str] = None,
     ) -> Tuple[Project, bool]:
         """
         Insert a project if no row with this id exists; otherwise update the
@@ -205,6 +209,7 @@ class ProjectRepository:
             parent_id=parent_id,
             status=status,
             owner=owner,
+            owner_other=owner_other,
             category=category,
             category_other=category_other,
             category_other_reason=category_other_reason,
@@ -225,6 +230,7 @@ class ProjectRepository:
                 "parent_id": stmt.excluded.parent_id,
                 "status": stmt.excluded.status,
                 "owner": stmt.excluded.owner,
+                "owner_other": stmt.excluded.owner_other,
                 "category": stmt.excluded.category,
                 "category_other": stmt.excluded.category_other,
                 "category_other_reason": stmt.excluded.category_other_reason,

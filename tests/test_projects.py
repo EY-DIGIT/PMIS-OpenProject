@@ -19,6 +19,7 @@ class TestCreateProject:
                 "description": "First project",
                 "active": True,
                 "public": False,
+                "owner": "tmd1",
             },
             headers=admin_headers,
         )
@@ -37,6 +38,7 @@ class TestCreateProject:
                 "name": "New Fields Project",
                 "status": "new",
                 "category": "MSAP",
+                "owner": "tmd2",
             },
             headers=admin_headers,
         )
@@ -193,7 +195,7 @@ class TestUpsert:
         new_uuid = str(_uuid.uuid4())
         resp = client.put(
             f"/api/v3/projects/{new_uuid}",
-            json={"name": "Wizard Demo", "owner": "admin"},
+            json={"name": "Wizard Demo", "owner": "tmd1"},
             headers=admin_headers,
         )
         assert resp.status_code == 201
@@ -207,12 +209,12 @@ class TestUpsert:
         new_uuid = str(_uuid.uuid4())
         client.put(
             f"/api/v3/projects/{new_uuid}",
-            json={"name": "Wizard v1", "owner": "admin"},
+            json={"name": "Wizard v1", "owner": "tmd1"},
             headers=admin_headers,
         )
         resp = client.put(
             f"/api/v3/projects/{new_uuid}",
-            json={"name": "Wizard v2", "owner": "admin"},
+            json={"name": "Wizard v2", "owner": "tmd1"},
             headers=admin_headers,
         )
         assert resp.status_code == 200

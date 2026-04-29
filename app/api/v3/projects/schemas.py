@@ -32,7 +32,21 @@ class ProjectCreateRequest(BaseModel):
     )
     owner: Optional[str] = Field(
         None, min_length=1, max_length=255,
-        description="Owner username (must exist in users table).",
+        description=(
+            "Project owner — division code: 'tmd1' / 'tmd2' / 'others'. "
+            "Required at the service layer on create + upsert. When set "
+            "to 'others', a non-empty `ownerOther` follow-up label is "
+            "required (max 255 chars)."
+        ),
+    )
+    ownerOther: Optional[str] = Field(
+        None,
+        alias="owner_other",
+        max_length=255,
+        description=(
+            "Required (non-empty) when owner == 'others'. Must be omitted / "
+            "null for any other owner value."
+        ),
     )
     category: Optional[str] = Field(
         None,
@@ -122,6 +136,7 @@ class ProjectUpdateRequest(BaseModel):
     parentId: Optional[str] = Field(None, alias="parent_id", description="Parent project UUID")
     status: Optional[str] = Field(None)
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
+    ownerOther: Optional[str] = Field(None, alias="owner_other", max_length=255)
     category: Optional[str] = Field(None)
     categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
     categoryOtherReason: Optional[str] = Field(
@@ -216,6 +231,7 @@ class ProjectUpsertRequest(BaseModel):
     parentId: Optional[str] = Field(None, alias="parent_id", description="Parent project UUID")
     status: str = Field("new")
     owner: Optional[str] = Field(None, min_length=1, max_length=255)
+    ownerOther: Optional[str] = Field(None, alias="owner_other", max_length=255)
     category: Optional[str] = Field(None)
     categoryOther: Optional[str] = Field(None, alias="category_other", max_length=255)
     categoryOtherReason: Optional[str] = Field(

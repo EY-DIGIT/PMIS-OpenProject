@@ -167,6 +167,7 @@ def format_project_response(
         "statusExplanation": project_data.get("status_explanation"),
         "status": project_data.get("status"),
         "owner": project_data.get("owner"),
+        "ownerOther": project_data.get("owner_other"),
         "category": project_data.get("category"),
         "categoryOther": project_data.get("category_other"),
         "categoryOtherReason": project_data.get("category_other_reason"),

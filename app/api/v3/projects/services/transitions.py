@@ -5,13 +5,148 @@ Single source of truth for:
   - the allowed status vocabulary
   - which fields are editable in each project state
   - which (from, to) status transitions are legal, and by whom
+  - owner-value validation (division code OR user login)
 """
 from typing import Optional, Set, Tuple
 from sqlalchemy.orm import Session
 
 from .....core.errors import ValidationError
 from .....domain.projects.project import Project
+from .....domain.resource_types.resource_type import DIVISION_CHOICES
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
+
+
+# ---------------------------------------------------------------------------
+# Owner value resolution
+# ---------------------------------------------------------------------------
+#
+# The HTML edit-project form renders the project Owner field with the same
+# `buildDivisionField` widget that drives the activity-resource division
+# picker. So the project owner is a DIVISION value, not a user reference.
+# Allowed wire values:
+#
+#     'tmd1' | 'tmd2' | 'others'
+#
+# Stored lowercase regardless of caller casing (`TMD1` is normalised to
+# `tmd1`). The 'others' free-text label captured by the FE goes into a
+# separate `categoryOther`-style follow-up if/when product needs that —
+# today the bare division code is enough.
+#
+# project_owners catalog (the per-user whitelist introduced in doc 15) is
+# no longer consulted on project create / update / upsert — it was a
+# user-based gate from before owner became a division field. The catalog
+# endpoints (`GET /project_owners`, `POST /project_owners/create`, etc.)
+# remain available for any future per-user enforcement layer but they no
+# longer affect project create.
+
+OWNER_DIVISION_CODES: Set[str] = {c.lower() for c in DIVISION_CHOICES}
+
+
+def normalize_owner_value(owner: Optional[str]) -> Optional[str]:
+    """Lowercase + strip an owner value, or return None.
+
+    Empty / whitespace-only strings are treated as None so the caller
+    can keep "owner is unset" semantics on PATCH.
+    """
+    if owner is None:
+        return None
+    s = owner.strip()
+    if not s:
+        return None
+    return s.lower()
+
+
+def assert_owner_is_division(owner: Optional[str]) -> None:
+    """Raise ValidationError unless ``owner`` is a recognised division code.
+
+    Caller is expected to call ``normalize_owner_value`` first; this
+    function applies the strict membership check only.
+    """
+    if owner is None:
+        return
+    if owner not in OWNER_DIVISION_CODES:
+        raise ValidationError(
+            f"Owner must be one of: {', '.join(sorted(OWNER_DIVISION_CODES))}.",
+        )
+
+
+# `owner == 'others'` means the FE picker is on the free-text branch.
+# Same idiom as ``category == 'others'`` requiring ``categoryOther``.
+OWNER_OTHERS = "others"
+
+
+def validate_owner_pair(
+    owner: Optional[str],
+    owner_other: Optional[str],
+    *,
+    require_owner: bool,
+    db: Optional[Session] = None,
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Normalise + validate the ``(owner, owner_other)`` pair.
+
+    Returns ``(normalised_owner, normalised_owner_other, error)``. ``error``
+    is None on success; on failure it's a user-facing string the caller
+    should return as a 422 ``validation_error``. The two normalised
+    values are what the caller should pass downstream.
+
+    Rules:
+      * If ``owner`` is None or normalises to None and ``require_owner``
+        is True → "Owner is required" error.
+      * If ``db`` is supplied: ``owner`` must be the ``code`` of an
+        active row in the ``divisions`` table (built-in OR user-added).
+        If ``db`` is None: fall back to the in-code OWNER_DIVISION_CODES
+        set (covers tests that don't run init_db).
+      * When normalised owner == 'others': ``owner_other`` MUST be a
+        non-empty string ≤ 255 chars; trimmed.
+      * When normalised owner != 'others': ``owner_other`` MUST be None
+        or an empty string; supplying a non-empty value is a 422.
+    """
+    n_owner = normalize_owner_value(owner)
+    if n_owner is None:
+        if require_owner:
+            return (None, None, (
+                f"Owner is required. Must be one of: "
+                f"{', '.join(sorted(OWNER_DIVISION_CODES))}."
+            ))
+        # Field omitted on PATCH and not required → no-op.
+        return (None, None, None)
+
+    # Built-in codes (tmd1 / tmd2 / others) are ALWAYS accepted, even
+    # when the divisions catalog hasn't been seeded (e.g. fresh in-memory
+    # test DBs). User-added codes from the table EXTEND the accepted set.
+    accepted_codes = set(OWNER_DIVISION_CODES)
+    if db is not None:
+        from .....infrastructure.db.repositories.division_repository import (
+            DivisionRepository,
+        )
+        for row in DivisionRepository(db).list_active():
+            accepted_codes.add(row.code)
+
+    if n_owner not in accepted_codes:
+        return (None, None, (
+            f"Owner '{n_owner}' is not a known division. Pick one from "
+            f"GET /divisions or use 'others' with a custom ownerOther "
+            f"label."
+        ))
+
+    other_clean = (owner_other or "").strip()
+    if n_owner == OWNER_OTHERS:
+        if not other_clean:
+            return (None, None, (
+                "ownerOther is required (non-empty) when owner is 'others'."
+            ))
+        if len(other_clean) > 255:
+            return (None, None, (
+                "ownerOther must be 1-255 characters."
+            ))
+        return (n_owner, other_clean, None)
+
+    # Not 'others' — owner_other MUST be empty.
+    if other_clean:
+        return (None, None, (
+            "ownerOther may only be provided when owner is 'others'."
+        ))
+    return (n_owner, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +199,7 @@ EDITABLE_FIELDS_BASELINE_UNPUBLISHED: Set[str] = {
     "name",
     "description",
     "owner",
+    "owner_other",
     "start_date",
     "end_date",
     "actual_start_date",
@@ -92,6 +228,7 @@ EDITABLE_FIELDS_BASELINE_PUBLISHED: Set[str] = EDITABLE_FIELDS_BASELINE_UNPUBLIS
 # project_code + baseline_id are immutable system identifiers.
 EDITABLE_FIELDS_VERSION: Set[str] = {
     "owner",
+    "owner_other",
     "public",
     "actual_start_date",
     "actual_end_date",

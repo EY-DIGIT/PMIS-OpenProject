@@ -16,16 +16,15 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
-from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....domain.projects.project import Project
 from .....shared.service_result import ServiceResult
 from .....shared.utils import normalize_string
 
-from .transitions import CATEGORY_OTHERS
-
-
-def _verify_user_exists(db: Session, username: str) -> bool:
-    return UserRepository(db).get_by_login(username) is not None
+from .transitions import (
+    CATEGORY_OTHERS,
+    OWNER_OTHERS,
+    validate_owner_pair,
+)
 
 
 def _looks_like_uuid(s: str) -> bool:
@@ -49,6 +48,7 @@ def upsert_project(
     parent_id: Optional[str] = None,
     status: str = "new",
     owner: Optional[str] = None,
+    owner_other: Optional[str] = None,
     category: Optional[str] = None,
     category_other: Optional[str] = None,
     category_other_reason: Optional[str] = None,
@@ -83,11 +83,14 @@ def upsert_project(
             error="end_date cannot be before start_date",
             error_type="validation_error",
         )
-    if owner is not None and not _verify_user_exists(db, owner):
-        return ServiceResult.fail(
-            error=f"Owner user with username '{owner}' does not exist.",
-            error_type="validation_error",
-        )
+    # Owner is required on upsert (treated like create — the wizard always
+    # supplies one). 'others' requires a non-empty `ownerOther` follow-up.
+    # Mints a new divisions row on success when applicable (see below).
+    owner, owner_other, owner_err = validate_owner_pair(
+        owner, owner_other, require_owner=True, db=db,
+    )
+    if owner_err:
+        return ServiceResult.fail(error=owner_err, error_type="validation_error")
 
     # 'others' idiom — symmetric with the create-project service.
     if category == CATEGORY_OTHERS:
@@ -131,17 +134,12 @@ def upsert_project(
 
     repository = ProjectRepository(db)
 
-    # Ownership gate on the update path.
-    existing = repository.get_by_id(id)
-    if existing is not None and not is_admin:
-        if existing.owner is None or existing.owner != current_user_login:
-            return ServiceResult.fail(
-                error=(
-                    "This project already exists and is owned by another user. "
-                    "You cannot modify it."
-                ),
-                error_type="forbidden",
-            )
+    # Ownership gate previously compared `existing.owner` against the
+    # current user's login. With owner now being a division code, that
+    # comparison can never match for non-admins. Route-level permission
+    # (PROJECTS_CREATE) is the gate; we no longer second-guess it here.
+    # `is_admin` and `current_user_login` are still accepted as args for
+    # call-site stability but unused below.
 
     if parent_id is not None and not repository.exists_by_id(parent_id):
         return ServiceResult.fail(
@@ -160,12 +158,22 @@ def upsert_project(
             parent_id=parent_id,
             status=status,
             owner=owner,
+            owner_other=owner_other,
             category=category,
             category_other=category_other,
             category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
         )
+        # Persist the user-supplied division label after the upsert
+        # commits (the repo's upsert_by_id commits internally; running
+        # the division upsert + commit here keeps both writes durable).
+        if owner == OWNER_OTHERS and owner_other:
+            from .....infrastructure.db.repositories.division_repository import (
+                DivisionRepository,
+            )
+            DivisionRepository(db).upsert_user_division(owner_other)
+            db.commit()
         return ServiceResult.ok((project, created))
     except Exception as e:
         return ServiceResult.fail(

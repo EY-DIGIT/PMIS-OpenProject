@@ -19,7 +19,7 @@ def _create_project(client, headers, name="P"):
         "/api/v3/projects/create",
         json={
             "name": name,
-            "owner": "admin",
+            "owner": "tmd1",
             "startDate": _iso(1),
             "endDate": _iso(120),
         },
@@ -58,7 +58,7 @@ class TestEndpointRenaming:
         """POST /api/v3/projects (without /create) should now 404 or 405."""
         resp = client.post(
             "/api/v3/projects",
-            json={"name": "Old Style", "owner": "admin"},
+            json={"name": "Old Style", "owner": "tmd1"},
             headers=admin_headers,
         )
         assert resp.status_code in (404, 405), resp.text
