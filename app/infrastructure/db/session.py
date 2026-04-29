@@ -371,12 +371,18 @@ def init_db() -> None:
                 # Legacy on-disk dev DBs predate the vendor soft-delete
                 # feature. Add the columns + index in-place so the new
                 # repository code finds the schema it expects.
+                # Doc 18 also added contact-detail columns (email,
+                # contact_person, phone_number); they're listed here too
+                # so a single PRAGMA pass picks up everything missing.
                 try:
                     res = conn.execute(text("PRAGMA table_info('vendors')"))
                     vcols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
-                        ("deleted_at", "ALTER TABLE vendors ADD COLUMN deleted_at DATETIME"),
-                        ("deleted_by", "ALTER TABLE vendors ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                        ("deleted_at",      "ALTER TABLE vendors ADD COLUMN deleted_at DATETIME"),
+                        ("deleted_by",      "ALTER TABLE vendors ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                        ("email",           "ALTER TABLE vendors ADD COLUMN email VARCHAR(255)"),
+                        ("contact_person",  "ALTER TABLE vendors ADD COLUMN contact_person VARCHAR(255)"),
+                        ("phone_number",    "ALTER TABLE vendors ADD COLUMN phone_number VARCHAR(50)"),
                     ):
                         if col not in vcols:
                             try:
@@ -391,6 +397,10 @@ def init_db() -> None:
                         conn.execute(text(
                             "CREATE INDEX IF NOT EXISTS idx_vendors_created_at "
                             "ON vendors(created_at)"
+                        ))
+                        conn.execute(text(
+                            "CREATE INDEX IF NOT EXISTS idx_vendors_email "
+                            "ON vendors(email)"
                         ))
                     except Exception as e:
                         logging.warning("Failed to create vendors indexes: %s", e)

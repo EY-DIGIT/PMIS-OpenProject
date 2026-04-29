@@ -45,6 +45,11 @@ def _vendor_to_response(v, projects: List[Dict[str, Any]] | None = None) -> Dict
         "name": d["name"],
         "description": d.get("description"),
         "active": d.get("active", True),
+        # Contact details (doc 18). NULL on vendors created before this
+        # batch — FE renders empty cells in that case.
+        "email": d.get("email"),
+        "contactPerson": d.get("contact_person"),
+        "phoneNumber": d.get("phone_number"),
         "createdAt": d.get("created_at"),
         "updatedAt": d.get("updated_at"),
         "deletedAt": d.get("deleted_at"),
@@ -118,6 +123,32 @@ def list_vendors(request: Request, db: Session = Depends(get_db)) -> JSONRespons
     })
 
 
+@router.get(
+    "/{vendor_id}",
+    dependencies=[require_permission(Permission.VENDORS_READ)],
+    summary="Get vendor detail (with mapped projects)",
+    description=(
+        "Returns full vendor detail — name, description, email, contact "
+        "person, phone number, soft-delete metadata — plus the list of "
+        "projects this vendor is mapped to (closed/completed/soft-deleted "
+        "projects filtered out, same rule as GET /vendors). 404 on "
+        "soft-deleted vendors; admins can see them by hitting "
+        "GET /vendors/{id}/projects (which already accepts deleted vendors)."
+    ),
+)
+def get_vendor(
+    request: Request,
+    vendor_id: str,
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    repo = VendorRepository(db)
+    vendor = repo.get_by_id(vendor_id)
+    if vendor is None:
+        raise NotFoundError("Vendor not found.")
+    projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
+    return BaseController.ok(data=_vendor_to_response(vendor, projects))
+
+
 @router.post(
     "/create",
     dependencies=[require_permission(Permission.VENDORS_MANAGE)],
@@ -142,6 +173,9 @@ def create_vendor(
         name=data.name,
         description=data.description,
         active=data.active,
+        email=str(data.email) if data.email else None,
+        contact_person=data.contactPerson,
+        phone_number=data.phoneNumber,
     )
     db.commit()
     return BaseController.created(data=_vendor_to_response(vendor))
@@ -168,6 +202,12 @@ def update_vendor(
         m.description = data.description
     if data.active is not None:
         m.active = data.active
+    if data.email is not None:
+        m.email = str(data.email)
+    if data.contactPerson is not None:
+        m.contact_person = data.contactPerson
+    if data.phoneNumber is not None:
+        m.phone_number = data.phoneNumber
     db.flush()
     db.commit()
     from ....domain.vendors.vendor import Vendor
@@ -175,6 +215,8 @@ def update_vendor(
         id=m.id, name=m.name, description=m.description, active=bool(m.active),
         created_at=m.created_at, updated_at=m.updated_at,
         deleted_at=m.deleted_at, deleted_by=m.deleted_by,
+        email=m.email, contact_person=m.contact_person,
+        phone_number=m.phone_number,
     )
     projects = _projects_by_vendor(db, [domain.id]).get(domain.id, [])
     return BaseController.ok(data=_vendor_to_response(domain, projects))

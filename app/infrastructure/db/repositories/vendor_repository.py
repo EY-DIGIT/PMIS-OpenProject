@@ -31,6 +31,9 @@ def _to_domain(m: VendorModel) -> Vendor:
         updated_at=m.updated_at,
         deleted_at=m.deleted_at,
         deleted_by=m.deleted_by,
+        email=getattr(m, "email", None),
+        contact_person=getattr(m, "contact_person", None),
+        phone_number=getattr(m, "phone_number", None),
     )
 
 
@@ -40,8 +43,24 @@ class VendorRepository:
 
     # ---- Vendor CRUD (lightweight) ------------------------------------
 
-    def create(self, *, name: str, description: Optional[str] = None, active: bool = True) -> Vendor:
-        m = VendorModel(name=name.strip(), description=description, active=active)
+    def create(
+        self,
+        *,
+        name: str,
+        description: Optional[str] = None,
+        active: bool = True,
+        email: Optional[str] = None,
+        contact_person: Optional[str] = None,
+        phone_number: Optional[str] = None,
+    ) -> Vendor:
+        m = VendorModel(
+            name=name.strip(),
+            description=description,
+            active=active,
+            email=(email.strip() if email else None),
+            contact_person=(contact_person.strip() if contact_person else None),
+            phone_number=(phone_number.strip() if phone_number else None),
+        )
         self.db.add(m)
         self.db.flush()
         return _to_domain(m)

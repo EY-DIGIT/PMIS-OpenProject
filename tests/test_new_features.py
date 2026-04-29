@@ -161,6 +161,187 @@ class TestVendorsAndProjectVendors:
         assert "vendor" in resp.json()["error"]["message"].lower()
 
 
+class TestVendorContactDetails:
+    """Doc 18: vendors carry email + contactPerson + phoneNumber, and a
+    new GET /vendors/{id} endpoint returns the full detail (with mapped
+    projects)."""
+
+    def test_create_vendor_with_contact_details(self, client, admin_headers):
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={
+                "name": "Acme Corp",
+                "description": "demo",
+                "email": "ops@acme.example",
+                "contactPerson": "Jane Doe",
+                "phoneNumber": "+91 98765 43210",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        d = resp.json()["data"]
+        assert d["name"] == "Acme Corp"
+        assert d["email"] == "ops@acme.example"
+        assert d["contactPerson"] == "Jane Doe"
+        assert d["phoneNumber"] == "+91 98765 43210"
+
+    def test_create_vendor_rejects_invalid_email(self, client, admin_headers):
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Bad Email", "email": "not-an-email"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_create_vendor_contact_fields_optional(self, client, admin_headers):
+        """Old-style payload without contact fields still works — the
+        new fields default to None and the response carries nulls."""
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Minimal Vendor"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        d = resp.json()["data"]
+        assert d["email"] is None
+        assert d["contactPerson"] is None
+        assert d["phoneNumber"] is None
+
+    def test_patch_vendor_updates_contact_details(self, client, admin_headers):
+        # Create with no contact info.
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Vendor For Patch"},
+            headers=admin_headers,
+        ).json()["data"]
+        # Patch in contact details.
+        resp = client.patch(
+            f"/api/v3/vendors/{c['id']}",
+            json={
+                "email": "hello@example.com",
+                "contactPerson": "John Smith",
+                "phoneNumber": "555-1212",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["email"] == "hello@example.com"
+        assert d["contactPerson"] == "John Smith"
+        assert d["phoneNumber"] == "555-1212"
+
+    def test_get_vendor_by_id_returns_full_detail(self, client, admin_headers):
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={
+                "name": "Detail Co",
+                "description": "Used to verify GET /vendors/{id}.",
+                "email": "ops@detail.example",
+                "contactPerson": "Detail Lead",
+                "phoneNumber": "+1 555 0000",
+            },
+            headers=admin_headers,
+        ).json()["data"]
+
+        resp = client.get(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["_type"] == "Vendor"
+        assert d["id"] == c["id"]
+        assert d["name"] == "Detail Co"
+        assert d["description"] == "Used to verify GET /vendors/{id}."
+        assert d["email"] == "ops@detail.example"
+        assert d["contactPerson"] == "Detail Lead"
+        assert d["phoneNumber"] == "+1 555 0000"
+        # `projects` is always a list — empty here because nothing's mapped.
+        assert d["projects"] == []
+
+    def test_get_vendor_by_id_includes_mapped_projects(
+        self, client, admin_headers, db_session,
+    ):
+        """When projects map to the vendor via the project-create vendor_ids
+        flow, GET /vendors/{id} returns those projects (id + projectCode +
+        name) — closed/completed/soft-deleted projects filtered out."""
+        v1, _v2 = _seed_vendors(db_session)
+        # Create two projects mapped to Vendor A.
+        p1 = _create_project(
+            client, admin_headers, name="Mapped P1", vendor_ids=[v1],
+        ).json()["data"]
+        p2 = _create_project(
+            client, admin_headers, name="Mapped P2", vendor_ids=[v1],
+        ).json()["data"]
+
+        resp = client.get(f"/api/v3/vendors/{v1}", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        names = sorted(p["name"] for p in d["projects"])
+        assert names == ["Mapped P1", "Mapped P2"]
+        for p in d["projects"]:
+            assert p["projectCode"].startswith("UIDAI-PR")
+            assert p["id"] in (p1["id"], p2["id"])
+
+    def test_get_vendor_by_id_404_on_missing(self, client, admin_headers):
+        from uuid import uuid4
+        resp = client.get(
+            f"/api/v3/vendors/{uuid4()}", headers=admin_headers,
+        )
+        assert resp.status_code == 404
+
+    def test_get_vendor_by_id_404_on_soft_deleted(
+        self, client, admin_headers,
+    ):
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Soon Deleted"},
+            headers=admin_headers,
+        ).json()["data"]
+        client.delete(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+        resp = client.get(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+        # Soft-deleted vendor is hidden from the detail endpoint — same
+        # rule as the list endpoint.
+        assert resp.status_code == 404
+
+    def test_get_vendor_by_id_returns_after_restore(
+        self, client, admin_headers,
+    ):
+        c = client.post(
+            "/api/v3/vendors/create",
+            json={
+                "name": "Round Trip",
+                "email": "rt@example.com",
+                "contactPerson": "RT",
+            },
+            headers=admin_headers,
+        ).json()["data"]
+        client.delete(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+        client.post(
+            f"/api/v3/vendors/{c['id']}/restore", headers=admin_headers,
+        )
+        resp = client.get(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["email"] == "rt@example.com"
+        assert d["contactPerson"] == "RT"
+
+    def test_list_vendors_includes_contact_fields(self, client, admin_headers):
+        client.post(
+            "/api/v3/vendors/create",
+            json={
+                "name": "On List Co",
+                "email": "on-list@example.com",
+                "phoneNumber": "555-9999",
+            },
+            headers=admin_headers,
+        )
+        resp = client.get("/api/v3/vendors", headers=admin_headers)
+        assert resp.status_code == 200
+        items = resp.json()["data"]["_embedded"]["elements"]
+        match = [i for i in items if i["name"] == "On List Co"]
+        assert len(match) == 1
+        assert match[0]["email"] == "on-list@example.com"
+        assert match[0]["phoneNumber"] == "555-9999"
+
+
 # ---------------------------------------------------------------------------
 # Task 4, 5, 6: milestone status + vendors + depends
 # ---------------------------------------------------------------------------
