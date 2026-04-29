@@ -58,7 +58,11 @@ class UserController:
             password=data.password,
             first_name=data.firstName,
             last_name=data.lastName,
-            admin=data.admin
+            admin=data.admin,
+            vendor_id=data.vendorId,
+            division=data.division,
+            division_other=data.divisionOther,
+            project_ids=data.projectIds,
         )
 
         if result.is_success():
@@ -216,7 +220,8 @@ class UserController:
             page=query.offset,
             page_size=query.pageSize,
             status=query.status,
-            is_admin=is_admin
+            is_admin=is_admin,
+            include_deleted=getattr(query, "includeDeleted", False),
         )
 
         if result.is_success():
@@ -272,6 +277,9 @@ class UserController:
             last_name=data.lastName,
             admin=data.admin,
             status=data.status,
+            vendor_id=data.vendorId,
+            division=data.division,
+            division_other=data.divisionOther,
             requesting_user_id=requesting_user_id,
             is_admin=is_admin
         )
@@ -369,7 +377,8 @@ class UserController:
         Returns:
             JSONResponse
         """
-        result = delete_user(db=db, user_id=user_id)
+        actor_id = get_current_user_id(request)
+        result = delete_user(db=db, user_id=user_id, actor_id=actor_id)
 
         if result.is_success():
             payload = format_success_response(f"User {user_id} deleted successfully")

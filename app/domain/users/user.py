@@ -1,9 +1,9 @@
 """
 User domain model.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -24,6 +24,25 @@ class User:
     created_at: datetime
     updated_at: datetime
 
+    # Vendor association (single per user). Both id + name carried so the
+    # API response can embed a slim vendor object without a second query.
+    vendor_id: Optional[str] = None
+    vendor_name: Optional[str] = None
+
+    # Division enum + free-text override when 'others'.
+    division: Optional[str] = None
+    division_other: Optional[str] = None
+
+    # Soft-delete fields.
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[int] = None
+
+    # Mapped projects — populated by the repo on explicit calls (list +
+    # get-by-id paths). Each entry is a slim project dict the response
+    # builder embeds. Closed/completed/soft-deleted projects are
+    # filtered out at the repo layer.
+    projects: List[dict] = field(default_factory=list)
+
     def to_dict(self) -> dict:
         """
         Convert user to dictionary.
@@ -41,6 +60,13 @@ class User:
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "vendor_id": self.vendor_id,
+            "vendor_name": self.vendor_name,
+            "division": self.division,
+            "division_other": self.division_other,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "deleted_by": self.deleted_by,
+            "projects": list(self.projects or []),
         }
 
     @property
@@ -67,3 +93,6 @@ class User:
             True if user is active
         """
         return self.status == "active"
+
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None

@@ -22,24 +22,40 @@ def format_user_response(
     user_data: Dict[str, Any],
     base_url: str = "/api/v3"
 ) -> Dict[str, Any]:
-    """
-    Format a single user response in HAL+JSON format.
+    """Format a single user response in HAL+JSON format.
 
-    Args:
-        user_data: User data dictionary
-        base_url: Base API URL
-
-    Returns:
-        HAL+JSON formatted response
+    Embeds the slim vendor object (when present), the division enum +
+    its free-text override (when 'others'), and the user's mapped
+    projects (filtered for live + non-closed by the repository).
     """
     user_id = user_data.get("id")
+
+    # Vendor: embed { id, name } when the user is mapped, else None.
+    vendor_id = user_data.get("vendor_id")
+    vendor_block = None
+    if vendor_id:
+        vendor_block = {
+            "id": vendor_id,
+            "name": user_data.get("vendor_name"),
+        }
+
+    # Mapped projects (slim).
+    projects_block = [
+        {
+            "id": p.get("id"),
+            "projectCode": p.get("project_code"),
+            "name": p.get("name"),
+            "status": p.get("status"),
+        }
+        for p in (user_data.get("projects") or [])
+    ]
 
     response = {
         "_type": "User",
         "_links": {
             "self": {
                 "href": f"{base_url}/users/{user_id}",
-                "title": user_data.get("login")
+                "title": user_data.get("login"),
             }
         },
         "id": user_id,
@@ -49,8 +65,14 @@ def format_user_response(
         "email": user_data.get("email"),
         "admin": user_data.get("admin", False),
         "status": user_data.get("status", "active"),
+        "vendor": vendor_block,
+        "division": user_data.get("division"),
+        "divisionOther": user_data.get("division_other"),
+        "projects": projects_block,
         "createdAt": user_data.get("created_at"),
-        "updatedAt": user_data.get("updated_at")
+        "updatedAt": user_data.get("updated_at"),
+        "deletedAt": user_data.get("deleted_at"),
+        "deletedBy": user_data.get("deleted_by"),
     }
 
     return response

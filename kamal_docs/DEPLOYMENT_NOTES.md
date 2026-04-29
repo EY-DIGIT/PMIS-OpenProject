@@ -10,6 +10,79 @@ DevOps needs to do.
 
 ---
 
+## 2026-04-28 — User Management batch (vendor / division / project mapping / soft-delete)
+
+### What changed
+
+- `users` table gains five new columns: `vendor_id` (FK to vendors),
+  `division`, `division_other`, `deleted_at`, `deleted_by`.
+- Alembic migration `c262a1b3e895` auto-applies on boot — additive only,
+  all new columns are nullable, safe to roll forward.
+- Behavioural changes to `/api/v3/users/*`:
+  - `POST /create` now **requires** `vendorId`, `division`, and at least
+    one entry in `projectIds`. Existing clients must be updated.
+  - `GET /users` is now sorted **newest-first** (`created_at DESC`).
+  - Default list filter excludes soft-deleted users (admin can opt in
+    with `?include_deleted=true`).
+  - `DELETE /users/{id}` now **soft-deletes** — sets `deleted_at` +
+    `status='inactive'`. Project mappings stay intact for restore.
+  - `PATCH /users/{id}` accepts `status='inactive'` (was rejected before).
+    Setting `status='active'` on a soft-deleted user **restores** them
+    (clears `deleted_at`).
+  - Response embeds `vendor`, `division`, `divisionOther`, `projects`
+    (filtered to live + non-closed) on every user response.
+- Bootstrap admin remains valid (vendor/division NULL is permitted at
+  the DB layer; the API enforces the requirement only on incoming
+  create requests).
+
+### DevOps actions on the server
+
+#### 1. Pull and restart
+
+```bash
+cd <repo>
+git pull
+sudo systemctl restart <monolith-service>   # or docker compose up -d
+```
+
+The Alembic migration runs automatically on boot. No manual SQL needed.
+
+#### 2. No new env vars
+
+This release introduces zero new environment variables. The existing
+`.env` works as-is.
+
+#### 3. Verify
+
+```bash
+curl http://<server>/health        # should still be 200, unchanged shape
+curl http://<server>/api/v3/users -H "Authorization: Bearer <admin>"
+```
+
+The user list response should now include `vendor`, `division`,
+`projects`, and `deletedAt` fields on each user.
+
+### Failure mode if rolled out without coordinating with frontend
+
+The frontend's existing user-create form (if it doesn't yet send
+`vendorId` / `division` / `projectIds`) will start getting `422`
+responses. That's the intended behaviour, but coordinate the frontend
+update timing with the FE team to avoid downtime on the create flow.
+
+### Rollback
+
+```bash
+cd <repo>
+alembic downgrade -1   # drops the new columns
+git revert <commit>
+```
+
+Soft-deleted-user data and vendor/division values for any rows created
+since the upgrade are lost — the columns get dropped. Document any
+test data created post-upgrade if you'll need to restore.
+
+---
+
 ## 2026-04-27 — Comments & Attachments feature
 
 ### What changed

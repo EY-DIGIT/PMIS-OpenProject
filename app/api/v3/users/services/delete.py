@@ -1,51 +1,49 @@
 """
-User deletion service.
+User soft-delete service.
+
+Sets ``deleted_at``, ``deleted_by``, and ``status='inactive'``. The
+project_members mapping rows are intentionally NOT removed — undelete
+(via PATCH status='active') restores the user with their full mapping
+history. Closed/completed projects are filtered out at response time.
 """
+from typing import Optional
+
 from sqlalchemy.orm import Session
+
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....shared.service_result import ServiceResult
 
 
 def delete_user(
     db: Session,
-    user_id: int
+    user_id: int,
+    *,
+    actor_id: Optional[int] = None,
 ) -> ServiceResult[bool]:
-    """
-    Delete user.
-
-    Note: This is a hard delete. Consider implementing soft delete in production.
-
-    Args:
-        db: Database session
-        user_id: User ID to delete
-
-    Returns:
-        ServiceResult with success status or error
-    """
+    """Soft-delete a user. Idempotent on already-deleted rows."""
     repository = UserRepository(db)
 
-    # Check user exists
-    user = repository.get_by_id(user_id)
+    # Use include_deleted so re-deleting a soft-deleted row reports
+    # "already deleted" rather than 404.
+    user = repository.get_by_id(user_id, include_deleted=True)
     if not user:
         return ServiceResult.fail(
             error=f"User with ID {user_id} not found",
-            error_type="not_found"
+            error_type="not_found",
         )
 
-    # Delete user
     try:
-        success = repository.delete(user_id)
-
-        if not success:
+        ok = repository.soft_delete(user_id, actor_id=actor_id)
+        if not ok:
             return ServiceResult.fail(
                 error=f"Failed to delete user with ID {user_id}",
-                error_type="internal_error"
+                error_type="internal_error",
             )
-
+        db.commit()
         return ServiceResult.ok(True)
-
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
         return ServiceResult.fail(
-            error=f"Failed to delete user: {str(e)}",
-            error_type="internal_error"
+            error=f"Failed to delete user: {e}",
+            error_type="internal_error",
         )

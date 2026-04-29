@@ -152,6 +152,13 @@ def list_users(
     offset: int = Query(1, ge=1, description="Page number (1-indexed)"),
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     status: str = Query(None, description="Filter by status"),
+    include_deleted: bool = Query(
+        False,
+        description=(
+            "Admin only. When true, soft-deleted users are also returned. "
+            "Default false hides them."
+        ),
+    ),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -159,7 +166,12 @@ def list_users(
 
     Requires: USERS_READ_ALL permission (admin only)
     """
-    query = UserListQuery(offset=offset, pageSize=pageSize, status=status)
+    query = UserListQuery(
+        offset=offset,
+        pageSize=pageSize,
+        status=status,
+        include_deleted=include_deleted,
+    )
     return UserController.list(request, query, db)
 
 

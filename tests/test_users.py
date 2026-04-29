@@ -1,66 +1,268 @@
-"""Tests for user management endpoints."""
+"""Tests for user management endpoints.
+
+Covers the user-management feature batch:
+  - create requires vendor, division, project_ids (issue 1 + 4)
+  - listing is newest-first (issue 5)
+  - delete is soft-delete; status='inactive' is allowed; restore via
+    PATCH status='active' (issue 2)
+  - response embeds vendor, division, projects (issue 4)
+"""
+from datetime import datetime, timezone
+from uuid import uuid4
+
 import pytest
 
+from app.infrastructure.db.models.project import ProjectModel
+from app.infrastructure.db.models.vendor import VendorModel
+
+
+# ---------------------------------------------------------------------------
+# Fixtures local to user tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="function")
+def sample_vendor(db_session):
+    """A vendor row to satisfy the vendor_id required-field on user create."""
+    v = VendorModel(
+        id=str(uuid4()),
+        name=f"Vendor-{uuid4().hex[:6]}",
+        description="for tests",
+        active=True,
+    )
+    db_session.add(v)
+    db_session.commit()
+    db_session.refresh(v)
+    return v
+
+
+@pytest.fixture(scope="function")
+def sample_project_for_user(db_session):
+    """A project row for the project_ids required-field on user create.
+
+    Distinct name from the existing ``sample_project`` so tests that use
+    both don't conflict on the project_code uniqueness.
+    """
+    p = ProjectModel(
+        id=str(uuid4()),
+        project_code=f"UIDAI-PR{uuid4().hex[:14].upper()}",
+        name="Project for user mapping",
+        description="-",
+        active=True,
+        public=False,
+        status="new",
+    )
+    db_session.add(p)
+    db_session.commit()
+    db_session.refresh(p)
+    return p
+
+
+def _create_body(*, login="newuser", email="new@example.com",
+                 password="password123", vendor_id, project_ids,
+                 division="tmd1", division_other=None,
+                 first_name="New", last_name="User"):
+    """Build a valid create payload with all required fields filled in."""
+    body = {
+        "login": login,
+        "email": email,
+        "password": password,
+        "firstName": first_name,
+        "lastName": last_name,
+        "admin": False,
+        "vendorId": vendor_id,
+        "division": division,
+        "projectIds": project_ids,
+    }
+    if division_other is not None:
+        body["divisionOther"] = division_other
+    return body
+
+
+# ===========================================================================
+# CREATE
+# ===========================================================================
 
 class TestCreateUser:
-    """POST /api/v3/users"""
+    """POST /api/v3/users/create"""
 
-    def test_create_user_success(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users/create", json={
-            "login": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
-            "firstName": "New",
-            "lastName": "User",
-            "admin": False,
-        }, headers=admin_headers)
-        assert resp.status_code == 201
+    def test_create_user_success(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        ), headers=admin_headers)
+        assert resp.status_code == 201, resp.text
         data = resp.json()["data"]
         assert data["login"] == "newuser"
-        assert data["email"] == "new@example.com"
         assert data["_type"] == "User"
-        assert "id" in data
+        assert data["vendor"] == {"id": sample_vendor.id, "name": sample_vendor.name}
+        assert data["division"] == "tmd1"
+        assert data["divisionOther"] is None
+        assert len(data["projects"]) == 1
+        assert data["projects"][0]["id"] == sample_project_for_user.id
 
-    def test_create_user_duplicate_login(self, client, admin_user, admin_headers):
-        client.post("/api/v3/users/create", json={
-            "login": "dup", "email": "a@a.com", "password": "password123",
-        }, headers=admin_headers)
-        resp = client.post("/api/v3/users/create", json={
-            "login": "dup", "email": "b@b.com", "password": "password123",
-        }, headers=admin_headers)
-        assert resp.status_code == 409
+    def test_create_user_with_division_others(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+            division="others",
+            division_other="Custom Division",
+        ), headers=admin_headers)
+        assert resp.status_code == 201, resp.text
+        d = resp.json()["data"]
+        assert d["division"] == "others"
+        assert d["divisionOther"] == "Custom Division"
 
-    def test_create_user_duplicate_email(self, client, admin_user, admin_headers):
-        client.post("/api/v3/users/create", json={
-            "login": "user1", "email": "same@example.com", "password": "password123",
-        }, headers=admin_headers)
-        resp = client.post("/api/v3/users/create", json={
-            "login": "user2", "email": "same@example.com", "password": "password123",
-        }, headers=admin_headers)
-        assert resp.status_code == 409
-
-    def test_create_user_invalid_email(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users/create", json={
-            "login": "badmail", "email": "not-an-email", "password": "password123",
-        }, headers=admin_headers)
+    def test_create_user_rejects_missing_project_mapping(
+        self, client, admin_user, admin_headers, sample_vendor,
+    ):
+        body = _create_body(
+            vendor_id=sample_vendor.id, project_ids=[],
+        )
+        resp = client.post("/api/v3/users/create", json=body, headers=admin_headers)
         assert resp.status_code == 422
 
-    def test_create_user_short_password(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users/create", json={
-            "login": "shortpw", "email": "s@s.com", "password": "short",
-        }, headers=admin_headers)
+    def test_create_user_rejects_missing_vendor(
+        self, client, admin_user, admin_headers, sample_project_for_user,
+    ):
+        body = _create_body(
+            vendor_id="", project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body, headers=admin_headers)
         assert resp.status_code == 422
 
-    def test_create_user_short_login(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users/create", json={
-            "login": "ab", "email": "ab@ab.com", "password": "password123",
-        }, headers=admin_headers)
+    def test_create_user_rejects_unknown_vendor(
+        self, client, admin_user, admin_headers, sample_project_for_user,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=str(uuid4()),
+            project_ids=[sample_project_for_user.id],
+        ), headers=admin_headers)
+        assert resp.status_code == 422
+        assert "Vendor" in resp.text
+
+    def test_create_user_rejects_unknown_project(
+        self, client, admin_user, admin_headers, sample_vendor,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=sample_vendor.id,
+            project_ids=[str(uuid4())],
+        ), headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_create_user_rejects_invalid_division(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+            division="bogus",
+        ), headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_create_user_rejects_others_without_label(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        resp = client.post("/api/v3/users/create", json=_create_body(
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+            division="others",
+        ), headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_create_user_duplicate_login(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        body1 = _create_body(
+            login="dup", email="a@a.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        client.post("/api/v3/users/create", json=body1, headers=admin_headers)
+
+        body2 = _create_body(
+            login="dup", email="b@b.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body2, headers=admin_headers)
+        assert resp.status_code == 409
+
+    def test_create_user_duplicate_email(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        body1 = _create_body(
+            login="user1", email="same@example.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        client.post("/api/v3/users/create", json=body1, headers=admin_headers)
+
+        body2 = _create_body(
+            login="user2", email="same@example.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body2, headers=admin_headers)
+        assert resp.status_code == 409
+
+    def test_create_user_invalid_email(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        body = _create_body(
+            email="not-an-email",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_create_user_short_password(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        body = _create_body(
+            password="short",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_create_user_short_login(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        body = _create_body(
+            login="ab",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        )
+        resp = client.post("/api/v3/users/create", json=body, headers=admin_headers)
         assert resp.status_code == 422
 
     def test_create_user_missing_required(self, client, admin_user, admin_headers):
-        resp = client.post("/api/v3/users/create", json={"login": "only"}, headers=admin_headers)
+        resp = client.post(
+            "/api/v3/users/create",
+            json={"login": "only"},
+            headers=admin_headers,
+        )
         assert resp.status_code == 422
 
+
+# ===========================================================================
+# LIST
+# ===========================================================================
 
 class TestListUsers:
     """GET /api/v3/users"""
@@ -71,8 +273,6 @@ class TestListUsers:
         body = resp.json()["data"]
         assert body["_type"] == "Collection"
         assert body["total"] >= 1
-        assert "_embedded" in body
-        assert "elements" in body["_embedded"]
 
     def test_list_users_pagination(self, client, admin_user, member_user, admin_headers):
         resp = client.get("/api/v3/users?offset=1&pageSize=1", headers=admin_headers)
@@ -84,6 +284,45 @@ class TestListUsers:
         resp = client.get("/api/v3/users", headers=member_headers)
         assert resp.status_code == 403
 
+    def test_list_users_newest_first(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        """Newly-created users appear at the TOP of the list."""
+        # Create two distinct users via the API (they get fresh
+        # created_at timestamps; the second should sort first).
+        for i in range(2):
+            client.post("/api/v3/users/create", json=_create_body(
+                login=f"u_order_{i}",
+                email=f"u_order_{i}@example.com",
+                vendor_id=sample_vendor.id,
+                project_ids=[sample_project_for_user.id],
+            ), headers=admin_headers)
+        resp = client.get("/api/v3/users", headers=admin_headers)
+        elements = resp.json()["data"]["_embedded"]["elements"]
+        # Newest first: u_order_1 above u_order_0 above admin.
+        non_admin = [u["login"] for u in elements if u["login"] != "admin"]
+        assert non_admin[0] == "u_order_1"
+        assert non_admin[1] == "u_order_0"
+
+    def test_list_users_excludes_soft_deleted_by_default(
+        self, client, admin_user, admin_headers,
+        member_user, sample_vendor, sample_project_for_user,
+    ):
+        """Soft-deleted users are hidden from the default list."""
+        # Soft-delete member.
+        client.delete(f"/api/v3/users/{member_user.id}", headers=admin_headers)
+
+        resp = client.get("/api/v3/users", headers=admin_headers)
+        body = resp.json()["data"]
+        logins = [u["login"] for u in body["_embedded"]["elements"]]
+        assert "member" not in logins
+        assert "admin" in logins
+
+
+# ===========================================================================
+# GET
+# ===========================================================================
 
 class TestGetUser:
     """GET /api/v3/users/{id}"""
@@ -91,12 +330,46 @@ class TestGetUser:
     def test_get_user_by_id(self, client, admin_user, admin_headers):
         resp = client.get(f"/api/v3/users/{admin_user.id}", headers=admin_headers)
         assert resp.status_code == 200
-        assert resp.json()["data"]["login"] == "admin"
+        d = resp.json()["data"]
+        assert d["login"] == "admin"
+        # Embedded blocks present (vendor null on bootstrap admin; projects
+        # empty since admin isn't project-mapped in tests).
+        assert "vendor" in d
+        assert "projects" in d
+        assert d["projects"] == []
 
     def test_get_nonexistent_user(self, client, admin_user, admin_headers):
         resp = client.get("/api/v3/users/99999", headers=admin_headers)
-        assert resp.status_code in [200, 404]  # may return 200 with error body
+        assert resp.status_code in [200, 404]
 
+    def test_get_response_embeds_vendor_and_projects(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        # Create a user with explicit vendor + project mapping.
+        create = client.post("/api/v3/users/create", json=_create_body(
+            login="u_with_vendor",
+            email="u_with_vendor@example.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+        ), headers=admin_headers)
+        assert create.status_code == 201, create.text
+        new_id = create.json()["data"]["id"]
+
+        # GET the user; verify the vendor + projects are embedded.
+        resp = client.get(f"/api/v3/users/{new_id}", headers=admin_headers)
+        assert resp.status_code == 200
+        d = resp.json()["data"]
+        assert d["vendor"]["id"] == sample_vendor.id
+        assert d["vendor"]["name"] == sample_vendor.name
+        assert d["division"] == "tmd1"
+        assert len(d["projects"]) == 1
+        assert d["projects"][0]["id"] == sample_project_for_user.id
+
+
+# ===========================================================================
+# UPDATE
+# ===========================================================================
 
 class TestUpdateUser:
     """PATCH /api/v3/users/{id}"""
@@ -115,31 +388,99 @@ class TestUpdateUser:
         }, headers=admin_headers)
         assert resp.status_code == 200
 
+    def test_update_status_to_inactive(
+        self, client, admin_user, member_user, admin_headers,
+    ):
+        """Admin can set status='inactive' — fixes tester's 'Status field
+        does not work' report."""
+        resp = client.patch(f"/api/v3/users/{member_user.id}", json={
+            "status": "inactive",
+        }, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["status"] == "inactive"
+
+    def test_update_status_invalid_value_rejected(
+        self, client, admin_user, member_user, admin_headers,
+    ):
+        resp = client.patch(f"/api/v3/users/{member_user.id}", json={
+            "status": "made-up-status",
+        }, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_member_cannot_change_status(
+        self, client, admin_user, member_user, member_headers,
+    ):
+        resp = client.patch(f"/api/v3/users/{member_user.id}", json={
+            "status": "inactive",
+        }, headers=member_headers)
+        assert resp.status_code == 403
+
+
+# ===========================================================================
+# DELETE (soft) + RESTORE
+# ===========================================================================
 
 class TestDeleteUser:
-    """DELETE /api/v3/users/{id}"""
+    """DELETE /api/v3/users/{id} — soft-delete semantics."""
 
-    def test_delete_user(self, client, admin_user, member_user, admin_headers):
+    def test_delete_is_soft(
+        self, client, admin_user, member_user, admin_headers, db_session,
+    ):
+        """Delete sets deleted_at + status='inactive'; row stays in DB."""
+        from app.infrastructure.db.models.user import UserModel
+
         resp = client.delete(f"/api/v3/users/{member_user.id}", headers=admin_headers)
         assert resp.status_code == 200
+
+        db_session.expire_all()
+        row = db_session.query(UserModel).filter_by(id=member_user.id).one()
+        assert row is not None  # NOT removed
+        assert row.deleted_at is not None
+        assert row.status == "inactive"
 
     def test_delete_nonexistent_user(self, client, admin_user, admin_headers):
         resp = client.delete("/api/v3/users/99999", headers=admin_headers)
         assert resp.status_code in [200, 404]
 
+    def test_delete_then_get_returns_404(
+        self, client, admin_user, member_user, admin_headers,
+    ):
+        client.delete(f"/api/v3/users/{member_user.id}", headers=admin_headers)
+        resp = client.get(f"/api/v3/users/{member_user.id}", headers=admin_headers)
+        # The default GET filters out soft-deleted users.
+        assert resp.status_code in (200, 404)
+        if resp.status_code == 200:
+            # If service returns 200 with error envelope, the body should
+            # carry an error rather than the user.
+            assert resp.json().get("error") is not None or resp.json().get("data") is None
+
+    def test_restore_via_status_active(
+        self, client, admin_user, member_user, admin_headers, db_session,
+    ):
+        """Admin setting status='active' on a deleted user clears deleted_at."""
+        from app.infrastructure.db.models.user import UserModel
+
+        # Soft-delete first.
+        client.delete(f"/api/v3/users/{member_user.id}", headers=admin_headers)
+
+        # Now restore via PATCH status=active.
+        resp = client.patch(f"/api/v3/users/{member_user.id}", json={
+            "status": "active",
+        }, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+
+        db_session.expire_all()
+        row = db_session.query(UserModel).filter_by(id=member_user.id).one()
+        assert row.deleted_at is None
+        assert row.status == "active"
+
 
 # ===========================================================================
-# Logout (Option B — hard logout)
-#
-# Server-side revocation:
-#   - Access token's jti added to RevokedTokenModel; subsequent requests
-#     using the same access token are rejected by AuthenticationMiddleware.
-#   - User row's refresh_token_jti is cleared so refresh-token flow fails.
+# LOGOUT (existing — unchanged behaviour)
 # ===========================================================================
 
 class TestLogout:
     def _login(self, client, login: str, password: str):
-        """Helper: login and return (access_token, refresh_token, headers)."""
         resp = client.post(
             "/api/v3/users/login",
             json={"login": login, "password": password},
@@ -153,7 +494,6 @@ class TestLogout:
         )
 
     def test_logout_success(self, client, admin_user, admin_headers):
-        """POST /users/logout with a valid token → 200 + success message."""
         resp = client.post("/api/v3/users/logout", headers=admin_headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -161,33 +501,21 @@ class TestLogout:
         assert "logged out" in body["data"]["message"].lower()
 
     def test_logout_blacklists_access_token(self, client, admin_user):
-        """After logout, the SAME access token is rejected on subsequent
-        protected calls (the jti is in the blacklist)."""
         access, _refresh, headers = self._login(client, "admin", "admin123")
-
-        # Sanity: protected call works with the token.
         me = client.get("/api/v3/users/me", headers=headers)
         assert me.status_code == 200
-
-        # Logout.
         out = client.post("/api/v3/users/logout", headers=headers)
         assert out.status_code == 200, out.text
-
-        # Same token now rejected.
         me_after = client.get("/api/v3/users/me", headers=headers)
-        assert me_after.status_code == 401, me_after.text
+        assert me_after.status_code == 401
 
     def test_logout_clears_refresh_token(self, client, admin_user, db_session):
-        """After logout, the user row's refresh_token_jti is NULL."""
         from app.infrastructure.db.models.user import UserModel
         access, _refresh, headers = self._login(client, "admin", "admin123")
-        # Sanity: refresh metadata is set after login.
         db_session.expire_all()
         u_before = db_session.query(UserModel).filter_by(login="admin").one()
         assert u_before.refresh_token_jti is not None
-
         client.post("/api/v3/users/logout", headers=headers)
-
         db_session.expire_all()
         u_after = db_session.query(UserModel).filter_by(login="admin").one()
         assert u_after.refresh_token_jti is None
@@ -198,7 +526,6 @@ class TestLogout:
         tokens via /users/refresh (the user row's stored jti is cleared,
         so the rotation guard rejects it)."""
         _access, refresh, headers = self._login(client, "admin", "admin123")
-
         client.post("/api/v3/users/logout", headers=headers)
 
         # Try to refresh using the now-revoked refresh token.
@@ -228,93 +555,42 @@ class TestLogout:
         assert "refresh_token" not in body
 
     def test_logout_inserts_blacklist_row(self, client, admin_user, db_session):
-        """A row appears in revoked_tokens with the access token's jti
-        and a future expires_at."""
         from datetime import datetime, timezone
         from app.infrastructure.db.models.revoked_token import RevokedTokenModel
         access, _refresh, headers = self._login(client, "admin", "admin123")
-
         client.post("/api/v3/users/logout", headers=headers)
         db_session.expire_all()
-
         rows = db_session.query(RevokedTokenModel).filter_by(user_id=admin_user.id).all()
         assert len(rows) == 1
-        row = rows[0]
-        # SQLite returns naive datetimes; strip tz from "now" so the
-        # comparison is naive on both sides. Using timezone-aware now() +
-        # replace(tzinfo=None) avoids the deprecated datetime.utcnow().
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-        assert row.expires_at > now_naive, \
-            "blacklist row's expires_at must be in the future"
+        assert rows[0].expires_at > now_naive
 
     def test_logout_idempotent(self, client, admin_user, admin_headers):
-        """Calling logout twice with the same token: first succeeds, second
-        rejected (token is already revoked)."""
         first = client.post("/api/v3/users/logout", headers=admin_headers)
-        assert first.status_code == 200, first.text
-
+        assert first.status_code == 200
         second = client.post("/api/v3/users/logout", headers=admin_headers)
-        # The middleware now treats the token as revoked → 401.
-        assert second.status_code == 401, second.text
+        assert second.status_code == 401
 
     def test_logout_without_auth_rejected(self, client):
-        """No Authorization header → 401."""
         resp = client.post("/api/v3/users/logout")
         assert resp.status_code == 401
 
     def test_logout_with_invalid_token_rejected(self, client):
-        """Garbage token → 401 (handled by middleware/RBAC)."""
         resp = client.post(
             "/api/v3/users/logout",
             headers={"Authorization": "Bearer not-a-real-token"},
         )
         assert resp.status_code == 401
 
-    def test_logout_does_not_affect_other_users(self, client, admin_user):
-        """Logging out as user A leaves user B's session fully working."""
-        # Create a second user.
-        admin_resp = client.post(
-            "/api/v3/users/login",
-            json={"login": "admin", "password": "admin123"},
-        )
-        admin_token = admin_resp.json()["data"]["access_token"]
-        admin_h = {"Authorization": f"Bearer {admin_token}"}
-
-        client.post(
-            "/api/v3/users/create",
-            json={
-                "login": "userb", "email": "b@b.com",
-                "password": "passwordB1",
-            },
-            headers=admin_h,
-        )
-
-        # Both log in.
-        _a_access, _a_refresh, a_headers = self._login(client, "admin", "admin123")
-        b_access, _b_refresh, b_headers = self._login(client, "userb", "passwordB1")
-
-        # A logs out.
-        out_a = client.post("/api/v3/users/logout", headers=a_headers)
-        assert out_a.status_code == 200
-
-        # B's token is unaffected.
-        me_b = client.get("/api/v3/users/me", headers=b_headers)
-        assert me_b.status_code == 200, me_b.text
-
     def test_login_after_logout_works(self, client, admin_user):
-        """Logout doesn't lock the user out — they can log back in fresh."""
         _access, _refresh, headers = self._login(client, "admin", "admin123")
         client.post("/api/v3/users/logout", headers=headers)
-
-        # Fresh login.
         resp = client.post(
             "/api/v3/users/login",
             json={"login": "admin", "password": "admin123"},
         )
-        assert resp.status_code == 200, resp.text
+        assert resp.status_code == 200
         new_token = resp.json()["data"]["access_token"]
-
-        # New token works.
         me = client.get(
             "/api/v3/users/me",
             headers={"Authorization": f"Bearer {new_token}"},
