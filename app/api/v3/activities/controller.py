@@ -167,7 +167,7 @@ class ActivityController:
             resource_count=data.resource_count,
             resource=None,
             current_user_id=current_user_id,
-            status=None,
+            status=data.status,
             depends_on=data.depends_on,
         )
         return BaseController.created(data=format_activity_response(
@@ -198,7 +198,7 @@ class ActivityController:
             resource_count=None,
             resource=data.resource.model_dump(),
             current_user_id=current_user_id,
-            status=None,
+            status=data.status,
             depends_on=data.depends_on,
         )
         return BaseController.created(data=format_activity_response(
@@ -229,7 +229,7 @@ class ActivityController:
             resource_count=None,
             resource=None,
             current_user_id=current_user_id,
-            status=None,
+            status=data.status,
             depends_on=data.depends_on,
         )
         return BaseController.created(data=format_activity_response(

@@ -237,20 +237,15 @@ def update_activity(
                     "The selected 'type of resource' could not be found or is inactive."
                 )
 
-    # Standard-only field: status is valid ONLY when the final type is
-    # standard. A PATCH that flips type=standard -> non-standard must clear
-    # it (done via the final shape below).
+    # Lifecycle status: applies to all activity types. The schema-level
+    # validator (in ActivityUpdateRequest) already enforces value-membership
+    # for any non-None input; we keep the service-layer guard so direct
+    # callers (CLI, internal scripts) can't bypass the choices.
     status_supplied = status is not None
-    if new_type != ACTIVITY_TYPE_STANDARD:
-        if status_supplied:
-            raise ValidationError(
-                "status is only valid on standard-type activities."
-            )
-    else:
-        if status_supplied and status not in ACTIVITY_STATUS_CHOICES:
-            raise ValidationError(
-                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
-            )
+    if status_supplied and status not in ACTIVITY_STATUS_CHOICES:
+        raise ValidationError(
+            f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+        )
 
     # Status-completion gate. Only run when the caller is explicitly trying
     # to set status to 'completed'.
@@ -334,17 +329,13 @@ def update_activity(
         updates["resource_mode"] = final_mode
         updates["resource_count"] = final_count
 
-    # Standard-only fields.
-    if new_type == ACTIVITY_TYPE_STANDARD:
-        if status_supplied:
-            updates["status"] = status
-        elif model.type != ACTIVITY_TYPE_STANDARD:
-            # Transitioning INTO standard with no status supplied — default.
-            updates["status"] = ACTIVITY_STATUS_DEFAULT
-    else:
-        # Transitioning OUT of standard — clear status.
-        if model.status is not None:
-            updates["status"] = None
+    # Status: write whatever the caller supplied. Type changes do NOT
+    # clear status anymore — every activity type carries a lifecycle
+    # state, so preserving it across type transitions is correct
+    # (an activity that was already 'completed' as a resource activity
+    # stays 'completed' if its type flips to standard).
+    if status_supplied:
+        updates["status"] = status
 
     before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}
 

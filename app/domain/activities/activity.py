@@ -21,7 +21,10 @@ RESOURCE_MODE_DETAILS = "details"
 RESOURCE_MODES = (RESOURCE_MODE_COUNT, RESOURCE_MODE_DETAILS)
 
 
-# Status choices for standard-type activities only. Extensible.
+# Lifecycle status applicable to ALL activity types (standard, resource,
+# transactional). Extensible — add new states by appending to
+# ACTIVITY_STATUS_CHOICES. The dependency-completion gate keys on
+# ACTIVITY_STATUS_COMPLETED regardless of the activity's type.
 ACTIVITY_STATUS_NOT_COMPLETED = "not_completed"
 ACTIVITY_STATUS_COMPLETED = "completed"
 ACTIVITY_STATUS_CHOICES: Tuple[str, ...] = (
@@ -62,7 +65,9 @@ class Activity:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
-    # Standard-only field; NULL on non-standard activities.
+    # Lifecycle status; applies to all activity types. NULL on legacy rows
+    # created before status was extended beyond standard-type activities;
+    # new activities default to ACTIVITY_STATUS_DEFAULT on create.
     status: Optional[str] = None
     # List of target activity ids this activity depends on. Populated by the
     # service layer from the activity_dependencies association table; never

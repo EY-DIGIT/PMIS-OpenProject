@@ -189,12 +189,8 @@ class ActivityCreateRequest(BaseModel):
         is_resource_type = self.type == ACTIVITY_TYPE_RESOURCE
         is_standard_type = self.type == ACTIVITY_TYPE_STANDARD
 
-        # status is STANDARD-only.
-        if not is_standard_type:
-            if self.status is not None:
-                raise ValueError(
-                    "status is only valid on standard-type activities."
-                )
+        # status applies to all activity types — no type-based rejection.
+        # The field-level validator (above) still enforces value-membership.
 
         # Resource-block consistency (mirrors prior behaviour; kept verbatim).
         if not is_resource_type:
@@ -339,7 +335,12 @@ class ActivityListQuery(BaseModel):
 
 
 class _ActivityCommonFields(BaseModel):
-    """Fields shared by every create schema."""
+    """Fields shared by every create schema.
+
+    ``status`` lives here because it now applies to all activity types
+    (standard, resource, transactional). Defaults to
+    ``ACTIVITY_STATUS_DEFAULT`` when omitted on create.
+    """
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(..., min_length=1, max_length=255)
@@ -349,6 +350,14 @@ class _ActivityCommonFields(BaseModel):
     actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
     actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
     position: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = Field(
+        None,
+        description=(
+            f"Lifecycle status. One of: {', '.join(ACTIVITY_STATUS_CHOICES)}. "
+            f"Defaults to '{ACTIVITY_STATUS_DEFAULT}' when omitted. Applies "
+            "to all activity types."
+        ),
+    )
     depends_on: Optional[List[str]] = Field(
         None,
         alias="dependsOn",
@@ -366,21 +375,6 @@ class _ActivityCommonFields(BaseModel):
             raise ValueError("End date cannot be before the start date.")
         return v
 
-
-class StandardActivityCreateRequest(_ActivityCommonFields):
-    """POST /milestones/{milestone_id}/activities/standard/create.
-
-    Standard activities carry a status (defaulting to 'not_completed') and
-    can be the source or target of dependency edges. No resource block.
-    """
-    status: Optional[str] = Field(
-        None,
-        description=(
-            f"One of: {', '.join(ACTIVITY_STATUS_CHOICES)}. "
-            f"Defaults to '{ACTIVITY_STATUS_DEFAULT}' when omitted."
-        ),
-    )
-
     @field_validator("status", mode="before")
     @classmethod
     def _validate_status(cls, v):
@@ -395,12 +389,21 @@ class StandardActivityCreateRequest(_ActivityCommonFields):
         return v
 
 
+class StandardActivityCreateRequest(_ActivityCommonFields):
+    """POST /milestones/{milestone_id}/activities/standard/create.
+
+    Standard activities can be the source or target of dependency edges.
+    ``status`` is inherited from _ActivityCommonFields. No resource block.
+    """
+    pass
+
+
 class ResourceCountActivityCreateRequest(_ActivityCommonFields):
     """POST /milestones/{milestone_id}/activities/resource/count/create.
 
     Resource activity in count mode — just a headcount. No inline resource
-    block; no classification columns; no status. resourceCount is required
-    and must be >= 1.
+    block; no classification columns. ``resourceCount`` is required and
+    must be >= 1. ``status`` is inherited from _ActivityCommonFields.
     """
     resource_count: int = Field(..., ge=1, alias="resourceCount")
 
@@ -412,7 +415,8 @@ class ResourceDetailsActivityCreateRequest(_ActivityCommonFields):
     classification. typeOfResourceId + division are REQUIRED on the nested
     resource (the inner ResourcePayload enforces this via its own
     validators for the division='others' idiom; the explicit required
-    check happens below).
+    check happens below). ``status`` is inherited from
+    _ActivityCommonFields.
     """
     resource: ResourcePayload = Field(...)
 
@@ -438,7 +442,9 @@ class ResourceDetailsActivityCreateRequest(_ActivityCommonFields):
 class TransactionalActivityCreateRequest(_ActivityCommonFields):
     """POST /milestones/{milestone_id}/activities/transactional/create.
 
-    Transactional activities have no status, no dependency-completion gate,
-    and no resource block. ``dependsOn`` edges are still allowed.
+    Transactional activities have no resource block. ``status`` is
+    inherited from _ActivityCommonFields and participates in the
+    dependency-completion gate the same as any other activity type.
+    ``dependsOn`` edges are allowed.
     """
     pass

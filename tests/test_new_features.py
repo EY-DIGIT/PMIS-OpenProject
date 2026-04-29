@@ -883,12 +883,11 @@ class TestStandardActivityFields:
         # Fresh activity has no dependencies yet.
         assert body.get("dependsOn") == []
 
-    def test_transactional_has_no_status_field(self, client, admin_headers, db_session):
-        """The transactional endpoint's schema has no ``status`` field.
-        Sending one is silently ignored (Pydantic default extras="ignore"),
-        and the created activity's status is NULL. This replaces the old
-        'rejects status' test — the split endpoint makes the wrong
-        combination structurally impossible at the contract boundary."""
+    def test_transactional_accepts_status(self, client, admin_headers, db_session):
+        """``status`` now applies to all activity types — transactional
+        included. Earlier behaviour silently dropped or 422'd it; now it
+        persists. The dependency-completion gate keys on
+        ``status='completed'`` regardless of activity type."""
         mid = self._milestone(client, admin_headers, db_session)
         resp = client.post(
             f"/api/v3/milestones/{mid}/activities/transactional/create",
@@ -896,7 +895,7 @@ class TestStandardActivityFields:
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
-        assert resp.json()["data"].get("status") is None
+        assert resp.json()["data"]["status"] == "completed"
 
     def test_standard_rejects_invalid_status(self, client, admin_headers, db_session):
         mid = self._milestone(client, admin_headers, db_session)

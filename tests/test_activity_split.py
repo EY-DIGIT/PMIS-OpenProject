@@ -131,7 +131,25 @@ class TestResourceCountSplitEndpoint:
         assert body["resourceMode"] == "count"
         assert body["resourceCount"] == 5
         assert body["resource"] is None
-        assert body.get("status") is None
+        # status applies to all activity types now and defaults to
+        # 'not_completed' when omitted on create.
+        assert body["status"] == "not_completed"
+
+    def test_accepts_status(self, client, admin_user, admin_headers):
+        """Resource/count activities now accept an explicit status."""
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        resp = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/count/create",
+            json={
+                "name": "A-count-completed",
+                "startDate": _iso(4), "endDate": _iso(20),
+                "resourceCount": 5,
+                "status": "completed",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["status"] == "completed"
 
     def test_resource_count_required(self, client, admin_user, admin_headers):
         _, mid = _setup_project_and_milestone(client, admin_headers)
@@ -233,6 +251,27 @@ class TestResourceDetailsSplitEndpoint:
         )
         assert resp.status_code == 422
 
+    def test_accepts_status(self, client, admin_user, admin_headers, db_session):
+        """Resource/details activities now accept an explicit status."""
+        rt_id = _seed_resource_type(db_session)
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        resp = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
+            json={
+                "name": "A-details-completed",
+                "startDate": _iso(4), "endDate": _iso(20),
+                "status": "completed",
+                "resource": {
+                    "resourceName": "Alice",
+                    "typeOfResourceId": rt_id,
+                    "division": "tmd1",
+                },
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["status"] == "completed"
+
 
 class TestTransactionalSplitEndpoint:
     def test_happy_path(self, client, admin_user, admin_headers):
@@ -245,30 +284,211 @@ class TestTransactionalSplitEndpoint:
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
         assert body["type"] == "transactional"
-        assert body.get("status") is None
+        # status applies to all activity types now and defaults to
+        # 'not_completed' when omitted on create.
+        assert body["status"] == "not_completed"
         assert body["resourceMode"] is None
         assert body["resourceCount"] is None
         assert body["resource"] is None
 
-    def test_extra_status_silently_ignored(self, client, admin_user, admin_headers):
-        """Transactional schema has no ``status`` field. Pydantic's default
-        extras='ignore' discards unknown fields. The activity is created
-        with status=None — the split endpoint cleans up what was previously
-        a service-layer 422."""
+    def test_accepts_status(self, client, admin_user, admin_headers):
+        """Transactional activities now accept an explicit status (was
+        previously silently dropped by the schema's extras='ignore')."""
         _, mid = _setup_project_and_milestone(client, admin_headers)
         resp = client.post(
             f"/api/v3/milestones/{mid}/activities/transactional/create",
             json={
                 "name": "A", "startDate": _iso(4), "endDate": _iso(20),
-                "status": "completed",   # ignored
-                "resourceCount": 3,      # ignored
+                "status": "completed",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["status"] == "completed"
+
+    def test_extra_unknown_fields_silently_ignored(
+        self, client, admin_user, admin_headers,
+    ):
+        """``resourceCount`` is not a transactional field — Pydantic's
+        default extras='ignore' continues to drop it without erroring."""
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        resp = client.post(
+            f"/api/v3/milestones/{mid}/activities/transactional/create",
+            json={
+                "name": "A", "startDate": _iso(4), "endDate": _iso(20),
+                "resourceCount": 3,      # ignored — not a transactional field
             },
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
-        assert body.get("status") is None
         assert body.get("resourceCount") is None
+
+
+class TestStatusOnAllActivityTypesViaPatch:
+    """PATCH /activities/{id} with a ``status`` field used to 422 on
+    resource/transactional types ("status is only valid on standard-type
+    activities"). After the all-types extension, status applies to every
+    activity type — these tests are the regression guard.
+    """
+
+    def test_patch_sets_status_on_resource_count(
+        self, client, admin_user, admin_headers,
+    ):
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        # Create a resource/count activity (defaults to not_completed).
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/count/create",
+            json={
+                "name": "RC", "startDate": _iso(4), "endDate": _iso(20),
+                "resourceCount": 2,
+            },
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        # PATCH it to completed.
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"status": "completed"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "completed"
+
+    def test_patch_sets_status_on_resource_details(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        rt_id = _seed_resource_type(db_session)
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
+            json={
+                "name": "RD", "startDate": _iso(4), "endDate": _iso(20),
+                "resource": {
+                    "resourceName": "Bob",
+                    "typeOfResourceId": rt_id,
+                    "division": "tmd2",
+                },
+            },
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"status": "completed"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "completed"
+
+    def test_patch_sets_status_on_transactional(
+        self, client, admin_user, admin_headers,
+    ):
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/transactional/create",
+            json={"name": "TX", "startDate": _iso(4), "endDate": _iso(20)},
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"status": "completed"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "completed"
+
+    def test_patch_resource_with_status_does_not_lose_resource_fields(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Tester-reported regression: editing a resource activity
+        (saving with a status field present) must not lose the resource
+        block. The PATCH used to 422 on the status field, so the whole
+        save was rejected and resource details appeared blank on reload.
+        """
+        rt_id = _seed_resource_type(db_session)
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/details/create",
+            json={
+                "name": "RD-preserve",
+                "startDate": _iso(4), "endDate": _iso(20),
+                "resource": {
+                    "resourceName": "Carol",
+                    "typeOfResourceId": rt_id,
+                    "division": "tmd1",
+                    "designation": "Architect",
+                },
+            },
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        # Edit name + send status — both must persist; resource untouched.
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"name": "RD-preserve-edited", "status": "not_completed"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()["data"]
+        assert body["name"] == "RD-preserve-edited"
+        assert body["status"] == "not_completed"
+        # GET again to verify resource details survived the round-trip.
+        g = client.get(f"/api/v3/activities/{aid}", headers=admin_headers)
+        gd = g.json()["data"]
+        assert gd["resource"]["resourceName"] == "Carol"
+        assert gd["resource"]["typeOfResourceId"] == rt_id
+        assert gd["resource"]["division"] == "tmd1"
+        assert gd["resource"]["designation"] == "Architect"
+
+    def test_type_change_preserves_status(
+        self, client, admin_user, admin_headers,
+    ):
+        """An activity that flips type from standard to transactional
+        keeps its status. (Old behaviour: status was silently NULLed.)"""
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/standard/create",
+            json={
+                "name": "T-flip", "startDate": _iso(4), "endDate": _iso(20),
+                "status": "completed",
+            },
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        # Flip type to transactional WITHOUT supplying a new status.
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"type": "transactional"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()["data"]
+        assert body["type"] == "transactional"
+        # Status survives the type change.
+        assert body["status"] == "completed"
+
+    def test_patch_invalid_status_value_rejected_on_resource(
+        self, client, admin_user, admin_headers,
+    ):
+        """Field-level value validation still applies to non-standard types."""
+        _, mid = _setup_project_and_milestone(client, admin_headers)
+        c = client.post(
+            f"/api/v3/milestones/{mid}/activities/resource/count/create",
+            json={
+                "name": "RC", "startDate": _iso(4), "endDate": _iso(20),
+                "resourceCount": 1,
+            },
+            headers=admin_headers,
+        )
+        aid = c.json()["data"]["id"]
+        r = client.patch(
+            f"/api/v3/activities/{aid}",
+            json={"status": "made-up-state"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 422
 
 
 class TestLegacyCatchAllGone:

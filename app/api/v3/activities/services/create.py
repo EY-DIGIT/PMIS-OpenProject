@@ -104,14 +104,16 @@ def create_activity(
         type == ACTIVITY_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_COUNT
     ) else None
 
-    # Standard-only field: status default.
-    resolved_status: Optional[str] = None
-    if type == ACTIVITY_TYPE_STANDARD:
-        resolved_status = status or ACTIVITY_STATUS_DEFAULT
-        if resolved_status not in ACTIVITY_STATUS_CHOICES:
-            raise ValidationError(
-                f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
-            )
+    # Lifecycle status: applies to all activity types. Default to
+    # ACTIVITY_STATUS_DEFAULT when the caller omits it. The schema layer
+    # already enforces value-membership for any non-None input, but we
+    # re-validate here so a future direct-service caller (CLI, internal
+    # script) can't bypass the choices.
+    resolved_status: str = status or ACTIVITY_STATUS_DEFAULT
+    if resolved_status not in ACTIVITY_STATUS_CHOICES:
+        raise ValidationError(
+            f"Activity status must be one of: {', '.join(ACTIVITY_STATUS_CHOICES)}."
+        )
 
     # Validate dependsOn targets BEFORE creating the row, so we don't leave
     # an orphan activity if validation fails.
