@@ -629,21 +629,56 @@ def init_db() -> None:
     finally:
         db.close()
 
-    # Seed a few demo vendors so the frontend has something to render on first
-    # run. Remove or replace with real vendor data when vendor management
-    # flows land.
+    # Seed a few demo vendors so the frontend has something to render on
+    # first run. Five well-known IT services orgs plus minimal demo contact
+    # info per row (email/contact_person/phone_number) so the post-doc-18
+    # Vendor Management columns aren't empty on a fresh install. Replace
+    # with real vendor data when vendor management flows land.
+    #
+    # ``include_deleted=True`` matters: post-doc-17, ``get_by_name`` defaults
+    # to filtering out soft-deleted rows, but the underlying ``vendors.name``
+    # UNIQUE constraint applies regardless of deletion state. If a vendor
+    # named e.g. "Infosys" was soft-deleted on this server, the existence
+    # check would return None, the create() call would fire, and the DB
+    # would reject the insert with a UniqueViolation. Checking with
+    # include_deleted=True correctly skips the insert for deleted rows.
+    #
+    # Per-row commit pattern: we commit after each successful insert so a
+    # later UniqueViolation (e.g. concurrent boot, partially-applied
+    # migration) doesn't roll back already-seeded earlier rows. The per-
+    # iteration rollback in the except clause keeps the session usable
+    # for the next iteration — without it, the final commit would raise
+    # PendingRollbackError and crash app startup.
+    _vendor_seed = (
+        ("Infosys",    "vendor.contact@infosys.example",    "Infosys Liaison",     "+91 80 4116 7777"),
+        ("TCS",        "vendor.contact@tcs.example",        "TCS Liaison",         "+91 22 6778 9595"),
+        ("Wipro",      "vendor.contact@wipro.example",      "Wipro Liaison",       "+91 80 2844 0011"),
+        ("Accenture",  "vendor.contact@accenture.example",  "Accenture Liaison",   "+91 80 2298 9999"),
+        ("Capgemini",  "vendor.contact@capgemini.example",  "Capgemini Liaison",   "+91 22 6755 7000"),
+    )
     db = SessionLocal()
     try:
         from .repositories import VendorRepository
 
         v_repo = VendorRepository(db)
-        for name in ("Infosys", "TCS", "Wipro", "Accenture", "Capgemini"):
+        for name, email, contact_person, phone_number in _vendor_seed:
             try:
-                if v_repo.get_by_name(name) is None:
-                    v_repo.create(name=name, active=True)
-            except Exception:
-                pass
-        db.commit()
+                if v_repo.get_by_name(name, include_deleted=True) is None:
+                    v_repo.create(
+                        name=name,
+                        active=True,
+                        email=email,
+                        contact_person=contact_person,
+                        phone_number=phone_number,
+                    )
+                    db.commit()
+            except Exception as e:
+                # A failed insert leaves the session needing a rollback
+                # before the next iteration can run; without this rollback
+                # any subsequent commit raises PendingRollbackError and
+                # crashes app startup.
+                logging.warning("Skipping vendor seed for %r: %s", name, e)
+                db.rollback()
     finally:
         db.close()
 
