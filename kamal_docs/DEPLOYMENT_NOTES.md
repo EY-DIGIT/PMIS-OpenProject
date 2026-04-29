@@ -81,6 +81,59 @@ Soft-deleted-user data and vendor/division values for any rows created
 since the upgrade are lost — the columns get dropped. Document any
 test data created post-upgrade if you'll need to restore.
 
+### Emergency recovery — locked out of admin
+
+The user-management batch protects against API-level lockout: the
+service layer refuses to (a) delete your own account, (b) demote
+yourself from admin, (c) demote/deactivate the last active admin.
+Together those guards make it impossible to leave the system with
+zero usable admins via the HTTP surface alone.
+
+**However**, direct DB writes, a botched migration, or a failed
+init_db seed can still leave the DB without a usable admin. In
+that case login returns 401 with no API-side recovery path.
+Recovery requires direct Postgres access:
+
+#### A. Restore a soft-deleted admin (most common case)
+
+```sql
+UPDATE users
+SET deleted_at = NULL,
+    deleted_by = NULL,
+    status = 'active'
+WHERE login = 'admin';
+```
+
+#### B. Reset the bootstrap admin password
+
+The bootstrap admin's credentials come from env vars
+``BOOTSTRAP_ADMIN_LOGIN`` (default: ``admin``),
+``BOOTSTRAP_ADMIN_EMAIL`` (default: ``admin@example.com``),
+``BOOTSTRAP_ADMIN_PASSWORD`` (default: ``admin123``). To reset
+the password to whatever's currently in the env, hash it with the
+app's bcrypt helper and ``UPDATE``:
+
+```bash
+# In the repo's venv:
+python3 -c "from app.core.security import hash_password; print(hash_password('<new-password>'))"
+# Copy the $2b$... output, then:
+psql -d pmis -c "UPDATE users SET hashed_password = '<paste-hash>', \
+                       status = 'active', deleted_at = NULL, \
+                       deleted_by = NULL \
+                 WHERE login = 'admin';"
+```
+
+(Quote the hash with single quotes — bcrypt strings contain ``$``
+which the shell would otherwise expand.)
+
+#### C. No admin exists at all (init_db never ran successfully)
+
+The bootstrap admin is created idempotently on every boot if no
+user with ``login = BOOTSTRAP_ADMIN_LOGIN`` exists. So restarting
+the app should re-seed it. If it doesn't, the boot logs will show
+why — usually a migration failure. Fix the migration root cause,
+restart, and the admin reappears.
+
 ---
 
 ## 2026-04-27 — Comments & Attachments feature

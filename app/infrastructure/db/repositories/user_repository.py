@@ -246,6 +246,23 @@ class UserRepository:
             self.db.query(UserModel).filter(UserModel.email == email).exists()
         ).scalar()
 
+    def has_other_active_admin(self, exclude_user_id: int) -> bool:
+        """True if at least one OTHER active admin exists.
+
+        "Active" = ``admin=True AND deleted_at IS NULL``. Used by the
+        delete / update services to refuse the operation that would
+        leave the system with zero active admins (i.e. permanently
+        locked out of admin-only endpoints).
+        """
+        return (
+            self.db.query(UserModel.id)
+            .filter(UserModel.admin.is_(True))
+            .filter(UserModel.deleted_at.is_(None))
+            .filter(UserModel.id != exclude_user_id)
+            .first()
+            is not None
+        )
+
     # ---- Update --------------------------------------------------------
 
     def update(

@@ -76,6 +76,35 @@ def update_user(
             error_type="authorization_error",
         )
 
+    # Admin-protection guards ---------------------------------
+    # These complement the delete-service guards so the API surface
+    # cannot lock the system out of itself via demotion / deactivation.
+
+    # Guard 1: An admin cannot demote themselves from admin.
+    # (Would also drop their own permission to undo the change.)
+    if admin is False and is_self and user.admin:
+        return ServiceResult.fail(
+            error="Cannot demote yourself from admin.",
+            error_type="authorization_error",
+        )
+
+    # Guard 2 + 3: Last-active-admin protection on demotion + deactivation.
+    # Demoting (admin=False) or deactivating (status='inactive') an
+    # active admin is refused if no OTHER active admin would remain.
+    if user.admin and not user.is_deleted():
+        removing_admin_flag = admin is False
+        deactivating_status = status == "inactive"
+        if removing_admin_flag or deactivating_status:
+            if not repository.has_other_active_admin(exclude_user_id=user_id):
+                action = "demote" if removing_admin_flag else "deactivate"
+                return ServiceResult.fail(
+                    error=(
+                        f"Cannot {action} the last active admin. "
+                        "Promote another user to admin first."
+                    ),
+                    error_type="validation_error",
+                )
+
     # Field validation -----------------------------------------
     if email is not None:
         email = normalize_email(email)

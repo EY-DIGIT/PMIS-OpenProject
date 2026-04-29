@@ -476,6 +476,223 @@ class TestDeleteUser:
 
 
 # ===========================================================================
+# ADMIN-PROTECTION GUARDS (last-active-admin + self-action lockout)
+# ===========================================================================
+
+@pytest.fixture(scope="function")
+def second_admin_user(db_session):
+    """A second admin so the last-active-admin guards don't block test
+    operations on ``admin_user``. Status active, not deleted."""
+    from app.core.security import hash_password
+    from app.infrastructure.db.models.user import UserModel
+
+    u = UserModel(
+        login="admin2",
+        email="admin2@example.com",
+        hashed_password=hash_password("admin123"),
+        first_name="Admin",
+        last_name="Two",
+        admin=True,
+        status="active",
+    )
+    db_session.add(u)
+    db_session.commit()
+    db_session.refresh(u)
+    return u
+
+
+class TestAdminProtectionGuards:
+    """The system must never let an admin lock the platform out of itself.
+
+    Verifies:
+      - admin cannot DELETE their own row (would drop their session)
+      - admin cannot demote themselves from admin via PATCH
+      - admin cannot deactivate themselves when they're the last admin
+      - the same operations succeed cleanly when a second admin exists
+    """
+
+    def test_admin_cannot_delete_self(
+        self, client, admin_user, admin_headers,
+    ):
+        """Self-delete is refused with 403 even when more admins exist."""
+        resp = client.delete(
+            f"/api/v3/users/{admin_user.id}", headers=admin_headers,
+        )
+        assert resp.status_code == 403, resp.text
+        assert "own account" in resp.text.lower()
+
+    def test_admin_cannot_demote_self(
+        self, client, admin_user, admin_headers,
+    ):
+        """PATCH {admin: false} on self → 403 (would drop own admin perms)."""
+        resp = client.patch(
+            f"/api/v3/users/{admin_user.id}",
+            json={"admin": False},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 403, resp.text
+        assert "demote yourself" in resp.text.lower()
+
+    def test_cannot_deactivate_last_active_admin(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Sole admin cannot set their own status='inactive' — would lock
+        the system out, since soft-deleted/inactive admins can't log in."""
+        from app.infrastructure.db.models.user import UserModel
+
+        resp = client.patch(
+            f"/api/v3/users/{admin_user.id}",
+            json={"status": "inactive"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        assert "last active admin" in resp.text.lower()
+
+        # Verify state didn't change
+        db_session.expire_all()
+        row = db_session.query(UserModel).filter_by(id=admin_user.id).one()
+        assert row.status == "active"
+        assert row.deleted_at is None
+
+    def test_can_delete_admin_when_another_admin_exists(
+        self, client, admin_user, second_admin_user, admin_headers, db_session,
+    ):
+        """Sanity: cross-admin delete still works when not the last admin."""
+        from app.infrastructure.db.models.user import UserModel
+
+        resp = client.delete(
+            f"/api/v3/users/{second_admin_user.id}", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+
+        db_session.expire_all()
+        row = db_session.query(UserModel).filter_by(id=second_admin_user.id).one()
+        assert row.deleted_at is not None
+        assert row.status == "inactive"
+
+    def test_can_deactivate_admin_when_another_admin_exists(
+        self, client, admin_user, second_admin_user, admin_headers,
+    ):
+        """Sanity: deactivating an admin via PATCH succeeds when another
+        admin remains. Also verifies non-self deactivation isn't over-blocked."""
+        resp = client.patch(
+            f"/api/v3/users/{second_admin_user.id}",
+            json={"status": "inactive"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["status"] == "inactive"
+
+
+# ===========================================================================
+# RESTORE — dedicated POST endpoint
+# ===========================================================================
+
+class TestRestoreUserEndpoint:
+    """POST /api/v3/users/{id}/restore — explicit restore route.
+
+    Mirrors POST /vendors/{id}/restore. The PATCH {status: 'active'}
+    path remains supported (covered by TestUpdateUser); this class
+    verifies the dedicated route specifically.
+    """
+
+    def test_restore_undeletes_a_soft_deleted_user(
+        self, client, admin_user, member_user, admin_headers, db_session,
+    ):
+        """Soft-delete → POST /restore → row is live again."""
+        from app.infrastructure.db.models.user import UserModel
+
+        # Soft-delete first
+        client.delete(f"/api/v3/users/{member_user.id}", headers=admin_headers)
+
+        # Restore via the dedicated endpoint
+        resp = client.post(
+            f"/api/v3/users/{member_user.id}/restore", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        assert body["status"] == "active"
+        assert body["deletedAt"] is None
+        assert body["deletedBy"] is None
+
+        db_session.expire_all()
+        row = db_session.query(UserModel).filter_by(id=member_user.id).one()
+        assert row.deleted_at is None
+        assert row.deleted_by is None
+        assert row.status == "active"
+
+    def test_restore_is_idempotent_on_active_user(
+        self, client, admin_user, member_user, admin_headers,
+    ):
+        """Restoring a user who was never deleted returns the current
+        snapshot with HTTP 200 (no 409, no 422). Matches the vendor
+        restore contract — benign retries shouldn't error."""
+        resp = client.post(
+            f"/api/v3/users/{member_user.id}/restore", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        assert body["id"] == member_user.id
+        assert body["status"] == "active"
+        assert body["deletedAt"] is None
+
+    def test_restore_returns_404_for_unknown_user(
+        self, client, admin_user, admin_headers,
+    ):
+        resp = client.post(
+            "/api/v3/users/99999/restore", headers=admin_headers,
+        )
+        assert resp.status_code == 404
+
+    def test_restore_requires_admin(
+        self, client, admin_user, member_user, member_headers,
+    ):
+        """Non-admins cannot call POST /restore.
+
+        The route has require_permission(USERS_DELETE_ALL) so the RBAC
+        middleware refuses before we even reach the service. Either 401
+        (no token) or 403 (member) is acceptable; both signal denial.
+        """
+        resp = client.post(
+            f"/api/v3/users/{member_user.id}/restore", headers=member_headers,
+        )
+        assert resp.status_code in (401, 403)
+
+    def test_restore_preserves_vendor_division_projects(
+        self, client, admin_user, admin_headers,
+        sample_vendor, sample_project_for_user,
+    ):
+        """End-to-end: create a user with vendor+division+projects, soft-
+        delete, restore — all embedded fields must survive the round-trip."""
+        # Create
+        create_resp = client.post("/api/v3/users/create", json=_create_body(
+            login="restore_target",
+            email="restore_target@example.com",
+            vendor_id=sample_vendor.id,
+            project_ids=[sample_project_for_user.id],
+            division="tmd2",
+        ), headers=admin_headers)
+        assert create_resp.status_code == 201, create_resp.text
+        new_id = create_resp.json()["data"]["id"]
+
+        # Delete
+        client.delete(f"/api/v3/users/{new_id}", headers=admin_headers)
+
+        # Restore via dedicated endpoint
+        resp = client.post(
+            f"/api/v3/users/{new_id}/restore", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        assert body["status"] == "active"
+        assert body["deletedAt"] is None
+        assert body["vendor"]["id"] == sample_vendor.id
+        assert body["division"] == "tmd2"
+        assert len(body["projects"]) == 1
+        assert body["projects"][0]["id"] == sample_project_for_user.id
+
+
+# ===========================================================================
 # LOGOUT (existing — unchanged behaviour)
 # ===========================================================================
 

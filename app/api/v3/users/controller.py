@@ -18,6 +18,7 @@ from .services import (
     update_user,
     update_password,
     delete_user,
+    restore_user,
     authenticate_user,
     logout_user,
 )
@@ -390,9 +391,57 @@ class UserController:
                 message=result.error,
                 details=result.details
             )
-            status_code = 404 if result.error_type == "not_found" else 500
+            if result.error_type == "not_found":
+                status_code = 404
+            elif result.error_type == "authorization_error":
+                status_code = 403
+            elif result.error_type == "validation_error":
+                status_code = 422
+            else:
+                status_code = 500
             resp = BaseController.error(error_payload, status=status_code)
             return resp
+
+    @staticmethod
+    def restore(
+        request: Request,
+        user_id: int,
+        db: Session
+    ) -> JSONResponse:
+        """
+        Restore a soft-deleted user.
+
+        Mirrors POST /vendors/{id}/restore. Idempotent on already-active
+        users (returns 200 with the current snapshot).
+
+        Requires: USERS_DELETE_ALL permission (admin only)
+        """
+        requesting_user_id = get_current_user_id(request)
+        is_admin = getattr(request.state, "is_admin", False)
+
+        result = restore_user(
+            db=db,
+            user_id=user_id,
+            requesting_user_id=requesting_user_id,
+            is_admin=is_admin,
+        )
+
+        if result.is_success():
+            payload = format_user_response(result.data.to_dict())
+            return BaseController.ok(payload)
+        else:
+            error_payload = format_error_response(
+                error_type=result.error_type,
+                message=result.error,
+                details=result.details,
+            )
+            if result.error_type == "not_found":
+                status_code = 404
+            elif result.error_type == "authorization_error":
+                status_code = 403
+            else:
+                status_code = 500
+            return BaseController.error(error_payload, status=status_code)
 
     @staticmethod
     def login(

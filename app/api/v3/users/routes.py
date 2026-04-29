@@ -257,3 +257,29 @@ def delete_user(
     Requires: USERS_DELETE_ALL permission (admin only)
     """
     return UserController.delete(request, user_id, db)
+
+
+@router.post(
+    "/{user_id}/restore",
+    dependencies=[require_permission(USERS_DELETE_ALL)],
+    summary="Restore a soft-deleted user (admin)",
+    description=(
+        "Clears deletedAt/deletedBy and sets status='active' on a "
+        "soft-deleted user. Idempotent on already-active users — returns "
+        "the current snapshot rather than 409. All project mappings, "
+        "vendor association, and division values are preserved on disk "
+        "during soft-delete and re-surface automatically. Mirrors "
+        "POST /api/v3/vendors/{id}/restore."
+    ),
+)
+def restore_user(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Restore a soft-deleted user.
+
+    Requires: USERS_DELETE_ALL permission (admin only)
+    """
+    return UserController.restore(request, user_id, db)
