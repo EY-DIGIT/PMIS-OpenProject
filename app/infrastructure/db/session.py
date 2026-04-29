@@ -234,7 +234,14 @@ def init_db() -> None:
         # module-level reference used earlier in the function.
 
         if engine.dialect.name == "sqlite":
-            with engine.connect() as conn:
+            # ``engine.begin()`` (NOT ``engine.connect()``) so DDL emitted
+            # below is committed on success. With plain connect(), SA 2.x
+            # autobegins an implicit transaction and rolls it back on close
+            # — every ALTER TABLE in this block would silently vanish, and
+            # the admin-bootstrap session a few lines down would crash with
+            # ``no such column: users.vendor_id`` against any legacy on-disk
+            # DB. begin() commits on clean exit, rolls back on exception.
+            with engine.begin() as conn:
                 try:
                     res = conn.execute(text("PRAGMA table_info('users')"))
                     rows = res.fetchall()
