@@ -46,7 +46,7 @@ def _seed_resource_types(db_session: Session):
     """Seed the three canonical resource types."""
     t1 = ResourceTypeModel(code="rfp", name="Request for Proposal", active=True)
     t2 = ResourceTypeModel(code="asg", name="Assignment", active=True)
-    t3 = ResourceTypeModel(code="ccm", name="Change Control Memo", active=True)
+    t3 = ResourceTypeModel(code="ccn", name="Change Control Notice", active=True)
     db_session.add_all([t1, t2, t3])
     db_session.commit()
     return t1.id, t2.id, t3.id
@@ -1023,7 +1023,7 @@ class TestResourceTypesEndpoint:
         resp = client.get("/api/v3/resource_types", headers=admin_headers)
         assert resp.status_code == 200
         codes = sorted(i["code"] for i in resp.json()["data"]["_embedded"]["elements"])
-        assert codes == ["asg", "ccm", "rfp"]
+        assert codes == ["asg", "ccn", "rfp"]
 
     def test_admin_can_create_resource_type(self, client, admin_headers, db_session):
         resp = client.post(

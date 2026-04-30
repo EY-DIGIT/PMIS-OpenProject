@@ -11,7 +11,7 @@ from typing import Tuple
 RESOURCE_TYPE_SEED = (
     ("rfp", "Request for Proposal"),
     ("asg", "Assignment"),
-    ("ccm", "Change Control Memo"),
+    ("ccn", "Change Control Notice"),
 )
 
 

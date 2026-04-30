@@ -19,7 +19,7 @@ This walkthrough takes a fresh environment from zero to a fully versioned projec
 
 - One admin user: `login=admin`, `password=admin123`
 - Five vendors: Infosys, TCS, Wipro, Accenture, Capgemini
-- Three resource types: rfp, asg, ccm
+- Three resource types: rfp, asg, ccn
 - Built-in work package types (not used in this demo)
 
 All the dates in the bodies below are set for **2026**. Replace them with dates in your own future if this document has aged.
@@ -81,7 +81,7 @@ ac5a2d47-df49-4503-b27e-7f734e1c5ee9
 
 **`GET /resource_types`** — Execute.
 
-**Expect 200** with `rfp`, `asg`, `ccm`. Copy the `id` of `rfp` — you'll use it as `typeOfResourceId` on a resource activity later.
+**Expect 200** with `rfp`, `asg`, `ccn`. Copy the `id` of `rfp` — you'll use it as `typeOfResourceId` on a resource activity later.
 c272a938-0dc7-4aa8-8593-ca217b845020
 
 ### 1c. List status transitions catalog (added in doc 15)

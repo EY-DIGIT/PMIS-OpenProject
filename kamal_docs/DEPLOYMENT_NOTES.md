@@ -10,6 +10,61 @@ DevOps needs to do.
 
 ---
 
+## 2026-04-30 — Resource type rename: CCM → CCN
+
+### What changed
+
+- The seeded resource_type with code ``ccm`` ("Change Control Memo")
+  is renamed to ``ccn`` ("Change Control Notice") to match the product
+  spec. Affects the catalog returned by ``GET /api/v3/resource_types``
+  and the seed inside ``init_db``.
+- Alembic migration ``e7f4a8b9c1d2`` auto-applies on boot and renames
+  any existing ``ccm`` row in-place. The row's UUID ``id`` is preserved,
+  so any ``activity_resources.type_of_resource_id`` references already
+  pointing at the old row remain valid — they now resolve to a row
+  whose code/name say "ccn" / "Change Control Notice".
+- Idempotent: ``WHERE code = 'ccm'`` makes a re-run a no-op on a DB
+  that's already migrated, or on a fresh install where ``init_db``
+  seeded ``ccn`` directly.
+
+### DevOps actions on the server
+
+```bash
+cd <repo>
+git pull
+sudo systemctl restart <monolith-service>   # or docker compose up -d
+```
+
+Migration runs automatically. No manual SQL, no env vars.
+
+### Verify
+
+```bash
+curl -H "Authorization: Bearer <token>" http://<server>/api/v3/resource_types
+```
+
+Response's ``data._embedded.elements`` should contain ``rfp``, ``asg``,
+``ccn``. The ``ccm`` code should no longer appear.
+
+### Failure mode if FE keeps sending the old "ccm" code
+
+It was already wrong — FE should send ``typeOfResourceId`` as the
+row's UUID, not the code. After this rename, sending ``"ccm"`` (or
+``"ccn"``) as ``typeOfResourceId`` still fails with
+``The selected 'type of resource' could not be found or is inactive.``
+The FE fix (use the UUID from ``GET /resource_types``) remains
+required regardless of the rename.
+
+### Rollback
+
+```bash
+cd <repo>
+alembic downgrade -1   # restores 'ccm' / 'Change Control Memo'
+git revert <commit>
+```
+
+---
+
 ## 2026-04-28 — User Management batch (vendor / division / project mapping / soft-delete)
 
 ### What changed

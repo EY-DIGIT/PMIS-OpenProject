@@ -1,4 +1,4 @@
-"""Resource type catalog (RFP / ASG / CCM / ...).
+"""Resource type catalog (RFP / ASG / CCN / ...).
 
 Referenced from ``activity_resources.type_of_resource_id`` when an activity
 is a resource-type activity in `details` mode. Seeded at startup with the
@@ -24,7 +24,7 @@ class ResourceTypeModel(Base):
         index=True,
         default=lambda: str(uuid4()),
     )
-    # Short canonical code: "rfp", "asg", "ccm", etc. Lowercase, unique.
+    # Short canonical code: "rfp", "asg", "ccn", etc. Lowercase, unique.
     code = Column(String(50), nullable=False, unique=True, index=True)
     # Human-readable display name: "Request for Proposal", etc.
     name = Column(String(255), nullable=False)
