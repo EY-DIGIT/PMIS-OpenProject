@@ -1,0 +1,231 @@
+"""
+Shared test fixtures for the PMIS test suite.
+
+Provides:
+- In-memory SQLite database per test function
+- FastAPI TestClient with dependency override
+- Pre-created admin and member users with tokens
+"""
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+import app.main as main_module
+from app.main import app
+from app.infrastructure.db import session as db_session_module
+from app.infrastructure.db.session import Base, get_db
+
+# Import ALL models to ensure they're registered with Base
+from app.infrastructure.db.models import (  # noqa: F401
+    UserModel,
+    RoleModel,
+    ProjectModel,
+    ProjectMemberModel,
+    WorkPackageTypeModel,
+)
+from app.infrastructure.db.models.work_package import WorkPackageModel  # noqa: F401
+from app.infrastructure.db.models.meeting import MeetingModel  # noqa: F401
+from app.infrastructure.db.models.meeting_participant import MeetingParticipantModel  # noqa: F401
+from app.infrastructure.db.models.meeting_agenda_item import MeetingAgendaItemModel  # noqa: F401
+
+from app.core.security import hash_password, create_access_token
+
+
+# ---------------------------------------------------------------------------
+# Database fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="function")
+def db_engine():
+    """Create a fresh in-memory SQLite engine per test.
+
+    Uses shared cache so all connections see the same database.
+    """
+    engine = create_engine(
+        "sqlite:///file:test.db?mode=memory&cache=shared&uri=true",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def db_session(db_engine):
+    """Create a database session bound to the in-memory engine."""
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=db_engine
+    )
+    session = TestingSessionLocal()
+    yield session
+    session.close()
+
+
+@pytest.fixture(scope="function")
+def client(db_engine, db_session):
+    """
+    FastAPI TestClient with the database dependency overridden
+    to use the in-memory test session.
+
+    Also patches the module-level SessionLocal and engine so that
+    any code creating its own sessions (e.g., init_db) uses the
+    test database.
+    """
+    TestingSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=db_engine
+    )
+
+    def _override_get_db():
+        s = TestingSessionLocal()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    # Patch module-level objects so init_db and any direct SessionLocal()
+    # calls also hit the in-memory database
+    original_engine = db_session_module.engine
+    original_session_local = db_session_module.SessionLocal
+    original_init_db = db_session_module.init_db
+
+    db_session_module.engine = db_engine
+    db_session_module.SessionLocal = TestingSessionLocal
+    # Prevent init_db from running during test lifespan (tables already created)
+    db_session_module.init_db = lambda: None
+    main_module.init_db = lambda: None
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    with TestClient(app) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+    db_session_module.engine = original_engine
+    db_session_module.SessionLocal = original_session_local
+    db_session_module.init_db = original_init_db
+    main_module.init_db = original_init_db
+
+
+# ---------------------------------------------------------------------------
+# Seed data fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="function")
+def admin_user(db_session: Session):
+    """Create an admin user and return the model instance."""
+    user = UserModel(
+        login="admin",
+        email="admin@example.com",
+        hashed_password=hash_password("admin123"),
+        first_name="Admin",
+        last_name="User",
+        admin=True,
+        status="active",
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def member_user(db_session: Session):
+    """Create a non-admin member user."""
+    user = UserModel(
+        login="member",
+        email="member@example.com",
+        hashed_password=hash_password("member123"),
+        first_name="Member",
+        last_name="User",
+        admin=False,
+        status="active",
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def admin_token(admin_user):
+    """JWT access token for the admin user."""
+    return create_access_token({
+        "sub": admin_user.login,
+        "user_id": admin_user.id,
+        "email": admin_user.email,
+        "role": "admin",
+        "is_admin": True,
+    })
+
+
+@pytest.fixture(scope="function")
+def member_token(member_user):
+    """JWT access token for the member user."""
+    return create_access_token({
+        "sub": member_user.login,
+        "user_id": member_user.id,
+        "email": member_user.email,
+        "role": "member",
+        "is_admin": False,
+    })
+
+
+@pytest.fixture(scope="function")
+def admin_headers(admin_token):
+    """Authorization headers for admin user."""
+    return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture(scope="function")
+def member_headers(member_token):
+    """Authorization headers for member user."""
+    return {"Authorization": f"Bearer {member_token}"}
+
+
+@pytest.fixture(scope="function")
+def sample_project(db_session: Session):
+    """Create a sample project in the database.
+
+    `id` is the UUID primary key. `project_code` uses the project_code
+    generator so fixtures match production insert semantics.
+    """
+    from uuid import uuid4
+    from app.shared.project_code import generate_project_code
+    project = ProjectModel(
+        id=str(uuid4()),
+        project_code=generate_project_code(db_session),
+        name="Test Project",
+        description="A test project",
+        active=True,
+        public=False,
+        status="new",
+    )
+    db_session.add(project)
+    db_session.commit()
+    db_session.refresh(project)
+    return project
+
+
+@pytest.fixture(scope="function")
+def builtin_wp_types(db_session: Session):
+    """Create built-in work package types."""
+    types = []
+    for pos, (name, internal) in enumerate(
+        [("Task", "task"), ("Bug", "bug"), ("Feature", "feature"),
+         ("Milestone", "milestone"), ("Activity", "activity")], start=1
+    ):
+        wpt = WorkPackageTypeModel(
+            name=name,
+            internal_name=internal,
+            is_builtin=True,
+            is_active=True,
+            position=pos,
+        )
+        db_session.add(wpt)
+        types.append(wpt)
+    db_session.commit()
+    for t in types:
+        db_session.refresh(t)
+    return types

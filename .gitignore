@@ -1,0 +1,49 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets — inline comments don't work in gitignore, so these must be
+# on their own lines. Track only .env.example (it's a template).
+.env
+.env.local
+.env.production
+.env.development
+
+# Databases / runtime artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Local attachments folder (dev fallback for ATTACHMENTS_STORAGE_BASE_PATH)
+local_uploads/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code local files
+.claude/
+
+# Test / coverage / build output
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+dist/
+build/
+*.egg-info/
