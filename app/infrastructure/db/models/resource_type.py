@@ -26,7 +26,9 @@ class ResourceTypeModel(Base):
     )
     # Short canonical code: "rfp", "asg", "ccn", etc. Lowercase, unique.
     code = Column(String(50), nullable=False, unique=True, index=True)
-    # Human-readable display name: "Request for Proposal", etc.
+    # Human-readable display name. The seeded built-ins use the short
+    # uppercase form ("RFP", "ASG", "CCN") to match the FE dropdown
+    # spec; admin-created entries can be any free-text label.
     name = Column(String(255), nullable=False)
     active = Column(Boolean, default=True, nullable=False, index=True)
 

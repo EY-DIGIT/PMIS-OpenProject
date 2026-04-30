@@ -10,6 +10,135 @@ DevOps needs to do.
 
 ---
 
+## 2026-04-30 — Resource type display names shortened to short codes
+
+### What changed
+
+The FE dropdown for Resource Type renders the ``name`` field as the
+visible label. Per product spec it should show the short uppercase
+form rather than the long-form descriptions. Migration
+``b3c5d7e9f1a2`` updates the three seeded rows in-place:
+
+| code | name (before) | name (after) |
+|---|---|---|
+| rfp | Request for Proposal | RFP |
+| asg | Assignment | ASG |
+| ccn | Change Control Notice | CCN |
+
+Row UUIDs are preserved, so any
+``activity_resources.type_of_resource_id`` references continue to
+resolve correctly. The seed in ``init_db`` is also updated, so
+fresh installs go straight to the short names. Migration is
+idempotent — re-running on a DB that already has the short names
+is a no-op.
+
+Admin-created (non-built-in) resource types are NOT touched. If
+ops adds a custom row labelled "Memorandum of Understanding", that
+label remains exactly as entered.
+
+### DevOps actions on the server
+
+```bash
+cd <repo>
+git pull
+sudo systemctl restart <monolith-service>   # or docker compose up -d
+```
+
+Migration auto-applies. No env vars. No manual SQL.
+
+### Verify
+
+```bash
+curl -H "Authorization: Bearer <token>" http://<server>/api/v3/resource_types
+```
+
+Expected: three rows with ``name`` values of exactly ``RFP``,
+``ASG``, ``CCN``.
+
+### Rollback
+
+```bash
+cd <repo>
+alembic downgrade -1   # restores the long-form names
+git revert <commit>
+```
+
+---
+
+## 2026-04-30 — Catalog cleanup: purge test rows from resource_types and divisions
+
+### What changed
+
+Both catalog tables had accumulated dummy / admin-created rows during
+testing that polluted the FE dropdowns:
+
+- ``resource_types`` had auto-generated *"Test Resource Type
+  &lt;timestamp&gt;"* rows from the admin "create resource type" flow.
+- ``divisions`` had user-added entries (e.g. ``admin`` / ``test`` /
+  ``come``) that appeared when projects were saved with
+  ``owner='others'`` plus those free-text labels (the slugify-on-
+  others-label flow).
+
+Alembic migration ``f8a9c2d1e3b4`` purges them on boot:
+
+- ``resource_types``: rows whose code is not in
+  ``('rfp', 'asg', 'ccn')`` are deleted when no
+  ``activity_resources.type_of_resource_id`` references them.
+  Referenced rows are kept (FK preserved) but flipped to
+  ``active = false`` so the catalog endpoint stops surfacing them.
+- ``divisions``: non-built-in rows are deleted unconditionally.
+  There are no incoming FKs (codes are wire values, not FKs from
+  other tables), so this is safe.
+
+After the migration: dropdowns render exactly the seeded values:
+
+- Resource Type → RFP, ASG, CCN
+- Division / Project Owner → TMD1, TMD2, Others
+
+The migration is idempotent (re-running on a clean DB is a no-op)
+and the create endpoints are *unchanged* — admins can still add new
+resource types or new "others"-labelled divisions later. This is a
+one-shot purge of the current accumulated test data, not a behaviour
+restriction.
+
+### DevOps actions on the server
+
+```bash
+cd <repo>
+git pull
+sudo systemctl restart <monolith-service>   # or docker compose up -d
+```
+
+Migration auto-applies. No env vars. No manual SQL.
+
+### Verify
+
+```bash
+curl -H "Authorization: Bearer <token>" http://<server>/api/v3/resource_types
+curl -H "Authorization: Bearer <token>" http://<server>/api/v3/divisions
+```
+
+The first should return three rows: ``rfp``, ``asg``, ``ccn`` (no
+"Test Resource Type" entries). The second should return three rows:
+``tmd1``, ``tmd2``, ``others`` (no ``admin`` / ``test`` / etc.).
+
+### Rollback
+
+```bash
+cd <repo>
+alembic downgrade -1
+git revert <commit>
+```
+
+The downgrade is a no-op by design — the dummy rows had
+auto-generated names and there's no audit trail of what was deleted,
+so they can't be reliably restored. If specific rows are needed
+back, re-add them via the admin endpoints (``POST /api/v3/
+resource_types/create`` for resource types; save a project with
+``owner='others'`` + ``ownerOther='<label>'`` for divisions).
+
+---
+
 ## 2026-04-30 — Resource type rename: CCM → CCN
 
 ### What changed

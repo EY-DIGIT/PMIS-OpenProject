@@ -44,9 +44,9 @@ def _seed_vendors(db_session: Session):
 
 def _seed_resource_types(db_session: Session):
     """Seed the three canonical resource types."""
-    t1 = ResourceTypeModel(code="rfp", name="Request for Proposal", active=True)
-    t2 = ResourceTypeModel(code="asg", name="Assignment", active=True)
-    t3 = ResourceTypeModel(code="ccn", name="Change Control Notice", active=True)
+    t1 = ResourceTypeModel(code="rfp", name="RFP", active=True)
+    t2 = ResourceTypeModel(code="asg", name="ASG", active=True)
+    t3 = ResourceTypeModel(code="ccn", name="CCN", active=True)
     db_session.add_all([t1, t2, t3])
     db_session.commit()
     return t1.id, t2.id, t3.id

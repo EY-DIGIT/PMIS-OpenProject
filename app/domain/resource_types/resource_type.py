@@ -9,9 +9,9 @@ from typing import Tuple
 # truth; this tuple is only used as a "seed on init" list and a default
 # display-order for the picker. Admins may add more via /resource_types.
 RESOURCE_TYPE_SEED = (
-    ("rfp", "Request for Proposal"),
-    ("asg", "Assignment"),
-    ("ccn", "Change Control Notice"),
+    ("rfp", "RFP"),
+    ("asg", "ASG"),
+    ("ccn", "CCN"),
 )
 
 
