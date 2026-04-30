@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     # Refresh token TTL (days)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Grace window (seconds) during which the just-rotated-out refresh token
+    # is still accepted by /users/refresh. Lets concurrent refresh attempts
+    # (timer + 401 interceptor firing in parallel, multi-tab races, retry
+    # queues holding a stale token) succeed instead of returning 401. The
+    # previous jti is recorded on every rotation event (login or refresh)
+    # and remains valid for this many seconds.
+    REFRESH_TOKEN_GRACE_SECONDS: int = 120
 
     # Database
     DATABASE_URL: str = Field(

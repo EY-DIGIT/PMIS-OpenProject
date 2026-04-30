@@ -80,11 +80,16 @@ def _introspect_access(db: Session, token: str) -> Dict[str, Any]:
 def _introspect_refresh(db: Session, token: str) -> Dict[str, Any]:
     """Introspect one refresh token. Always returns a dict (never raises).
 
-    A refresh token is "active" only when:
+    A refresh token is "active" when:
       - signature is valid AND not expired
-      - its jti matches the user row's stored ``refresh_token_jti``
-        (i.e. it is the LATEST issued refresh — older ones rotated out)
+      - its jti matches EITHER the user row's stored ``refresh_token_jti``
+        (the latest issued) OR the ``previous_refresh_token_jti`` while
+        the grace window (``previous_refresh_token_jti_valid_until``) is
+        still open. Outside the grace window, only the current jti
+        counts as active.
       - the user row's stored ``refresh_token_expires_at`` is in the future
+        (only enforced when the incoming token resolves to the current slot;
+        the previous slot is bounded by the grace window itself).
     """
     payload = verify_refresh_token(token)
     if not payload:
@@ -96,21 +101,36 @@ def _introspect_refresh(db: Session, token: str) -> Dict[str, Any]:
         return {"active": False, "tokenType": "refresh"}
 
     repo = UserRepository(db)
-    stored_jti, stored_expires = repo.get_refresh_metadata(user_id)
-    if not stored_jti or stored_jti != jti:
+    (
+        current_jti,
+        current_expires,
+        previous_jti,
+        previous_valid_until,
+    ) = repo.get_refresh_metadata_with_grace(user_id)
+
+    now = datetime.now(timezone.utc)
+    matches_current = bool(current_jti) and current_jti == jti
+    matches_previous_in_grace = (
+        bool(previous_jti)
+        and previous_jti == jti
+        and previous_valid_until is not None
+        and _as_utc(previous_valid_until) > now
+    )
+
+    if not (matches_current or matches_previous_in_grace):
         return {"active": False, "tokenType": "refresh"}
 
-    if stored_expires is not None:
-        # SQLite returns naive datetimes; coerce to aware UTC for comparison.
-        stored_aware = (
-            stored_expires
-            if stored_expires.tzinfo is not None
-            else stored_expires.replace(tzinfo=timezone.utc)
-        )
-        if stored_aware < datetime.now(timezone.utc):
+    if matches_current and current_expires is not None:
+        if _as_utc(current_expires) < now:
             return {"active": False, "tokenType": "refresh"}
 
     return _claims_to_response(payload, token_type="refresh")
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Coerce a naive datetime to aware UTC. SQLite drops tzinfo on
+    round-trip; Postgres preserves it."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def introspect_tokens(

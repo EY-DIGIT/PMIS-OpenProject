@@ -9,7 +9,7 @@ vendor name, and run a follow-up query against ``project_members ⋈
 projects`` to embed the user's mapped projects (excluding closed and
 soft-deleted projects) without N+1 lookups in the controller layer.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy import desc
@@ -336,28 +336,75 @@ class UserRepository:
         self.db.flush()
         return True
 
+    def rotate_refresh_token(
+        self,
+        user_id: int,
+        new_jti: Optional[str],
+        new_expires_at,
+        grace_seconds: int = 0,
+    ) -> bool:
+        """Unconditional refresh-token rotation with grace-window capture.
+
+        Reads the current ``refresh_token_jti`` and, if non-null, copies it
+        into ``previous_refresh_token_jti`` with a TTL of ``grace_seconds``.
+        Then writes ``new_jti`` + ``new_expires_at`` to the live columns.
+
+        Both the previous-jti capture and the live-jti write happen in the
+        same UPDATE statement so concurrent callers don't see torn state.
+
+        Pass ``new_jti=None`` and ``grace_seconds=0`` from logout to clear
+        everything (no grace after explicit logout).
+        """
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
+            return False
+
+        if new_jti is None:
+            # Explicit logout — clear current AND any in-flight grace.
+            model.refresh_token_jti = None
+            model.refresh_token_expires_at = None
+            model.previous_refresh_token_jti = None
+            model.previous_refresh_token_jti_valid_until = None
+            self.db.commit()
+            return True
+
+        # Rotation: capture the outgoing jti as previous, then overwrite.
+        outgoing = model.refresh_token_jti
+        if outgoing is not None and grace_seconds > 0:
+            model.previous_refresh_token_jti = outgoing
+            model.previous_refresh_token_jti_valid_until = (
+                _utcnow() + timedelta(seconds=grace_seconds)
+            )
+        model.refresh_token_jti = new_jti
+        model.refresh_token_expires_at = new_expires_at
+        self.db.commit()
+        return True
+
+    # Backward-compat shim. Old call sites (none remaining inside the
+    # refresh / authenticate services after the grace-window rewrite)
+    # still resolve to a working rotation; ``expected_old_jti`` is now
+    # ignored — the atomic-swap conditional was the source of the
+    # concurrent-refresh race that this rewrite fixes.
     def update_refresh_token_metadata(
         self,
         user_id: int,
         jti: Optional[str],
         expires_at,
-        expected_old_jti: Optional[str] = None,
+        expected_old_jti: Optional[str] = None,  # noqa: ARG002 — kept for compat
     ) -> bool:
-        query = self.db.query(UserModel).filter(UserModel.id == user_id)
-        if expected_old_jti is not None:
-            query = query.filter(UserModel.refresh_token_jti == expected_old_jti)
-
-        rows_updated = query.update({
-            UserModel.refresh_token_jti: jti,
-            UserModel.refresh_token_expires_at: expires_at,
-        }, synchronize_session=False)
-
-        if rows_updated:
-            self.db.commit()
-            return True
-        return False
+        return self.rotate_refresh_token(
+            user_id, jti, expires_at, grace_seconds=0,
+        )
 
     def get_refresh_metadata(self, user_id: int):
+        """Return ``(current_jti, current_expires_at)``.
+
+        Kept for callers that don't need the grace-window fields.
+        """
         model = (
             self.db.query(UserModel)
             .filter(UserModel.id == user_id)
@@ -366,6 +413,27 @@ class UserRepository:
         if not model:
             return None, None
         return model.refresh_token_jti, model.refresh_token_expires_at
+
+    def get_refresh_metadata_with_grace(self, user_id: int):
+        """Return ``(current_jti, current_expires, previous_jti, previous_valid_until)``.
+
+        Used by /refresh and /introspect to honour the grace window: a
+        token whose jti matches ``previous_jti`` is still accepted while
+        ``now() < previous_valid_until``.
+        """
+        model = (
+            self.db.query(UserModel)
+            .filter(UserModel.id == user_id)
+            .first()
+        )
+        if not model:
+            return None, None, None, None
+        return (
+            model.refresh_token_jti,
+            model.refresh_token_expires_at,
+            model.previous_refresh_token_jti,
+            model.previous_refresh_token_jti_valid_until,
+        )
 
     # ---- Soft delete ---------------------------------------------------
 

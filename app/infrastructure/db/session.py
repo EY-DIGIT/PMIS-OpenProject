@@ -260,6 +260,32 @@ def init_db() -> None:
                             conn.execute(text("ALTER TABLE users ADD COLUMN refresh_token_expires_at DATETIME"))
                         except Exception as e:
                             logging.warning("Failed to add column refresh_token_expires_at: %s", e)
+
+                    # Refresh-token grace window (added when concurrent /refresh
+                    # races started returning 401s in normal FE use). Holds
+                    # the just-rotated-out jti for REFRESH_TOKEN_GRACE_SECONDS
+                    # so a parallel call still resolves successfully.
+                    if "previous_refresh_token_jti" not in existing_cols:
+                        try:
+                            conn.execute(text(
+                                "ALTER TABLE users ADD COLUMN "
+                                "previous_refresh_token_jti VARCHAR(64)"
+                            ))
+                        except Exception as e:
+                            logging.warning(
+                                "Failed to add column previous_refresh_token_jti: %s", e,
+                            )
+                    if "previous_refresh_token_jti_valid_until" not in existing_cols:
+                        try:
+                            conn.execute(text(
+                                "ALTER TABLE users ADD COLUMN "
+                                "previous_refresh_token_jti_valid_until DATETIME"
+                            ))
+                        except Exception as e:
+                            logging.warning(
+                                "Failed to add column "
+                                "previous_refresh_token_jti_valid_until: %s", e,
+                            )
                 except Exception:
                     # If PRAGMA fails for any reason, do not prevent app startup
                     pass

@@ -36,6 +36,13 @@ class UserModel(Base):
     # Refresh token tracking for stateless rotation
     refresh_token_jti = Column(String(64), nullable=True, index=False)
     refresh_token_expires_at = Column(DateTime, nullable=True)
+    # Grace window: the just-rotated-out jti is held here for
+    # REFRESH_TOKEN_GRACE_SECONDS (see settings) so concurrent /refresh
+    # races, multi-tab login, and stale-token retry queues don't get
+    # locked out by the atomic-swap losing path. NULL once expired or
+    # cleared on explicit logout.
+    previous_refresh_token_jti = Column(String(64), nullable=True)
+    previous_refresh_token_jti_valid_until = Column(DateTime, nullable=True)
 
     # Vendor association (single vendor per user). Nullable so the
     # bootstrap admin (created by init_db) and any pre-feature legacy

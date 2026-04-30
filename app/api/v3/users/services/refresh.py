@@ -3,10 +3,19 @@ Refresh-token rotation service.
 
 Backs ``POST /api/v3/users/refresh``. Takes a refresh token, validates it
 against the user row's stored jti + expiry, and on success issues a fresh
-access + refresh pair. Atomic — the user row's ``refresh_token_jti`` is
-swapped to the new value via a conditional UPDATE that requires the old
-jti to match (single-writer guarantee), so concurrent refresh attempts
-with the same token only succeed once.
+access + refresh pair.
+
+The user row carries TWO valid jtis at any moment:
+
+* ``refresh_token_jti``                              — the latest one issued.
+* ``previous_refresh_token_jti`` (with valid_until)  — the one rotated out
+  just now; remains acceptable for ``REFRESH_TOKEN_GRACE_SECONDS``.
+
+Both are accepted by this service. Each successful refresh shifts the
+current jti into the previous slot and writes the freshly-minted jti to
+the live slot. The grace window absorbs concurrent refresh races
+(timer + 401-interceptor firing in parallel), multi-tab/multi-device
+login interleaves, and stale-token retries from middleware.
 """
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -20,6 +29,16 @@ from .....core.security import (
 )
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....shared.service_result import ServiceResult
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Coerce a possibly-naive datetime to a timezone-aware UTC datetime.
+
+    SQLite drops tzinfo on round-trip; Postgres preserves it. We treat
+    a naive value as already-UTC so the comparison against
+    ``datetime.now(tz=UTC)`` doesn't raise a TypeError.
+    """
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _exp_metadata(token: str) -> Dict[str, Any]:
@@ -82,22 +101,39 @@ def refresh_tokens(
         )
 
     repo = UserRepository(db)
-    stored_jti, stored_expires = repo.get_refresh_metadata(user_id)
-    if not stored_jti or stored_jti != token_jti:
-        # Either the user has been logged out (jti cleared), or this is
-        # an older refresh token that has already been rotated out.
+    (
+        current_jti,
+        current_expires,
+        previous_jti,
+        previous_valid_until,
+    ) = repo.get_refresh_metadata_with_grace(user_id)
+
+    now = datetime.now(timezone.utc)
+
+    # Decide which jti slot the incoming token resolves to. Accept the
+    # previous slot only while inside the grace window; outside, treat
+    # it as already rotated out.
+    matches_current = bool(current_jti) and current_jti == token_jti
+    matches_previous_in_grace = (
+        bool(previous_jti)
+        and previous_jti == token_jti
+        and previous_valid_until is not None
+        and _as_utc(previous_valid_until) > now
+    )
+
+    if not (matches_current or matches_previous_in_grace):
+        # Either logged out (both slots cleared), wrong user, or this is an
+        # old token whose grace window already expired.
         return ServiceResult.fail(
             error="Refresh token invalid or already rotated.",
             error_type="authentication_error",
         )
 
-    if stored_expires is not None:
-        stored_aware = (
-            stored_expires
-            if stored_expires.tzinfo is not None
-            else stored_expires.replace(tzinfo=timezone.utc)
-        )
-        if stored_aware < datetime.now(timezone.utc):
+    # Hard-expiry check on the live token's TTL (7-day TTL by default).
+    # Only enforced on the CURRENT slot — the previous slot lives only as
+    # long as the grace window so its underlying TTL is moot.
+    if matches_current and current_expires is not None:
+        if _as_utc(current_expires) < now:
             return ServiceResult.fail(
                 error="Refresh token expired.",
                 error_type="authentication_error",
@@ -114,16 +150,18 @@ def refresh_tokens(
     new_access = create_access_token(token_data)
     new_refresh, new_jti, new_expires = create_refresh_token(token_data)
 
-    # Atomic swap: only succeeds when the stored jti still equals the one
-    # we validated against. Two concurrent refreshes can't both win.
-    swapped = repo.update_refresh_token_metadata(
-        user_id, new_jti, new_expires, expected_old_jti=token_jti,
+    # Unconditional rotation. The repository captures the outgoing
+    # ``current_jti`` into the previous slot with the configured grace
+    # TTL, then writes the new jti into the current slot — single
+    # transaction, so callers never see torn state. There's no
+    # expected-old-jti check anymore: the validation above already
+    # ensured the caller is authorized, so concurrent refreshes BOTH
+    # succeed (each producing its own fresh pair).
+    from .....core.config import settings as _settings
+    repo.rotate_refresh_token(
+        user_id, new_jti, new_expires,
+        grace_seconds=_settings.REFRESH_TOKEN_GRACE_SECONDS,
     )
-    if not swapped:
-        return ServiceResult.fail(
-            error="Refresh token invalid or already rotated.",
-            error_type="authentication_error",
-        )
 
     user = repo.get_by_id(user_id)
     if not user:

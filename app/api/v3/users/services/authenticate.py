@@ -4,6 +4,7 @@ User authentication service.
 from typing import Optional
 from sqlalchemy.orm import Session
 from .....core.security import verify_password, create_access_token, create_refresh_token
+from .....core.config import settings
 from .....core.rbac import Role
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....shared.service_result import ServiceResult
@@ -75,8 +76,15 @@ def authenticate_user(
         "is_admin": user.admin
     })
 
-    # Persist refresh metadata
-    repository.update_refresh_token_metadata(user.id, refresh_jti, refresh_expires)
+    # Rotate the user's refresh-token jti. ``grace_seconds`` keeps the
+    # previously-issued refresh token valid for a short window so a parallel
+    # tab / login replay / in-flight refresh from before this login still
+    # resolves successfully. See settings.REFRESH_TOKEN_GRACE_SECONDS and
+    # the user-repository docstring for details.
+    repository.rotate_refresh_token(
+        user.id, refresh_jti, refresh_expires,
+        grace_seconds=settings.REFRESH_TOKEN_GRACE_SECONDS,
+    )
 
     return ServiceResult.ok({
         "access_token": access_token,

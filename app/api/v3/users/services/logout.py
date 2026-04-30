@@ -61,12 +61,13 @@ def logout_user(
         ServiceResult.ok({"message": "..."}) on success. Always succeeds
         if the user exists; idempotent otherwise.
     """
-    # Refresh-token revocation. Clears the JTI + expiry columns on the
-    # user row so the introspect/refresh path treats the token as reused.
+    # Refresh-token revocation. Clears the live jti, expiry, AND any
+    # in-flight grace-window columns on the user row so neither the
+    # current refresh token nor the just-rotated-out one can mint
+    # further pairs. Logout is an explicit "stop my session now" — no
+    # grace period after.
     user_repo = UserRepository(db)
-    # update_refresh_token_metadata writes both columns; passing None for
-    # both effectively clears them.
-    user_repo.update_refresh_token_metadata(user_id, None, None)
+    user_repo.rotate_refresh_token(user_id, None, None, grace_seconds=0)
 
     # Access-token blacklisting (skip gracefully if jti is missing).
     if token_jti and token_exp is not None:

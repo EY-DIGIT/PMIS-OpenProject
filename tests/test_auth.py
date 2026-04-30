@@ -198,9 +198,38 @@ class TestRefresh:
         assert isinstance(nd["expiresInSeconds"], int)
         assert nd["user"]["login"] == "admin"
 
-    def test_refresh_old_token_rejected_after_rotation(self, client, admin_user):
-        """After a successful refresh, the OLD refresh token is no longer
-        usable (its jti was rotated out of the user row)."""
+    def test_refresh_old_token_accepted_within_grace_window(self, client, admin_user):
+        """After a successful refresh, the OLD refresh token remains valid
+        for ``REFRESH_TOKEN_GRACE_SECONDS`` so concurrent /refresh calls
+        from the FE (timer + 401 interceptor + multi-tab) don't 401 the
+        loser. Both calls get their own fresh pair."""
+        ld = self._login(client)
+        first = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": ld["refresh_token"]},
+        )
+        assert first.status_code == 200
+        nd1 = first.json()["data"]
+
+        # Re-using the original refresh inside the grace window still works.
+        second = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": ld["refresh_token"]},
+        )
+        assert second.status_code == 200, second.text
+        nd2 = second.json()["data"]
+        # Each call mints its OWN fresh pair — they aren't shared.
+        assert nd2["refresh_token"] not in (
+            ld["refresh_token"], nd1["refresh_token"],
+        )
+
+    def test_refresh_old_token_rejected_after_grace_expires(
+        self, client, admin_user, monkeypatch
+    ):
+        """Once the grace window closes, the original (rotated-out) refresh
+        token is rejected. We shrink the window to 1s and sleep past it."""
+        from app.core.config import settings
+        monkeypatch.setattr(settings, "REFRESH_TOKEN_GRACE_SECONDS", 1)
         ld = self._login(client)
         first = client.post(
             "/api/v3/users/refresh",
@@ -208,12 +237,86 @@ class TestRefresh:
         )
         assert first.status_code == 200
 
-        # Re-using the original refresh now fails.
+        import time
+        time.sleep(1.5)
+
         second = client.post(
             "/api/v3/users/refresh",
             json={"refresh_token": ld["refresh_token"]},
         )
         assert second.status_code == 401, second.text
+
+    def test_refresh_same_token_works_twice_back_to_back(self, client, admin_user):
+        """Modelling the FE race: two /refresh calls with the SAME RT, fired
+        as close together as the test client allows. Both succeed — the
+        first rotates the live jti, the second is absorbed by the grace
+        window. This is the user-visible behaviour fix.
+
+        (A truly threaded version of this test trips SQLite's global-write
+        lock; Postgres handles it cleanly with row-level locks.)
+        """
+        ld = self._login(client)
+        first = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": ld["refresh_token"]},
+        )
+        second = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": ld["refresh_token"]},
+        )
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        # Each call mints its own pair, and both pairs differ from the
+        # original login pair.
+        rt0 = ld["refresh_token"]
+        rt1 = first.json()["data"]["refresh_token"]
+        rt2 = second.json()["data"]["refresh_token"]
+        assert len({rt0, rt1, rt2}) == 3
+
+    def test_refresh_after_relogin_still_works_in_grace(
+        self, client, admin_user
+    ):
+        """A second login rotates the user's stored jti. The pre-relogin
+        refresh token must still mint successfully while the grace window
+        is open — this prevents tab-A getting locked out the moment tab-B
+        opens and logs in."""
+        first_login = self._login(client)
+        # Second login from "another tab" — rotates the stored jti and
+        # captures the original into the grace slot.
+        self._login(client)
+        # First-login token still works, because the grace window is open.
+        resp = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": first_login["refresh_token"]},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_logout_clears_grace_window(self, client, admin_user):
+        """Logout must clear BOTH the live jti and the grace-window slot —
+        no user-visible session may survive an explicit logout, even if a
+        refresh just happened a moment before."""
+        ld = self._login(client)
+        rotated = client.post(
+            "/api/v3/users/refresh",
+            json={"refresh_token": ld["refresh_token"]},
+        )
+        assert rotated.status_code == 200
+        rotated_rt = rotated.json()["data"]["refresh_token"]
+
+        # Logout using the access token from the freshly-issued pair.
+        new_access = rotated.json()["data"]["access_token"]
+        client.post(
+            "/api/v3/users/logout",
+            headers={"Authorization": f"Bearer {new_access}"},
+        )
+
+        # Grace-slot RT (original ld) and the live RT (rotated) both fail.
+        for rt in (ld["refresh_token"], rotated_rt):
+            r = client.post(
+                "/api/v3/users/refresh",
+                json={"refresh_token": rt},
+            )
+            assert r.status_code == 401, r.text
 
     def test_refresh_garbage_token_returns_401(self, client):
         resp = client.post(
