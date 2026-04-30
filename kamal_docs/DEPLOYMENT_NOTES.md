@@ -10,6 +10,61 @@ DevOps needs to do.
 
 ---
 
+## 2026-04-30 — Resource type display names shortened to short codes
+
+### What changed
+
+The FE dropdown for Resource Type renders the ``name`` field as the
+visible label. Per product spec it should show the short uppercase
+form rather than the long-form descriptions. Migration
+``b3c5d7e9f1a2`` updates the three seeded rows in-place:
+
+| code | name (before) | name (after) |
+|---|---|---|
+| rfp | Request for Proposal | RFP |
+| asg | Assignment | ASG |
+| ccn | Change Control Notice | CCN |
+
+Row UUIDs are preserved, so any
+``activity_resources.type_of_resource_id`` references continue to
+resolve correctly. The seed in ``init_db`` is also updated, so
+fresh installs go straight to the short names. Migration is
+idempotent — re-running on a DB that already has the short names
+is a no-op.
+
+Admin-created (non-built-in) resource types are NOT touched. If
+ops adds a custom row labelled "Memorandum of Understanding", that
+label remains exactly as entered.
+
+### DevOps actions on the server
+
+```bash
+cd <repo>
+git pull
+sudo systemctl restart <monolith-service>   # or docker compose up -d
+```
+
+Migration auto-applies. No env vars. No manual SQL.
+
+### Verify
+
+```bash
+curl -H "Authorization: Bearer <token>" http://<server>/api/v3/resource_types
+```
+
+Expected: three rows with ``name`` values of exactly ``RFP``,
+``ASG``, ``CCN``.
+
+### Rollback
+
+```bash
+cd <repo>
+alembic downgrade -1   # restores the long-form names
+git revert <commit>
+```
+
+---
+
 ## 2026-04-30 — Catalog cleanup: purge test rows from resource_types and divisions
 
 ### What changed
