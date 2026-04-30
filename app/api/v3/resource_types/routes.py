@@ -1,7 +1,12 @@
-"""Resource-type catalog routes.
+"""Resource-type catalog routes (LEGACY — superseded by doc 20).
 
-- GET  /api/v3/resource_types       : list active types (any authenticated user)
-- POST /api/v3/resource_types       : create a type (admin only)
+- GET  /api/v3/resource_types         : list active types (any authenticated user)
+- POST /api/v3/resource_types/create  : create a type (admin only)
+
+Both endpoints continue to work but stamp a ``Deprecation: true`` header
+pointing at ``/api/v3/master/resource_types``. The FE should migrate; the
+new master-data router supports full CRUD (PATCH / DELETE / restore)
+which this legacy router never gained.
 """
 from typing import Any, Dict, Optional
 
@@ -49,12 +54,15 @@ def _rt_to_response(rt) -> Dict[str, Any]:
 def list_resource_types(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
     repo = ResourceTypeRepository(db)
     items = [_rt_to_response(rt) for rt in repo.list_active()]
-    return BaseController.ok(data={
-        "_type": "Collection",
-        "total": len(items),
-        "count": len(items),
-        "_embedded": {"elements": items},
-    })
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data={
+            "_type": "Collection",
+            "total": len(items),
+            "count": len(items),
+            "_embedded": {"elements": items},
+        }),
+        successor_path="/api/v3/master/resource_types",
+    )
 
 
 @router.post(
@@ -73,4 +81,7 @@ def create_resource_type(
         raise AlreadyExistsError(f"A resource type with code '{data.code.lower()}' already exists.")
     rt = repo.create(code=data.code, name=data.name, active=data.active)
     db.commit()
-    return BaseController.created(data=_rt_to_response(rt))
+    return BaseController.stamp_deprecation(
+        BaseController.created(data=_rt_to_response(rt)),
+        successor_path="/api/v3/master/resource_types/create",
+    )

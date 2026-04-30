@@ -17,6 +17,7 @@ from .v3.tree import router as tree_router
 from .v3.vendors import router as vendors_router
 from .v3.resource_types import router as resource_types_router
 from .v3.catalogs import catalogs_router
+from .v3.master_data import master_data_router
 from .v3.comments import router as comments_router
 from .v3.attachments import router as attachments_router
 
@@ -50,6 +51,11 @@ api_v3_router.include_router(tree_router)
 api_v3_router.include_router(vendors_router)
 api_v3_router.include_router(resource_types_router)
 api_v3_router.include_router(catalogs_router)
+
+# Consolidated master-data CRUD (doc 20). Lives under /api/v3/master/*.
+# Supersedes the legacy per-catalog endpoints above; those remain
+# functional during the FE migration window with a Deprecation header.
+api_v3_router.include_router(master_data_router)
 
 # Comments + attachments (polymorphic across M/A/T/S targets)
 api_v3_router.include_router(comments_router)

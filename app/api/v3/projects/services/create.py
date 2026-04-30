@@ -205,15 +205,14 @@ def create_project(
             # Refresh the domain object's vendor list for the response.
             project.vendors = vendor_repo.list_project_vendors(project.id)
 
-        # When owner is 'others' + a free-text label was supplied, mint
-        # a new division row from the label (or no-op if its slug
-        # already exists). Inside the same transaction so a project
-        # rollback also rolls back the division insert.
-        if owner == OWNER_OTHERS and owner_other:
-            from .....infrastructure.db.repositories.division_repository import (
-                DivisionRepository,
-            )
-            DivisionRepository(db).upsert_user_division(owner_other)
+        # NOTE: pre-doc-20, this point used to upsert a divisions row from
+        # the user's free-text ``owner_other`` label (so the next project
+        # could pick it from the dropdown). That auto-create path was
+        # removed — it produced rogue divisions like 'admin' / 'test' from
+        # one-off project labels and tester-reported pollution of the
+        # picker. The catalog is now strictly admin-managed via
+        # POST /api/v3/master/divisions/create. The label still lives on
+        # the project row's owner_other column for display.
 
         record_audit(
             db,

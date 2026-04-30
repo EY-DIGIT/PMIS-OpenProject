@@ -1,4 +1,4 @@
-"""Vendor catalog routes.
+"""Vendor catalog routes (LEGACY — superseded by doc 20).
 
 - GET    /api/v3/vendors                   : list live vendors (newest first,
                                              each with its mapped projects)
@@ -8,6 +8,12 @@
 - POST   /api/v3/vendors/{id}/restore      : undelete a vendor (admin)
 - GET    /api/v3/vendors/{id}/projects     : projects mapped to this vendor,
                                              excluding closed/completed
+
+All six endpoints continue to work but each stamps a ``Deprecation: true``
+header pointing at the corresponding ``/api/v3/master/vendors/*``
+successor. The new master-data router (doc 20) delegates back into the
+handlers in this file so behaviour is identical — only the URL surface
+and RBAC permission change.
 """
 from typing import Any, Dict, Iterable, List
 
@@ -205,12 +211,15 @@ def list_vendors(request: Request, db: Session = Depends(get_db)) -> JSONRespons
         _vendor_to_response(v, projects_by_vendor.get(v.id, []))
         for v in vendors
     ]
-    return BaseController.ok(data={
-        "_type": "Collection",
-        "total": len(items),
-        "count": len(items),
-        "_embedded": {"elements": items},
-    })
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data={
+            "_type": "Collection",
+            "total": len(items),
+            "count": len(items),
+            "_embedded": {"elements": items},
+        }),
+        successor_path="/api/v3/master/vendors",
+    )
 
 
 @router.get(
@@ -236,7 +245,10 @@ def get_vendor(
     if vendor is None:
         raise NotFoundError("Vendor not found.")
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
-    return BaseController.ok(data=_vendor_to_response(vendor, projects))
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data=_vendor_to_response(vendor, projects)),
+        successor_path=f"/api/v3/master/vendors/{vendor_id}",
+    )
 
 
 @router.post(
@@ -275,7 +287,10 @@ def create_vendor(
         repo.set_vendor_projects(vendor.id, project_ids)
     db.commit()
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
-    return BaseController.created(data=_vendor_to_response(vendor, projects))
+    return BaseController.stamp_deprecation(
+        BaseController.created(data=_vendor_to_response(vendor, projects)),
+        successor_path="/api/v3/master/vendors/create",
+    )
 
 
 @router.patch(
@@ -326,7 +341,10 @@ def update_vendor(
         phone_number=m.phone_number,
     )
     projects = _projects_by_vendor(db, [domain.id]).get(domain.id, [])
-    return BaseController.ok(data=_vendor_to_response(domain, projects))
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data=_vendor_to_response(domain, projects)),
+        successor_path=f"/api/v3/master/vendors/{vendor_id}",
+    )
 
 
 @router.delete(
@@ -354,7 +372,10 @@ def delete_vendor(
         raise NotFoundError("Vendor not found or already deleted.")
     repo.soft_delete(vendor_id, actor_id=actor_id)
     db.commit()
-    return BaseController.no_content()
+    return BaseController.stamp_deprecation(
+        BaseController.no_content(),
+        successor_path=f"/api/v3/master/vendors/{vendor_id}",
+    )
 
 
 @router.post(
@@ -377,16 +398,23 @@ def restore_vendor(
     m = repo.get_model_by_id(vendor_id, include_deleted=True)
     if m is None:
         raise NotFoundError("Vendor not found.")
+    successor = f"/api/v3/master/vendors/{vendor_id}/restore"
     if m.deleted_at is None:
         # Already live — return the current snapshot so the call is idempotent
         # rather than 409'ing a benign retry.
         live = repo.get_by_id(vendor_id)
         projects = _projects_by_vendor(db, [vendor_id]).get(vendor_id, [])
-        return BaseController.ok(data=_vendor_to_response(live, projects))
+        return BaseController.stamp_deprecation(
+            BaseController.ok(data=_vendor_to_response(live, projects)),
+            successor_path=successor,
+        )
     restored = repo.restore(vendor_id)
     db.commit()
     projects = _projects_by_vendor(db, [vendor_id]).get(vendor_id, [])
-    return BaseController.ok(data=_vendor_to_response(restored, projects))
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data=_vendor_to_response(restored, projects)),
+        successor_path=successor,
+    )
 
 
 @router.get(
@@ -412,9 +440,12 @@ def list_vendor_projects(
     # projects array on /vendors and /vendors/{id} return identical
     # entries (same fields, same filter, same order).
     items = _projects_by_vendor(db, [vendor_id]).get(vendor_id, [])
-    return BaseController.ok(data={
-        "_type": "Collection",
-        "total": len(items),
-        "count": len(items),
-        "_embedded": {"elements": items},
-    })
+    return BaseController.stamp_deprecation(
+        BaseController.ok(data={
+            "_type": "Collection",
+            "total": len(items),
+            "count": len(items),
+            "_embedded": {"elements": items},
+        }),
+        successor_path="/api/v3/master/vendors",
+    )

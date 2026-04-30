@@ -1,35 +1,33 @@
 """Tests for the catalog + master-data endpoints introduced across
-docs 15-18.
+docs 15-20.
 
-- ``TestStatusTransitionsCatalog`` — GET /project_status_transitions and
-  the invalid_status guard on project create (doc 15).
-- ``TestProjectOwnersCatalog``     — GET / POST / DELETE on the project_owners
-  master. NOTE: per doc 18 §4 this catalog NO LONGER gates project create
-  (owner is a division code now); the catalog endpoints remain available
-  for any future per-user enforcement layer.
+- ``TestStatusTransitionsCatalog`` — legacy GET /project_status_transitions
+  and the invalid_status guard on project create (doc 15).
 - ``TestCategoryOtherReason``      — categoryOtherReason required when
-  category='others' (one upsert-path test; create-path coverage lives in
-  test_new_features.py::TestCategoryOthers).
+  category='others'.
 - ``TestOwnerStrictDivisionOnly``  — owner is a strict division code
   (doc 18 §4); user logins are no longer accepted.
 - ``TestOwnerOthers``              — owner='others' requires `ownerOther`
-  (doc 18 §5).
-- ``TestDivisionsCatalog``         — GET /divisions returns built-ins +
-  user-added rows (doc 18 §6).
-- ``TestDivisionsPersistedFromOwnerOther`` — `ownerOther` labels are
-  slugified and inserted into the divisions table on project save.
+  (doc 18 §5). Per doc 20 the label is stored on the project row only
+  and is NOT auto-inserted into the divisions catalog anymore.
+- ``TestDivisionsCatalog``         — legacy GET /divisions returns the
+  built-in rows.
 - ``TestPatchEditableFields``      — PATCH whitelist matches the HTML
-  edit-project flow; status PATCH is rejected (use the dedicated
-  publish/close/suspend endpoints).
+  edit-project flow.
 - ``TestTaskSubtaskTypeInheritance`` — type field derived from the parent
   activity / parent task (doc 15).
+
+NOTE: the ``TestProjectOwnersCatalog`` and ``TestDivisionsPersistedFromOwnerOther``
+classes that lived here pre-doc-20 were removed when the project_owners
+table was dropped and the auto-insert path on owner='others' was
+deleted. See ``tests/test_master_data.py`` for the consolidated CRUD
+coverage on the new ``/api/v3/master/*`` router.
 """
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
 
-from app.infrastructure.db.models.project_owner import ProjectOwnerModel
 from app.infrastructure.db.models.project_status_transition import (
     ProjectStatusTransitionModel,
 )
@@ -58,21 +56,6 @@ def _seed_status_transitions(db_session):
             requires_admin=admin_only, version_only=version_only,
             active=True,
         ))
-    db_session.commit()
-
-
-def _add_admin_owner(db_session, admin_user):
-    """Seed the project_owners catalog with the admin user.
-
-    Historical helper: the project create flow no longer consults this
-    catalog (owner is now a division code, not a user reference), but the
-    catalog itself remains usable via /project_owners endpoints, and the
-    TestProjectOwnersCatalog tests still exercise it. Kept so seed code
-    in those tests stays one line.
-    """
-    db_session.add(ProjectOwnerModel(
-        user_id=admin_user.id, display_name="Admin", active=True,
-    ))
     db_session.commit()
 
 
@@ -135,67 +118,11 @@ class TestStatusTransitionsCatalog:
 
 
 # ---------------------------------------------------------------------------
-# Project owners catalog
+# Project owners catalog — REMOVED in doc 20 along with the underlying
+# table. The whitelist had been dead since doc 18 (project.owner became a
+# strict division code). The previous TestProjectOwnersCatalog class has
+# been removed entirely.
 # ---------------------------------------------------------------------------
-
-
-class TestProjectOwnersCatalog:
-    def test_list_initially_empty(self, client, admin_headers):
-        resp = client.get("/api/v3/project_owners", headers=admin_headers)
-        assert resp.status_code == 200
-        body = resp.json()["data"]
-        assert body["total"] == 0
-        assert body["_embedded"]["elements"] == []
-
-    def test_admin_can_add_owner_by_login(self, client, admin_user, admin_headers):
-        resp = client.post(
-            "/api/v3/project_owners/create",
-            json={"login": "admin", "displayName": "System Admin"},
-            headers=admin_headers,
-        )
-        assert resp.status_code == 201, resp.text
-        body = resp.json()["data"]
-        assert body["login"] == "admin"
-        assert body["displayName"] == "System Admin"
-        assert body["active"] is True
-
-    def test_unknown_login_404s(self, client, admin_headers):
-        resp = client.post(
-            "/api/v3/project_owners/create",
-            json={"login": "no_such_user"},
-            headers=admin_headers,
-        )
-        assert resp.status_code == 404
-
-    def test_project_owners_catalog_no_longer_gates_project_create(
-        self, client, admin_user, member_user, admin_headers, db_session,
-    ):
-        """Owner is now a division code (tmd1/tmd2/others); the per-user
-        project_owners whitelist no longer affects project create. Keeping
-        the catalog manageable so other code can use it, but verifying it
-        does NOT block a project whose owner isn't in the catalog."""
-        # Seed the catalog with member_user only — admin is NOT in it.
-        db_session.add(ProjectOwnerModel(
-            user_id=member_user.id, display_name="Member", active=True,
-        ))
-        db_session.commit()
-        resp = client.post(
-            "/api/v3/projects/create",
-            json=_create_project_body(owner="tmd1"),
-            headers=admin_headers,
-        )
-        # Whitelist is irrelevant — division-code owner is accepted regardless.
-        assert resp.status_code == 201, resp.text
-
-    def test_deactivate_owner(self, client, admin_user, admin_headers, db_session):
-        _add_admin_owner(db_session, admin_user)
-        resp = client.delete(
-            f"/api/v3/project_owners/{admin_user.id}", headers=admin_headers,
-        )
-        assert resp.status_code == 200
-        # List now empty.
-        list_resp = client.get("/api/v3/project_owners", headers=admin_headers)
-        assert list_resp.json()["data"]["total"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -338,8 +265,10 @@ class TestOwnerOthers:
     the cross-validation when switching owner away from 'others' without
     explicitly clearing the stale `ownerOther` (treats it as empty).
     Casing/whitespace on both fields is normalised on the way in.
-    `ownerOther` labels also flow into the divisions catalog (see
-    `TestDivisionsPersistedFromOwnerOther`)."""
+
+    NOTE: per doc 20 the `ownerOther` label is stored on the project row
+    only and is NOT auto-inserted into the divisions catalog. See
+    `TestOwnerOtherDoesNotPolluteDivisions` for the negative coverage."""
 
     def _seed(self, db_session):
         _seed_status_transitions(db_session)
@@ -626,28 +555,29 @@ class TestDivisionsCatalog:
         assert resp.status_code == 401, resp.text
 
 
-class TestDivisionsPersistedFromOwnerOther:
-    """When a project is created with owner='others' + a free-text
-    ownerOther label, the label is slugified and inserted into the
-    divisions table so the next project-owner dropdown carries it."""
+class TestOwnerOtherDoesNotPolluteDivisions:
+    """Doc 20: ``ownerOther`` labels are stored on the project row's
+    ``owner_other`` column ONLY. The pre-doc-20 auto-insert path that
+    mirrored the label into the divisions catalog was removed (it was
+    producing rogue rows like 'admin' / 'test' from one-off labels).
+    Going forward the divisions catalog is admin-managed via the
+    ``/api/v3/master/divisions`` router."""
 
     def _seed(self, db_session):
         _seed_status_transitions(db_session)
 
-    def test_owner_other_creates_new_division_row(
+    def test_owner_other_does_not_create_division_row(
         self, client, admin_user, admin_headers, db_session,
     ):
         self._seed(db_session)
         # Pre-condition: 'engineering' is not in the divisions table.
         from app.infrastructure.db.models.division import DivisionModel
-        db_session.expire_all()
         existing = (
             db_session.query(DivisionModel)
             .filter_by(code="engineering").first()
         )
-        assert existing is None, "fixture state: engineering should not exist"
+        assert existing is None
 
-        # Create a project with owner='others' + ownerOther='Engineering'.
         resp = client.post(
             "/api/v3/projects/create",
             json=_create_project_body(
@@ -656,23 +586,24 @@ class TestDivisionsPersistedFromOwnerOther:
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
+        # Project row carries the label as free text…
+        assert resp.json()["data"]["ownerOther"] == "Engineering"
 
-        # Post-condition: a new divisions row exists with code='engineering',
-        # label='Engineering', is_builtin=False.
+        # …but NO new divisions row was inserted.
         db_session.expire_all()
         row = (
             db_session.query(DivisionModel)
             .filter_by(code="engineering").first()
         )
-        assert row is not None
-        assert row.label == "Engineering"
-        assert row.is_builtin is False
-        assert row.requires_other is False
-        assert row.active is True
+        assert row is None, (
+            "ownerOther must NOT auto-insert into divisions in doc 20+"
+        )
 
-    def test_division_appears_in_get_divisions_after_create(
+    def test_owner_other_does_not_appear_in_get_divisions(
         self, client, admin_user, admin_headers, db_session,
     ):
+        """GET /divisions stays at the three built-ins after a project
+        creates with a fresh ownerOther label."""
         self._seed(db_session)
         client.post(
             "/api/v3/projects/create",
@@ -683,83 +614,42 @@ class TestDivisionsPersistedFromOwnerOther:
         )
         resp = client.get("/api/v3/divisions", headers=admin_headers)
         assert resp.status_code == 200
-        items = resp.json()["data"]["_embedded"]["elements"]
-        codes = [i["code"] for i in items]
-        assert "field_operations" in codes
-        new_entry = [i for i in items if i["code"] == "field_operations"][0]
-        assert new_entry["label"] == "Field Operations"
-        assert new_entry["isBuiltin"] is False
-        assert new_entry["requiresOther"] is False
+        codes = [i["code"] for i in resp.json()["data"]["_embedded"]["elements"]]
+        assert "field_operations" not in codes
+        assert codes == ["tmd1", "tmd2", "others"]
 
-    def test_duplicate_owner_other_is_idempotent(
+    def test_user_added_division_only_creatable_via_admin_endpoint(
         self, client, admin_user, admin_headers, db_session,
     ):
-        """Two projects with the same ownerOther label produce ONE
-        divisions row (the slugifier collapses casing / punctuation)."""
+        """The only way to land a non-builtin row in divisions is now the
+        admin endpoint POST /api/v3/master/divisions/create. Once added,
+        future projects can pick that code as their owner directly."""
         self._seed(db_session)
-        for variant in ("Marketing", "  marketing  ", "MARKETING"):
-            resp = client.post(
-                "/api/v3/projects/create",
-                json=_create_project_body(
-                    name=f"P-{variant}", owner="others",
-                    ownerOther=variant,
-                ),
-                headers=admin_headers,
-            )
-            assert resp.status_code == 201, (variant, resp.text)
-
-        from app.infrastructure.db.models.division import DivisionModel
-        db_session.expire_all()
-        rows = (
-            db_session.query(DivisionModel)
-            .filter_by(code="marketing").all()
-        )
-        assert len(rows) == 1, "should collapse to a single row"
-
-    def test_subsequent_project_can_pick_user_added_division_directly(
-        self, client, admin_user, admin_headers, db_session,
-    ):
-        """Once 'engineering' has been added to divisions, future projects
-        can set owner='engineering' WITHOUT going through the 'others'
-        free-text branch — the validator accepts it from the table."""
-        self._seed(db_session)
-        # Step 1: create a first project that mints 'engineering'.
-        client.post(
-            "/api/v3/projects/create",
-            json=_create_project_body(
-                owner="others", ownerOther="Engineering",
-            ),
-            headers=admin_headers,
-        )
-        # Step 2: create a second project with owner='engineering' directly.
+        # Admin curates the catalog explicitly.
         resp = client.post(
-            "/api/v3/projects/create",
-            json=_create_project_body(
-                name="P-2", owner="engineering",
-            ),
+            "/api/v3/master/divisions/create",
+            json={"label": "Engineering"},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
-        d = resp.json()["data"]
-        assert d["owner"] == "engineering"
-        # No ownerOther needed for non-'others' codes.
-        assert d.get("ownerOther") in (None, "")
+        assert resp.json()["data"]["code"] == "engineering"
+        assert resp.json()["data"]["isBuiltin"] is False
 
-    def test_unknown_owner_code_still_rejected(
+        # Now a project can use owner='engineering' directly.
+        resp = client.post(
+            "/api/v3/projects/create",
+            json=_create_project_body(name="P-2", owner="engineering"),
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["owner"] == "engineering"
+
+    def test_unknown_owner_code_rejected(
         self, client, admin_user, admin_headers, db_session,
     ):
         """Codes not in built-ins AND not in the divisions table are
-        still rejected, even after some user-added entries exist."""
+        rejected — same as before doc 20."""
         self._seed(db_session)
-        # Mint 'engineering' to populate the table.
-        client.post(
-            "/api/v3/projects/create",
-            json=_create_project_body(
-                owner="others", ownerOther="Engineering",
-            ),
-            headers=admin_headers,
-        )
-        # 'sales' isn't a built-in and wasn't user-added → 422.
         resp = client.post(
             "/api/v3/projects/create",
             json=_create_project_body(name="P-Sales", owner="sales"),

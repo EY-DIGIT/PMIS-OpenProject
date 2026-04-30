@@ -32,12 +32,10 @@ from .....infrastructure.db.repositories.project_repository import ProjectReposi
 # separate `categoryOther`-style follow-up if/when product needs that —
 # today the bare division code is enough.
 #
-# project_owners catalog (the per-user whitelist introduced in doc 15) is
-# no longer consulted on project create / update / upsert — it was a
-# user-based gate from before owner became a division field. The catalog
-# endpoints (`GET /project_owners`, `POST /project_owners/create`, etc.)
-# remain available for any future per-user enforcement layer but they no
-# longer affect project create.
+# project_owners catalog (the per-user whitelist introduced in doc 15)
+# was a user-based gate from before owner became a division field. It
+# stopped being consulted in doc 18, and the table + endpoints were
+# removed entirely in doc 20. Owner is strictly a division code now.
 
 OWNER_DIVISION_CODES: Set[str] = {c.lower() for c in DIVISION_CHOICES}
 

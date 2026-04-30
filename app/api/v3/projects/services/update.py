@@ -289,14 +289,11 @@ def update_project(
             vendor_repo.set_project_vendors(project_id, clean_vendor_ids)
             updated.vendors = vendor_repo.list_project_vendors(project_id)
 
-        # If the PATCH carried a fresh ownerOther label (owner is or is
-        # being moved to 'others'), mint the corresponding divisions row
-        # so it appears in future picker calls.
-        if updated.owner == OWNER_OTHERS and updated.owner_other:
-            from .....infrastructure.db.repositories.division_repository import (
-                DivisionRepository,
-            )
-            DivisionRepository(db).upsert_user_division(updated.owner_other)
+        # NOTE: pre-doc-20, this point used to upsert a divisions row from
+        # the patched ``owner_other`` label. That auto-create path was
+        # removed — see the matching note in services/create.py. The
+        # divisions catalog is now strictly admin-managed via
+        # POST /api/v3/master/divisions/create.
 
         record_audit(
             db,

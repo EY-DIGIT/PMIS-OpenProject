@@ -57,3 +57,33 @@ class BaseController:
             error=error_payload,
             status=status,
         )
+
+    @staticmethod
+    def stamp_deprecation(
+        response: JSONResponse, *, successor_path: str,
+    ) -> JSONResponse:
+        """Mark a response as deprecated, pointing the FE at the successor.
+
+        Used by the doc-20 legacy catalog endpoints (``/api/v3/divisions``,
+        ``/api/v3/resource_types``, ``/api/v3/project_status_transitions``,
+        ``/api/v3/vendors/*``) so the FE can detect the deprecation in
+        DevTools and migrate at its own pace. Adds two HTTP headers:
+
+          Deprecation: true
+          Link: <successor_path>; rel="successor-version"
+
+        The ``Deprecation`` header follows the IETF API Deprecation draft;
+        the ``Link`` rel="successor-version" is RFC 8631. Both are widely
+        understood by API client libraries and dev tools.
+
+        Returns the same response object so the call composes:
+            return BaseController.stamp_deprecation(
+                BaseController.ok(data),
+                successor_path="/api/v3/master/divisions",
+            )
+        """
+        response.headers["Deprecation"] = "true"
+        response.headers["Link"] = (
+            f'<{successor_path}>; rel="successor-version"'
+        )
+        return response

@@ -43,6 +43,15 @@ class Permission(str, Enum):
     RESOURCE_TYPES_READ = "resource_types:read"
     RESOURCE_TYPES_MANAGE = "resource_types:manage"
 
+    # Master-data router (doc 20). Single coarse pair that gates the
+    # consolidated /api/v3/master/* endpoints across every catalog
+    # (divisions, project_status_transitions, resource_types, vendors).
+    # The legacy per-catalog permissions above remain in place so the
+    # deprecated /vendors, /resource_types, /divisions etc. routes keep
+    # working for FE during the migration window.
+    MASTER_DATA_VIEW = "master_data:view"
+    MASTER_DATA_MANAGE = "master_data:manage"
+
     # Project Members permissions
     PROJECT_MEMBERS_READ = "project_members:read"
     PROJECT_MEMBERS_ADD = "project_members:add"
@@ -133,6 +142,8 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.VENDORS_MANAGE,
         Permission.RESOURCE_TYPES_READ,
         Permission.RESOURCE_TYPES_MANAGE,
+        Permission.MASTER_DATA_VIEW,
+        Permission.MASTER_DATA_MANAGE,
         Permission.PROJECT_MEMBERS_READ,
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,
@@ -186,6 +197,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECTS_UPDATE,
         Permission.VENDORS_READ,
         Permission.RESOURCE_TYPES_READ,
+        Permission.MASTER_DATA_VIEW,
         Permission.PROJECT_MEMBERS_READ,
         Permission.PROJECT_MEMBERS_ADD,
         Permission.PROJECT_MEMBERS_UPDATE,
@@ -226,6 +238,7 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.PROJECTS_READ,
         Permission.VENDORS_READ,
         Permission.RESOURCE_TYPES_READ,
+        Permission.MASTER_DATA_VIEW,
         Permission.PROJECT_MEMBERS_READ,
         Permission.WORK_PACKAGES_VIEW,
         Permission.MEETINGS_VIEW,

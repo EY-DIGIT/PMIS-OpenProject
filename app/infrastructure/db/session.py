@@ -805,33 +805,11 @@ def init_db() -> None:
     finally:
         db.close()
 
-    # Seed project_owners catalog with the bootstrap admin so the master is
-    # never empty (the FE owner-picker has at least one row, and any bootstrap
-    # smoke-test that creates a project under 'admin' still works).
-    db = SessionLocal()
-    try:
-        from .models.project_owner import ProjectOwnerModel
-
-        admin = db.query(UserModel).filter(
-            UserModel.login == settings.BOOTSTRAP_ADMIN_LOGIN
-        ).first()
-        if admin is not None:
-            existing = (
-                db.query(ProjectOwnerModel)
-                .filter(ProjectOwnerModel.user_id == admin.id)
-                .first()
-            )
-            if existing is None:
-                db.add(ProjectOwnerModel(
-                    user_id=admin.id,
-                    display_name="Administrator",
-                    active=True,
-                ))
-                db.commit()
-    except Exception:
-        db.rollback()
-    finally:
-        db.close()
+    # NOTE: the project_owners catalog seed used to live here, populating
+    # the bootstrap admin into the per-user owner whitelist. The whitelist
+    # was deprecated in doc 18 (project.owner became a strict division
+    # code, not a user reference) and the table itself was dropped in
+    # doc 20. No seed needed anymore.
 
     # ---- File storage readiness check --------------------------------------
     # Verify the attachments storage path is reachable + writable. In prod

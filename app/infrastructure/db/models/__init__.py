@@ -25,7 +25,8 @@ from .vendor import VendorModel
 from .resource_type import ResourceTypeModel
 from .revoked_token import RevokedTokenModel
 from .project_status_transition import ProjectStatusTransitionModel
-from .project_owner import ProjectOwnerModel
+# ProjectOwnerModel was removed in doc 20 — the project_owners whitelist
+# was already dead since doc 18 made project.owner a strict division code.
 from .comment import CommentModel
 from .attachment import AttachmentModel
 from .division import DivisionModel
@@ -43,7 +44,6 @@ __all__ = [
     "VendorModel", "ResourceTypeModel",
     "RevokedTokenModel",
     "ProjectStatusTransitionModel",
-    "ProjectOwnerModel",
     "CommentModel",
     "AttachmentModel",
     "DivisionModel",

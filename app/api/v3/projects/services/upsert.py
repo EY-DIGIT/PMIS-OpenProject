@@ -165,15 +165,12 @@ def upsert_project(
             start_date=start_date,
             end_date=end_date,
         )
-        # Persist the user-supplied division label after the upsert
-        # commits (the repo's upsert_by_id commits internally; running
-        # the division upsert + commit here keeps both writes durable).
-        if owner == OWNER_OTHERS and owner_other:
-            from .....infrastructure.db.repositories.division_repository import (
-                DivisionRepository,
-            )
-            DivisionRepository(db).upsert_user_division(owner_other)
-            db.commit()
+        # NOTE: pre-doc-20, this point used to upsert a divisions row from
+        # the user's free-text ``owner_other`` label. That auto-create
+        # path was removed across all three project-write entry points
+        # (create / update / upsert) — see the matching notes in
+        # services/create.py and services/update.py. The divisions catalog
+        # is now strictly admin-managed via POST /api/v3/master/divisions/create.
         return ServiceResult.ok((project, created))
     except Exception as e:
         return ServiceResult.fail(
