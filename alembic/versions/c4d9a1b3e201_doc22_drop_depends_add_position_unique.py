@@ -19,6 +19,21 @@ ambiguous (two activities could both resolve to ``A1.2``). The
 ``next_position`` allocation in services already prevents duplicates in
 practice; the index makes that invariant a constraint.
 
+Self-healing data step
+----------------------
+Some deployments arrived at this migration with pre-existing duplicate
+``(parent_id, position)`` live rows — legacy bug, manual import, or a
+race in older position-allocation code. Adding the unique index would
+fail on such data with ``UniqueViolation``. Before each index is
+created, this migration runs ``heal_duplicate_positions`` (in
+``app.shared.position_heal``), which keeps the row with the smallest
+``id`` at its current position and renumbers every additional row to
+the next free slot for that parent. The heal is idempotent — runs
+zero updates on clean data, so dev / test DBs see no churn.
+
+The heal happens BEFORE the index is created, inside the same
+transaction, so a failure anywhere rolls back the heal too.
+
 IDEMPOTENT — every drop/index step is wrapped in an inspector check so
 re-running against an already-migrated DB is a no-op.
 """
@@ -26,6 +41,8 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+
+from app.shared.position_heal import heal_duplicate_positions
 
 
 revision: str = "c4d9a1b3e201"
@@ -68,6 +85,19 @@ def upgrade() -> None:
     for ix_name, table, parent_col in indexes:
         if _has_index(inspector, table, ix_name):
             continue
+
+        # Self-heal pre-existing duplicate (parent, position) live rows
+        # before adding the unique index. No-op on clean data; rescues
+        # legacy deployments where past races / manual imports left
+        # duplicates behind. Same transaction, so any later failure
+        # rolls the heal back too.
+        healed = heal_duplicate_positions(bind, table, parent_col)
+        if healed:
+            print(
+                f"  doc 22 migration: re-numbered {healed} duplicate-position "
+                f"row(s) in `{table}` to satisfy {ix_name}."
+            )
+
         if dialect == "postgresql":
             op.create_index(
                 ix_name, table, [parent_col, "position"],
