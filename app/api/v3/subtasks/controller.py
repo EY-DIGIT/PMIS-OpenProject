@@ -5,6 +5,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....shared.labels import (
+    KIND_SUBTASK,
+    LabelIndex,
+    build_label_index_for_project,
+)
 from .schemas import SubtaskCreateRequest, SubtaskUpdateRequest, SubtaskListQuery
 from .services import (
     create_subtask, get_subtask_with_resource, list_subtasks,
@@ -34,8 +39,18 @@ def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 
 def format_subtask_response(
-    s: Dict[str, Any], resource: Optional[Dict[str, Any]] = None, base_url: str = "/api/v3",
+    s: Dict[str, Any],
+    resource: Optional[Dict[str, Any]] = None,
+    label_index: Optional[LabelIndex] = None,
+    base_url: str = "/api/v3",
 ) -> Dict[str, Any]:
+    deps = s.get("depends_on") or []
+    display_code = (
+        label_index.label_of(KIND_SUBTASK, s["id"]) if label_index else None
+    )
+    deps_display = (
+        label_index.labels_of(KIND_SUBTASK, deps) if label_index else []
+    )
     return {
         "_type": "Subtask",
         "_links": {
@@ -44,6 +59,7 @@ def format_subtask_response(
             "project": {"href": f"{base_url}/projects/{s['project_id']}"},
         },
         "id": s["id"],
+        "displayCode": display_code,
         "projectId": s["project_id"],
         "taskId": s["task_id"],
         "name": s["name"],
@@ -56,7 +72,8 @@ def format_subtask_response(
         "position": s["position"],
         "resourceMode": s.get("resource_mode"),
         "resourceCount": s.get("resource_count"),
-        "dependsOn": s.get("depends_on") or [],
+        "dependsOn": deps,
+        "dependsOnDisplay": deps_display,
         "createdAt": s["created_at"],
         "updatedAt": s["updated_at"],
         "createdBy": s["created_by"],
@@ -84,12 +101,20 @@ class SubtaskController:
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
         )
-        return BaseController.created(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, s.project_id)
+        return BaseController.created(data=format_subtask_response(
+            s.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def list(request: Request, task_id: str, query: SubtaskListQuery, db: Session) -> JSONResponse:
         paged = list_subtasks(db, task_id=task_id, page=query.offset, page_size=query.pageSize, include_deleted=query.includeDeleted)
-        items = [format_subtask_response(s.to_dict(), None) for s in paged.items]
+        items_data = list(paged.items)
+        idx = (
+            build_label_index_for_project(db, items_data[0].project_id)
+            if items_data else None
+        )
+        items = [format_subtask_response(s.to_dict(), None, label_index=idx) for s in items_data]
         payload = {
             "_type": "Collection",
             "_links": {"self": {"href": f"/api/v3/tasks/{task_id}/subtasks?offset={paged.page}&pageSize={paged.page_size}"}},
@@ -102,7 +127,10 @@ class SubtaskController:
     @staticmethod
     def get(request: Request, subtask_id: str, db: Session) -> JSONResponse:
         s, r = get_subtask_with_resource(db, subtask_id)
-        return BaseController.ok(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, s.project_id)
+        return BaseController.ok(data=format_subtask_response(
+            s.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def update(request: Request, subtask_id: str, data: SubtaskUpdateRequest, db: Session) -> JSONResponse:
@@ -119,7 +147,10 @@ class SubtaskController:
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
         )
-        return BaseController.ok(data=format_subtask_response(s.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, s.project_id)
+        return BaseController.ok(data=format_subtask_response(
+            s.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def delete(request: Request, subtask_id: str, db: Session) -> JSONResponse:
@@ -131,4 +162,7 @@ class SubtaskController:
     def restore(request: Request, subtask_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         s = restore_subtask(db, subtask_id=subtask_id, current_user_id=cuid)
-        return BaseController.ok(data=format_subtask_response(s.to_dict()))
+        idx = build_label_index_for_project(db, s.project_id)
+        return BaseController.ok(data=format_subtask_response(
+            s.to_dict(), label_index=idx,
+        ))

@@ -16,6 +16,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
 )
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
+from .....shared.labels import KIND_TASK, resolve_labels_to_ids
 from .....domain.tasks.task import (
     Task,
     TASK_TYPE_RESOURCE,
@@ -170,11 +171,19 @@ def create_task(
             project_start_date=project.start_date,
         )
 
-    # Validate dependsOn BEFORE inserting the task row.
+    # Validate dependsOn BEFORE inserting the task row. Accepts UUIDs or
+    # labels (e.g. "T1.2.3") — see app/shared/labels.py.
     desired_deps: List[str] = []
     if depends_on is not None:
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        candidates, _id_to_raw = resolve_labels_to_ids(
+            db,
+            project_id=activity.project_id,
+            expected_kind=KIND_TASK,
+            raw_inputs=depends_on,
+        )
         # No self-edge needed (new id doesn't exist yet); cycle impossible.
+        # _validate_task_deps_hierarchy runs the same-project + parent-
+        # activity-edge check; existence is folded in there.
         _validate_task_deps_hierarchy(
             db,
             source_activity_id=activity_id,

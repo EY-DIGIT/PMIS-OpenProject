@@ -31,6 +31,7 @@ from .....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
+from .....shared.labels import KIND_ACTIVITY, normalize_dependency_inputs
 
 
 def create_activity(
@@ -116,21 +117,19 @@ def create_activity(
         )
 
     # Validate dependsOn targets BEFORE creating the row, so we don't leave
-    # an orphan activity if validation fails.
+    # an orphan activity if validation fails. ``dependsOn`` accepts either
+    # UUIDs or display labels (e.g. "A1.2") — see app/shared/labels.py
+    # and planned_changes/22.
     desired_deps: List[str] = []
     if depends_on is not None:
         dep_repo = DependencyRepository(db)
-        # Drop dupes, keep order.
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
-        if candidates:
-            ok = dep_repo.existing_target_activity_ids(milestone.project_id, candidates)
-            missing = [d for d in candidates if d not in ok]
-            if missing:
-                raise ValidationError(
-                    f"Unknown or out-of-project activity dependency target(s): "
-                    f"{', '.join(missing)}"
-                )
-            desired_deps = candidates
+        desired_deps = normalize_dependency_inputs(
+            db,
+            project_id=milestone.project_id,
+            expected_kind=KIND_ACTIVITY,
+            raw_inputs=depends_on,
+            existence_check=dep_repo.existing_target_activity_ids,
+        )
         # No cycle / self check needed — the new activity has no id yet, so
         # it can't appear in any existing edge. (Self-edge is impossible on
         # create.) The cycle check kicks in on update.

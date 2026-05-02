@@ -5,6 +5,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....shared.labels import (
+    KIND_TASK,
+    LabelIndex,
+    build_label_index_for_project,
+)
 from .schemas import TaskCreateRequest, TaskUpdateRequest, TaskListQuery
 from .services import (
     create_task, get_task_with_resource, list_tasks,
@@ -34,8 +39,18 @@ def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 
 def format_task_response(
-    t: Dict[str, Any], resource: Optional[Dict[str, Any]] = None, base_url: str = "/api/v3",
+    t: Dict[str, Any],
+    resource: Optional[Dict[str, Any]] = None,
+    label_index: Optional[LabelIndex] = None,
+    base_url: str = "/api/v3",
 ) -> Dict[str, Any]:
+    deps = t.get("depends_on") or []
+    display_code = (
+        label_index.label_of(KIND_TASK, t["id"]) if label_index else None
+    )
+    deps_display = (
+        label_index.labels_of(KIND_TASK, deps) if label_index else []
+    )
     return {
         "_type": "Task",
         "_links": {
@@ -44,6 +59,7 @@ def format_task_response(
             "project": {"href": f"{base_url}/projects/{t['project_id']}"},
         },
         "id": t["id"],
+        "displayCode": display_code,
         "projectId": t["project_id"],
         "activityId": t["activity_id"],
         "name": t["name"],
@@ -56,7 +72,8 @@ def format_task_response(
         "position": t["position"],
         "resourceMode": t.get("resource_mode"),
         "resourceCount": t.get("resource_count"),
-        "dependsOn": t.get("depends_on") or [],
+        "dependsOn": deps,
+        "dependsOnDisplay": deps_display,
         "createdAt": t["created_at"],
         "updatedAt": t["updated_at"],
         "createdBy": t["created_by"],
@@ -84,12 +101,20 @@ class TaskController:
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
         )
-        return BaseController.created(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, t.project_id)
+        return BaseController.created(data=format_task_response(
+            t.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def list(request: Request, activity_id: str, query: TaskListQuery, db: Session) -> JSONResponse:
         paged = list_tasks(db, activity_id=activity_id, page=query.offset, page_size=query.pageSize, include_deleted=query.includeDeleted)
-        items = [format_task_response(t.to_dict(), None) for t in paged.items]
+        items_data = list(paged.items)
+        idx = (
+            build_label_index_for_project(db, items_data[0].project_id)
+            if items_data else None
+        )
+        items = [format_task_response(t.to_dict(), None, label_index=idx) for t in items_data]
         payload = {
             "_type": "Collection",
             "_links": {"self": {"href": f"/api/v3/activities/{activity_id}/tasks?offset={paged.page}&pageSize={paged.page_size}"}},
@@ -102,7 +127,10 @@ class TaskController:
     @staticmethod
     def get(request: Request, task_id: str, db: Session) -> JSONResponse:
         t, r = get_task_with_resource(db, task_id)
-        return BaseController.ok(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, t.project_id)
+        return BaseController.ok(data=format_task_response(
+            t.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session) -> JSONResponse:
@@ -119,7 +147,10 @@ class TaskController:
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
         )
-        return BaseController.ok(data=format_task_response(t.to_dict(), r.to_dict() if r else None))
+        idx = build_label_index_for_project(db, t.project_id)
+        return BaseController.ok(data=format_task_response(
+            t.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
 
     @staticmethod
     def delete(request: Request, task_id: str, db: Session) -> JSONResponse:
@@ -131,4 +162,7 @@ class TaskController:
     def restore(request: Request, task_id: str, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
         t = restore_task(db, task_id=task_id, current_user_id=cuid)
-        return BaseController.ok(data=format_task_response(t.to_dict()))
+        idx = build_label_index_for_project(db, t.project_id)
+        return BaseController.ok(data=format_task_response(
+            t.to_dict(), label_index=idx,
+        ))

@@ -23,6 +23,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
 )
 from .....infrastructure.db.repositories.task_repository import TaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
+from .....shared.labels import KIND_TASK, resolve_labels_to_ids
 from .....domain.tasks.task import (
     Task,
     TASK_TYPE_RESOURCE,
@@ -146,10 +147,15 @@ def update_task(
             project_start_date=project.start_date,
         )
 
-    # Validate dependsOn for replace.
+    # Validate dependsOn for replace. Accepts UUIDs or labels (T1.2.3).
     desired_deps: Optional[List[str]] = None
     if depends_on is not None:
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        candidates, _id_to_raw = resolve_labels_to_ids(
+            db,
+            project_id=model.project_id,
+            expected_kind=KIND_TASK,
+            raw_inputs=depends_on,
+        )
         if task_id in candidates:
             raise ValidationError("A task cannot depend on itself.")
         if candidates:

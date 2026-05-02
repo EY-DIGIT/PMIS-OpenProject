@@ -24,6 +24,13 @@ from ....infrastructure.db.models.task_resource import TaskResourceModel
 from ....infrastructure.db.models.subtask import SubtaskModel
 from ....infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
 from ....infrastructure.db.models.subtask_resource import SubtaskResourceModel
+from ....shared.labels import (
+    KIND_ACTIVITY,
+    KIND_MILESTONE,
+    KIND_SUBTASK,
+    KIND_TASK,
+    build_label_index_for_project,
+)
 
 
 def _iso(v) -> Optional[str]:
@@ -96,6 +103,11 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
     ):
         task_deps_by_source[src].append(tgt)
 
+    # Build the label index ONCE per tree request (4 queries — one per
+    # M/A/T/S level). Used to populate displayCode + dependsOnDisplay on
+    # every node in the response.
+    label_idx = build_label_index_for_project(db, project_id)
+
     subtask_deps_by_source: Dict[str, List[str]] = defaultdict(list)
     for src, tgt in (
         db.query(
@@ -135,8 +147,11 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             if s.type == "resource" and getattr(s, "resource_mode", None) == "details"
             else None
         )
+        deps = sorted(subtask_deps_by_source.get(s.id, []))
         return {
-            "id": s.id, "taskId": s.task_id, "projectId": s.project_id,
+            "id": s.id,
+            "displayCode": label_idx.label_of(KIND_SUBTASK, s.id),
+            "taskId": s.task_id, "projectId": s.project_id,
             "name": s.name, "description": s.description, "type": s.type,
             "startDate": _iso(s.start_date), "endDate": _iso(s.end_date),
             "actualStartDate": _iso(s.actual_start_date),
@@ -144,7 +159,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "position": s.position,
             "resourceMode": getattr(s, "resource_mode", None),
             "resourceCount": getattr(s, "resource_count", None),
-            "dependsOn": sorted(subtask_deps_by_source.get(s.id, [])),
+            "dependsOn": deps,
+            "dependsOnDisplay": label_idx.labels_of(KIND_SUBTASK, deps),
             "deletedAt": _iso(s.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
         }
@@ -155,8 +171,11 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             if t.type == "resource" and getattr(t, "resource_mode", None) == "details"
             else None
         )
+        deps = sorted(task_deps_by_source.get(t.id, []))
         return {
-            "id": t.id, "activityId": t.activity_id, "projectId": t.project_id,
+            "id": t.id,
+            "displayCode": label_idx.label_of(KIND_TASK, t.id),
+            "activityId": t.activity_id, "projectId": t.project_id,
             "name": t.name, "description": t.description, "type": t.type,
             "startDate": _iso(t.start_date), "endDate": _iso(t.end_date),
             "actualStartDate": _iso(t.actual_start_date),
@@ -164,7 +183,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "position": t.position,
             "resourceMode": getattr(t, "resource_mode", None),
             "resourceCount": getattr(t, "resource_count", None),
-            "dependsOn": sorted(task_deps_by_source.get(t.id, [])),
+            "dependsOn": deps,
+            "dependsOnDisplay": label_idx.labels_of(KIND_TASK, deps),
             "deletedAt": _iso(t.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "subtasks": [subtask_node(s) for s in subs_by_task.get(t.id, [])],
@@ -176,8 +196,11 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             if a.type == "resource" and getattr(a, "resource_mode", None) == "details"
             else None
         )
+        deps = sorted(act_deps_by_source.get(a.id, []))
         return {
-            "id": a.id, "milestoneId": a.milestone_id, "projectId": a.project_id,
+            "id": a.id,
+            "displayCode": label_idx.label_of(KIND_ACTIVITY, a.id),
+            "milestoneId": a.milestone_id, "projectId": a.project_id,
             "name": a.name, "description": a.description, "type": a.type,
             "status": getattr(a, "status", None),
             "startDate": _iso(a.start_date), "endDate": _iso(a.end_date),
@@ -186,7 +209,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "position": a.position,
             "resourceMode": getattr(a, "resource_mode", None),
             "resourceCount": getattr(a, "resource_count", None),
-            "dependsOn": sorted(act_deps_by_source.get(a.id, [])),
+            "dependsOn": deps,
+            "dependsOnDisplay": label_idx.labels_of(KIND_ACTIVITY, deps),
             "deletedAt": _iso(a.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
             "tasks": [task_node(t) for t in tasks_by_activity.get(a.id, [])],
@@ -194,7 +218,9 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
 
     def milestone_node(m: MilestoneModel) -> Dict[str, Any]:
         return {
-            "id": m.id, "projectId": m.project_id,
+            "id": m.id,
+            "displayCode": label_idx.label_of(KIND_MILESTONE, m.id),
+            "projectId": m.project_id,
             "name": m.name, "description": m.description,
             "startDate": _iso(m.start_date), "endDate": _iso(m.end_date),
             "position": m.position,

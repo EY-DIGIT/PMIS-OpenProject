@@ -5,6 +5,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....shared.labels import (
+    KIND_ACTIVITY,
+    LabelIndex,
+    build_label_index_for_project,
+)
 from .schemas import (
     ActivityCreateRequest,
     ActivityUpdateRequest,
@@ -45,8 +50,24 @@ def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 
 def format_activity_response(
-    a: Dict[str, Any], resource: Optional[Dict[str, Any]] = None, base_url: str = "/api/v3",
+    a: Dict[str, Any],
+    resource: Optional[Dict[str, Any]] = None,
+    label_index: Optional[LabelIndex] = None,
+    base_url: str = "/api/v3",
 ) -> Dict[str, Any]:
+    """HAL+JSON shape for one activity.
+
+    When ``label_index`` is provided, the response includes ``displayCode``
+    (this activity's label, e.g. "A1.2") and ``dependsOnDisplay`` (labels
+    for each id in ``dependsOn``).
+    """
+    deps = a.get("depends_on") or []
+    display_code = (
+        label_index.label_of(KIND_ACTIVITY, a["id"]) if label_index else None
+    )
+    deps_display = (
+        label_index.labels_of(KIND_ACTIVITY, deps) if label_index else []
+    )
     return {
         "_type": "Activity",
         "_links": {
@@ -55,6 +76,7 @@ def format_activity_response(
             "project": {"href": f"{base_url}/projects/{a['project_id']}"},
         },
         "id": a["id"],
+        "displayCode": display_code,
         "projectId": a["project_id"],
         "milestoneId": a["milestone_id"],
         "name": a["name"],
@@ -68,7 +90,8 @@ def format_activity_response(
         "resourceMode": a.get("resource_mode"),
         "resourceCount": a.get("resource_count"),
         "status": a.get("status"),
-        "dependsOn": a.get("depends_on") or [],
+        "dependsOn": deps,
+        "dependsOnDisplay": deps_display,
         "createdAt": a["created_at"],
         "updatedAt": a["updated_at"],
         "createdBy": a["created_by"],
@@ -101,9 +124,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
             resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     # ------------------------------------------------------------------
@@ -139,9 +164,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
             resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -170,9 +197,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
             resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -201,9 +230,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
             resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -232,9 +263,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.created(data=format_activity_response(
             activity.to_dict(),
             resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -245,7 +278,12 @@ class ActivityController:
             include_deleted=query.includeDeleted,
         )
         # Resource details are not inlined in the list; use GET /activities/{id} for that.
-        items = [format_activity_response(a.to_dict(), None) for a in paged.items]
+        items_data = list(paged.items)
+        idx = (
+            build_label_index_for_project(db, items_data[0].project_id)
+            if items_data else None
+        )
+        items = [format_activity_response(a.to_dict(), None, label_index=idx) for a in items_data]
         payload = {
             "_type": "Collection",
             "_links": {"self": {"href": f"/api/v3/milestones/{milestone_id}/activities?offset={paged.page}&pageSize={paged.page_size}"}},
@@ -260,8 +298,11 @@ class ActivityController:
     @staticmethod
     def get(request: Request, activity_id: str, db: Session) -> JSONResponse:
         activity, resource = get_activity_with_resource(db, activity_id)
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.ok(data=format_activity_response(
-            activity.to_dict(), resource.to_dict() if resource else None,
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -286,8 +327,11 @@ class ActivityController:
             status=data.status,
             depends_on=data.depends_on,
         )
+        idx = build_label_index_for_project(db, activity.project_id)
         return BaseController.ok(data=format_activity_response(
-            activity.to_dict(), resource.to_dict() if resource else None,
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
         ))
 
     @staticmethod
@@ -300,4 +344,7 @@ class ActivityController:
     def restore(request: Request, activity_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         activity = restore_activity(db, activity_id=activity_id, current_user_id=current_user_id)
-        return BaseController.ok(data=format_activity_response(activity.to_dict()))
+        idx = build_label_index_for_project(db, activity.project_id)
+        return BaseController.ok(data=format_activity_response(
+            activity.to_dict(), label_index=idx,
+        ))

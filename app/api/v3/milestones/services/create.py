@@ -18,6 +18,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
+from .....shared.labels import KIND_MILESTONE, normalize_dependency_inputs
 from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_CREATE,
@@ -82,20 +83,18 @@ def create_milestone(
             f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
         )
 
-    # Validate depends_on targets BEFORE creating the row.
+    # Validate depends_on targets BEFORE creating the row. Accepts UUIDs
+    # or labels (e.g. "M2"); see app/shared/labels.py.
     desired_deps: List[str] = []
     if depends_on is not None:
         dep_repo = DependencyRepository(db)
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
-        if candidates:
-            ok = dep_repo.existing_target_milestone_ids(project_id, candidates)
-            missing = [d for d in candidates if d not in ok]
-            if missing:
-                raise ValidationError(
-                    f"Unknown or out-of-project milestone dependency target(s): "
-                    f"{', '.join(missing)}"
-                )
-            desired_deps = candidates
+        desired_deps = normalize_dependency_inputs(
+            db,
+            project_id=project_id,
+            expected_kind=KIND_MILESTONE,
+            raw_inputs=depends_on,
+            existence_check=dep_repo.existing_target_milestone_ids,
+        )
 
     vendor_repo = VendorRepository(db)
     resolved_vendor_ids: List[str] = []

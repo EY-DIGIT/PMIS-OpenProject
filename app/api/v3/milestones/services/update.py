@@ -17,6 +17,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
+from .....shared.labels import KIND_MILESTONE, resolve_labels_to_ids
 from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_UPDATE,
@@ -76,11 +77,19 @@ def update_milestone(
         )
 
     # Validate depends_on (replace-list semantics) BEFORE writing.
+    # Accepts UUIDs or labels (e.g. "M2"); see app/shared/labels.py.
     desired_deps: Optional[List[str]] = None
     if depends_on is not None:
         dep_repo = DependencyRepository(db)
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        candidates, _id_to_raw = resolve_labels_to_ids(
+            db,
+            project_id=model.project_id,
+            expected_kind=KIND_MILESTONE,
+            raw_inputs=depends_on,
+        )
         if candidates:
+            # Existence check (folded into the below cycle/missing logic
+            # for tighter error messages — keeps the per-target raise).
             ok = dep_repo.existing_target_milestone_ids(model.project_id, candidates)
             missing = [d for d in candidates if d not in ok]
             if missing:

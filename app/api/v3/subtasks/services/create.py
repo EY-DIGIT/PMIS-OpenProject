@@ -16,6 +16,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
 )
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
+from .....shared.labels import KIND_SUBTASK, resolve_labels_to_ids
 from .....domain.subtasks.subtask import (
     Subtask,
     SUBTASK_TYPE_RESOURCE,
@@ -158,7 +159,12 @@ def create_subtask(
 
     desired_deps: List[str] = []
     if depends_on is not None:
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        candidates, _id_to_raw = resolve_labels_to_ids(
+            db,
+            project_id=task.project_id,
+            expected_kind=KIND_SUBTASK,
+            raw_inputs=depends_on,
+        )
         _validate_subtask_deps_hierarchy(
             db,
             source_task_id=task_id,

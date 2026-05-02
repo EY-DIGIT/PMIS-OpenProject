@@ -1,5 +1,5 @@
 """Milestones controller."""
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -8,6 +8,11 @@ from ....core.base_controller import BaseController
 from ....core.errors import NotFoundError
 from ....core.response import format_collection_response
 from ....infrastructure.db.repositories.project_repository import ProjectRepository
+from ....shared.labels import (
+    KIND_MILESTONE,
+    LabelIndex,
+    build_label_index_for_project,
+)
 from .schemas import MilestoneCreateRequest, MilestoneUpdateRequest, MilestoneListQuery
 from .services import (
     create_milestone, get_milestone, list_milestones,
@@ -21,7 +26,26 @@ def _verify_project_exists(db: Session, project_uuid: str) -> None:
         raise NotFoundError("The project could not be found.")
 
 
-def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, Any]:
+def format_milestone_response(
+    m: dict,
+    label_index: Optional[LabelIndex] = None,
+    base_url: str = "/api/v3",
+) -> Dict[str, Any]:
+    """HAL+JSON shape for one milestone.
+
+    When ``label_index`` is provided, the response includes ``displayCode``
+    (this milestone's label, e.g. "M1") and ``dependsOnDisplay`` (labels
+    for each id in ``dependsOn``). Pass ``None`` only on paths where the
+    label index isn't worth building (none in practice — every controller
+    here builds one).
+    """
+    deps = m.get("depends_on", []) or []
+    display_code = (
+        label_index.label_of(KIND_MILESTONE, m["id"]) if label_index else None
+    )
+    deps_display = (
+        label_index.labels_of(KIND_MILESTONE, deps) if label_index else []
+    )
     return {
         "_type": "Milestone",
         "_links": {
@@ -29,6 +53,7 @@ def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, A
             "project": {"href": f"{base_url}/projects/{m['project_id']}"},
         },
         "id": m["id"],
+        "displayCode": display_code,
         "projectId": m["project_id"],
         "name": m["name"],
         "description": m["description"],
@@ -36,7 +61,8 @@ def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, A
         "endDate": m["end_date"],
         "position": m["position"],
         "status": m.get("status", "not_completed"),
-        "dependsOn": m.get("depends_on", []) or [],
+        "dependsOn": deps,
+        "dependsOnDisplay": deps_display,
         "vendors": m.get("vendors", []) or [],
         "createdAt": m["created_at"],
         "updatedAt": m["updated_at"],
@@ -65,7 +91,8 @@ class MilestoneController:
             depends_on=data.depends_on,
             vendor_ids=data.vendors,
         )
-        return BaseController.created(data=format_milestone_response(m.to_dict()))
+        idx = build_label_index_for_project(db, project_id)
+        return BaseController.created(data=format_milestone_response(m.to_dict(), idx))
 
     @staticmethod
     def list(request: Request, project_uuid: str, query: MilestoneListQuery, db: Session) -> JSONResponse:
@@ -76,7 +103,8 @@ class MilestoneController:
             page=query.offset, page_size=query.pageSize,
             include_deleted=query.includeDeleted,
         )
-        items = [format_milestone_response(m.to_dict()) for m in paged.items]
+        idx = build_label_index_for_project(db, project_id)
+        items = [format_milestone_response(m.to_dict(), idx) for m in paged.items]
         payload = {
             "_type": "Collection",
             "_links": {"self": {"href": f"/api/v3/projects/{project_uuid}/milestones?offset={paged.page}&pageSize={paged.page_size}"}},
@@ -91,7 +119,8 @@ class MilestoneController:
     @staticmethod
     def get(request: Request, milestone_id: str, db: Session) -> JSONResponse:
         m = get_milestone(db, milestone_id)
-        return BaseController.ok(data=format_milestone_response(m.to_dict()))
+        idx = build_label_index_for_project(db, m.project_id)
+        return BaseController.ok(data=format_milestone_response(m.to_dict(), idx))
 
     @staticmethod
     def update(request: Request, milestone_id: str, data: MilestoneUpdateRequest, db: Session) -> JSONResponse:
@@ -109,7 +138,8 @@ class MilestoneController:
             depends_on=data.depends_on,
             vendor_ids=data.vendors,
         )
-        return BaseController.ok(data=format_milestone_response(m.to_dict()))
+        idx = build_label_index_for_project(db, m.project_id)
+        return BaseController.ok(data=format_milestone_response(m.to_dict(), idx))
 
     @staticmethod
     def delete(request: Request, milestone_id: str, db: Session) -> JSONResponse:
@@ -121,4 +151,5 @@ class MilestoneController:
     def restore(request: Request, milestone_id: str, db: Session) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
         m = restore_milestone(db, milestone_id=milestone_id, current_user_id=current_user_id)
-        return BaseController.ok(data=format_milestone_response(m.to_dict()))
+        idx = build_label_index_for_project(db, m.project_id)
+        return BaseController.ok(data=format_milestone_response(m.to_dict(), idx))

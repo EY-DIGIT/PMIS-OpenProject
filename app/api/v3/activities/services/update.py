@@ -46,6 +46,7 @@ from .....infrastructure.db.repositories.activity_repository import ActivityRepo
 from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
 )
+from .....shared.labels import KIND_ACTIVITY, normalize_dependency_inputs
 from .....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
@@ -277,24 +278,25 @@ def update_activity(
         else:
             _gate_status_against_deps(db, activity_id, ACTIVITY_STATUS_COMPLETED)
 
-    # Validate dependsOn targets for replace.
+    # Validate dependsOn targets for replace. Accepts UUIDs or labels
+    # (e.g. "A1.2"); see app/shared/labels.py and planned_changes/22.
     desired_deps: Optional[List[str]] = None
     if depends_on is not None:
         dep_repo = DependencyRepository(db)
-        candidates = [d for d in dict.fromkeys(depends_on) if d]
-        # Self-edge guard.
+        candidates = normalize_dependency_inputs(
+            db,
+            project_id=model.project_id,
+            expected_kind=KIND_ACTIVITY,
+            raw_inputs=depends_on,
+            existence_check=dep_repo.existing_target_activity_ids,
+        )
+        # Self-edge guard. Done AFTER normalization because a label like
+        # "A1.2" can resolve to the source's own UUID.
         if activity_id in candidates:
             raise ValidationError(
                 "An activity cannot depend on itself."
             )
         if candidates:
-            ok = dep_repo.existing_target_activity_ids(model.project_id, candidates)
-            missing = [d for d in candidates if d not in ok]
-            if missing:
-                raise ValidationError(
-                    f"Unknown or out-of-project activity dependency target(s): "
-                    f"{', '.join(missing)}"
-                )
             # Cycle detection: would adding any of these create a cycle?
             # Check against existing edges that don't include the source's
             # current outgoing set (those will be replaced below).
