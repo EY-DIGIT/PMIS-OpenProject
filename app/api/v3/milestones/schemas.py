@@ -29,10 +29,13 @@ class MilestoneCreateRequest(BaseModel):
     # Same-project, no self-edge, acyclic — enforced in the service layer
     # against the milestone_dependencies edge table. Empty / null = no
     # dependencies.
+    #
+    # Accepts either UUIDs or display labels (e.g. "M2"). The service
+    # resolves labels to UUIDs at write time. Wire field is `dependsOn`
+    # (camelCase) — matches activity / task / subtask schemas exactly.
     depends_on: Optional[List[str]] = Field(
         None,
-        validation_alias=AliasChoices("depends_on", "dependsOn"),
-        serialization_alias="dependsOn",
+        alias="dependsOn",
     )
     # Optional subset of the project's vendors. Each id MUST also appear in
     # the project's vendor list (enforced by the service layer).
@@ -82,8 +85,7 @@ class MilestoneUpdateRequest(BaseModel):
     status: Optional[str] = None
     depends_on: Optional[List[str]] = Field(
         None,
-        validation_alias=AliasChoices("depends_on", "dependsOn"),
-        serialization_alias="dependsOn",
+        alias="dependsOn",
     )
     # Same renaming + back-compat aliases as the create schema.
     vendors: Optional[List[str]] = Field(
