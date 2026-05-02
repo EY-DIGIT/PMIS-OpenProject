@@ -67,9 +67,14 @@ def delete_milestone(db: Session, *, milestone_id: str, current_user_id: Optiona
 
     # Soft-delete all dep edges touching the subtree before we soft-delete
     # the rows themselves. Single call — the repo handles the bulk UPDATEs.
-    DependencyRepository(db).cascade_remove_for_deleted_milestone_subtree(
+    dep_repo = DependencyRepository(db)
+    dep_repo.cascade_remove_for_deleted_milestone_subtree(
         activity_ids, task_ids, subtask_ids,
         actor_id=current_user_id,
+    )
+    # Wipe milestone-level dep edges (incoming + outgoing) for this milestone.
+    dep_repo.cascade_remove_milestone_targets(
+        milestone_id, actor_id=current_user_id,
     )
 
     repo.soft_delete_with_cascade(milestone_id, deleted_by=current_user_id)

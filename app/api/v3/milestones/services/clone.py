@@ -71,10 +71,6 @@ def clone_tree_for_version(
             position=src.position,
             # Reset status on a new version — work hasn't happened yet.
             status="not_completed",
-            # `depends` references sibling milestones; the cloned milestones
-            # have new ids, so the reference list is meaningless. Drop it on
-            # clone to avoid carrying stale ids across.
-            depends=None,
             # Lineage — points back to the baseline row we cloned from, so
             # later baseline edits can locate this copy and propagate.
             cloned_from_id=src.id,
@@ -274,6 +270,17 @@ def clone_tree_for_version(
         subtask_map[src.id] = new.id
         counts["subtasks"] += 1
 
+    # --- Milestone dependencies ---
+    # Clone the baseline's milestone_dependencies edges into the new version's
+    # scope, rewriting source/target ids via milestone_map.
+    dep_repo = DependencyRepository(db)
+    if milestone_map:
+        dep_repo.clone_milestone_dependencies_for_version(
+            source_project_id=source_project_id,
+            target_project_id=target_project_id,
+            milestone_id_map=milestone_map,
+        )
+
     # --- Activity dependencies ---
     # Clone the baseline's activity_dependencies edges into the new version's
     # scope, rewriting source/target ids via activity_map. Tasks and subtasks
@@ -281,7 +288,7 @@ def clone_tree_for_version(
     # clone), so task/subtask dependency tables are intentionally not
     # populated here.
     if activity_map:
-        DependencyRepository(db).clone_activity_dependencies_for_version(
+        dep_repo.clone_activity_dependencies_for_version(
             source_project_id=source_project_id,
             target_project_id=target_project_id,
             activity_id_map=activity_map,

@@ -1,6 +1,6 @@
 """Create a milestone under a project."""
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,9 @@ from .....domain.milestones.milestone import (
     Milestone,
 )
 from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
@@ -19,6 +22,7 @@ from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_CREATE,
     propagate_milestone_create,
+    propagate_milestone_dependency_change,
 )
 
 
@@ -33,7 +37,7 @@ def create_milestone(
     position: Optional[int],
     current_user_id: Optional[int],
     status: Optional[str] = None,
-    depends: Optional[List[Any]] = None,
+    depends_on: Optional[List[str]] = None,
     vendor_ids: Optional[List[str]] = None,
 ) -> Milestone:
     """
@@ -45,6 +49,10 @@ def create_milestone(
       - start_date >= project.start_date; end_date >= start_date.
       - If ``vendor_ids`` given, each must also appear in the project's vendors.
       - ``status`` must be in MILESTONE_STATUS_CHOICES (default 'not_completed').
+      - If ``depends_on`` given, every target id must reference a live
+        milestone in the SAME project (cross-milestone within the project
+        is the point of this feature). No self-edge is possible on create
+        (the new id doesn't exist yet); cycle detection kicks in on update.
     """
     assert_milestone_activity_writable(db, project_id)
 
@@ -57,7 +65,6 @@ def create_milestone(
             "Please set the project start date before adding milestones."
         )
 
-    # Parent of a milestone is the project itself.
     validate_entity_dates(
         entity_start=start_date,
         entity_end=end_date,
@@ -75,9 +82,21 @@ def create_milestone(
             f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
         )
 
-    # Vendor validation: each must exist/be active AND be attached to the
-    # parent project. We don't allow attaching vendors to a milestone that the
-    # project hasn't signed off on.
+    # Validate depends_on targets BEFORE creating the row.
+    desired_deps: List[str] = []
+    if depends_on is not None:
+        dep_repo = DependencyRepository(db)
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        if candidates:
+            ok = dep_repo.existing_target_milestone_ids(project_id, candidates)
+            missing = [d for d in candidates if d not in ok]
+            if missing:
+                raise ValidationError(
+                    f"Unknown or out-of-project milestone dependency target(s): "
+                    f"{', '.join(missing)}"
+                )
+            desired_deps = candidates
+
     vendor_repo = VendorRepository(db)
     resolved_vendor_ids: List[str] = []
     if vendor_ids:
@@ -110,15 +129,20 @@ def create_milestone(
         position=position,
         created_by=current_user_id,
         status=resolved_status,
-        depends=depends,
     )
+
+    if desired_deps:
+        DependencyRepository(db).set_milestone_dependencies(
+            m.id, project_id, desired_deps, actor_id=current_user_id,
+        )
+        db.commit()
+        m.depends_on = list(desired_deps)
 
     if resolved_vendor_ids:
         vendor_repo.set_milestone_vendors(m.id, resolved_vendor_ids)
         db.commit()
         m.vendors = vendor_repo.list_milestone_vendors(m.id)
 
-    # Audit the baseline create and fan out to active versions.
     record_audit(
         db,
         project_id=project_id,
@@ -132,9 +156,14 @@ def create_milestone(
             "end_date": m.end_date.isoformat() if m.end_date else None,
             "position": m.position,
             "status": resolved_status,
+            "depends_on": desired_deps,
         },
     )
     db.commit()
     propagate_milestone_create(db, baseline_milestone_id=m.id, actor_id=current_user_id)
+    if desired_deps:
+        propagate_milestone_dependency_change(
+            db, baseline_milestone_id=m.id, actor_id=current_user_id,
+        )
 
     return m

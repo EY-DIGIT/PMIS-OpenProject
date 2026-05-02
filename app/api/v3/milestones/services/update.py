@@ -1,6 +1,6 @@
 """Update a milestone (partial; with date re-validation)."""
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,9 @@ from .....domain.milestones.milestone import (
     Milestone,
 )
 from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.repositories.dependency_repository import (
+    DependencyRepository,
+)
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
@@ -18,6 +21,7 @@ from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_UPDATE,
     propagate_milestone_update,
+    propagate_milestone_dependency_change,
 )
 
 
@@ -36,7 +40,7 @@ def update_milestone(
     position: Optional[int],
     current_user_id: Optional[int],
     status: Optional[str] = None,
-    depends: Optional[List[Any]] = None,
+    depends_on: Optional[List[str]] = None,
     vendor_ids: Optional[List[str]] = None,
 ) -> Milestone:
     repo = MilestoneRepository(db)
@@ -44,7 +48,6 @@ def update_milestone(
     if model is None:
         raise NotFoundError("The milestone could not be found.")
 
-    # Lock check against the owning project.
     assert_milestone_activity_writable(db, model.project_id)
 
     project = db.query(ProjectModel).filter(ProjectModel.id == model.project_id).first()
@@ -53,7 +56,6 @@ def update_milestone(
             "The project this milestone belongs to could not be found or has no start date."
         )
 
-    # Merge incoming against current for consistent cross-field checks.
     new_start = start_date if start_date is not None else model.start_date
     new_end = end_date if end_date is not None else model.end_date
 
@@ -73,6 +75,33 @@ def update_milestone(
             f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
         )
 
+    # Validate depends_on (replace-list semantics) BEFORE writing.
+    desired_deps: Optional[List[str]] = None
+    if depends_on is not None:
+        dep_repo = DependencyRepository(db)
+        candidates = [d for d in dict.fromkeys(depends_on) if d]
+        if candidates:
+            ok = dep_repo.existing_target_milestone_ids(model.project_id, candidates)
+            missing = [d for d in candidates if d not in ok]
+            if missing:
+                raise ValidationError(
+                    f"Unknown or out-of-project milestone dependency target(s): "
+                    f"{', '.join(missing)}"
+                )
+            offending = dep_repo.would_create_cycle_milestone(
+                milestone_id, candidates,
+            )
+            if offending is not None:
+                if offending == milestone_id:
+                    raise ValidationError(
+                        "A milestone cannot depend on itself."
+                    )
+                raise ValidationError(
+                    f"Adding milestone dependency on {offending} would "
+                    "create a cycle."
+                )
+        desired_deps = candidates
+
     updates = {}
     if name is not None:
         updates["name"] = name.strip()
@@ -86,11 +115,7 @@ def update_milestone(
         updates["position"] = position
     if status is not None:
         updates["status"] = status
-    if depends is not None:
-        updates["depends"] = depends
 
-    # Vendor replacement is independent of column-level updates — it goes
-    # through the association table.
     vendor_repo = VendorRepository(db)
     will_replace_vendors = vendor_ids is not None
     resolved_vendor_ids: List[str] = []
@@ -112,7 +137,7 @@ def update_milestone(
                 )
         resolved_vendor_ids = unique
 
-    if not updates and not will_replace_vendors:
+    if not updates and not will_replace_vendors and desired_deps is None:
         return repo._to_domain(model)
 
     before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}
@@ -120,9 +145,15 @@ def update_milestone(
     if updates:
         updated = repo.update(milestone_id, updates=updates, updated_by=current_user_id)
     else:
-        # No column changes requested — we still want to refresh the domain
-        # object so the returned vendor list is correct.
         updated = repo._to_domain(model)
+
+    if desired_deps is not None:
+        DependencyRepository(db).set_milestone_dependencies(
+            milestone_id, model.project_id, desired_deps,
+            actor_id=current_user_id,
+        )
+        db.commit()
+        updated.depends_on = list(desired_deps)
 
     if will_replace_vendors:
         vendor_repo.set_milestone_vendors(milestone_id, resolved_vendor_ids)
@@ -144,6 +175,11 @@ def update_milestone(
             baseline_milestone_id=milestone_id,
             updates=updates,
             actor_id=current_user_id,
+        )
+
+    if desired_deps is not None:
+        propagate_milestone_dependency_change(
+            db, baseline_milestone_id=milestone_id, actor_id=current_user_id,
         )
 
     return updated

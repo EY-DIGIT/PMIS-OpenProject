@@ -793,15 +793,40 @@ class TestMilestoneFields:
         )
         assert resp.status_code == 422
 
-    def test_depends_passthrough(self, client, admin_headers, db_session):
+    def test_depends_on_validates_against_same_project(
+        self, client, admin_headers, db_session,
+    ):
+        # Doc 21: milestone depends_on now references real, same-project
+        # milestones (was a passthrough JSON column previously).
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
+        m1 = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json=self._milestone_body(name="M1"),
+            headers=admin_headers,
+        ).json()["data"]["id"]
+        m2 = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json=self._milestone_body(name="M2"),
+            headers=admin_headers,
+        ).json()["data"]["id"]
         resp = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
-            json=self._milestone_body(depends=[str(uuid4()), str(uuid4())]),
+            json=self._milestone_body(name="M3", dependsOn=[m1, m2]),
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
-        assert len(resp.json()["data"]["depends"]) == 2
+        assert sorted(resp.json()["data"]["dependsOn"]) == sorted([m1, m2])
+
+    def test_depends_on_unknown_target_rejected(
+        self, client, admin_headers, db_session,
+    ):
+        pid, _ = self._project_with_vendors(client, admin_headers, db_session)
+        resp = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json=self._milestone_body(dependsOn=[str(uuid4())]),
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
 
     def test_milestone_vendors_must_be_subset(self, client, admin_headers, db_session):
         # Project has only vendor_a; vendor_b is NOT on the project.

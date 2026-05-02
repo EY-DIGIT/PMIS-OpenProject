@@ -54,6 +54,7 @@ ACTION_ACTIVITY_DELETE = "activity.soft_delete"
 ACTION_MILESTONE_CREATE_CASCADE = "milestone.create.cascade_from_baseline"
 ACTION_MILESTONE_UPDATE_CASCADE = "milestone.update.cascade_from_baseline"
 ACTION_MILESTONE_DELETE_CASCADE = "milestone.soft_delete.cascade_from_baseline"
+ACTION_MILESTONE_DEPS_CASCADE = "milestone.depends_on.cascade_from_baseline"
 ACTION_ACTIVITY_CREATE_CASCADE = "activity.create.cascade_from_baseline"
 ACTION_ACTIVITY_UPDATE_CASCADE = "activity.update.cascade_from_baseline"
 ACTION_ACTIVITY_DELETE_CASCADE = "activity.soft_delete.cascade_from_baseline"
@@ -320,6 +321,10 @@ def propagate_milestone_soft_delete(
             twin_activity_ids, twin_task_ids, twin_subtask_ids,
             actor_id=actor_id,
         )
+        # Wipe milestone-level edges for the twin too (incoming + outgoing).
+        dep_repo.cascade_remove_milestone_targets(
+            twin.id, actor_id=actor_id,
+        )
 
         _soft_delete_milestone_subtree(db, twin.id, actor_id=actor_id, now=now)
         record_audit(
@@ -333,6 +338,112 @@ def propagate_milestone_soft_delete(
                 "name": twin.name,
             },
             after=None,
+        )
+        count += 1
+    db.commit()
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Milestone dependency propagation
+# ---------------------------------------------------------------------------
+
+def propagate_milestone_dependency_change(
+    db: Session,
+    *,
+    baseline_milestone_id: str,
+    actor_id: Optional[int],
+) -> int:
+    """
+    Mirror this baseline milestone's LIVE dependency targets onto every
+    active version. Each version twin gets its outgoing edges replaced
+    with the version-local twin ids of the baseline targets.
+
+    Unlike activity/task/subtask deps (which are version-local), milestone
+    deps follow baseline edits — see doc 21 part A. Dropped edges
+    on the baseline are dropped on the version twin too; new edges are
+    materialized between the corresponding twins. Returns count of version
+    twins updated.
+
+    Targets that have no twin in a version (typically a baseline target
+    created after that version forked, or a target whose twin was
+    soft-deleted on the version) are silently skipped — the version sees a
+    smaller dep set than the baseline in that case.
+    """
+    from .....infrastructure.db.repositories.dependency_repository import (
+        DependencyRepository,
+    )
+
+    baseline = (
+        db.query(MilestoneModel).filter(MilestoneModel.id == baseline_milestone_id).first()
+    )
+    if baseline is None or baseline.deleted_at is not None:
+        return 0
+
+    active_vid_set = set(_active_version_ids(db, baseline.project_id))
+    if not active_vid_set:
+        return 0
+
+    dep_repo = DependencyRepository(db)
+    baseline_target_ids = dep_repo.list_milestone_dependencies(baseline_milestone_id)
+
+    # Locate this baseline's twins on each active version.
+    source_twins = (
+        db.query(MilestoneModel)
+        .filter(
+            and_(
+                MilestoneModel.cloned_from_id == baseline_milestone_id,
+                MilestoneModel.deleted_at.is_(None),
+                MilestoneModel.project_id.in_(active_vid_set),
+            )
+        )
+        .all()
+    )
+    if not source_twins:
+        return 0
+
+    # Build per-version map: baseline_milestone_id -> twin_milestone_id
+    # for the union of source AND target baseline ids we care about.
+    relevant_baseline_ids = {baseline_milestone_id, *baseline_target_ids}
+    twins_lookup = (
+        db.query(MilestoneModel)
+        .filter(
+            and_(
+                MilestoneModel.cloned_from_id.in_(relevant_baseline_ids),
+                MilestoneModel.deleted_at.is_(None),
+                MilestoneModel.project_id.in_(active_vid_set),
+            )
+        )
+        .all()
+    )
+    # (project_id, baseline_id) -> twin_id
+    by_vid_baseline: Dict[tuple, str] = {}
+    for t in twins_lookup:
+        by_vid_baseline[(t.project_id, t.cloned_from_id)] = t.id
+
+    count = 0
+    for src_twin in source_twins:
+        vid = src_twin.project_id
+        # Compute the target twin ids for this version.
+        version_target_ids: List[str] = []
+        for bt in baseline_target_ids:
+            tid = by_vid_baseline.get((vid, bt))
+            if tid is not None:
+                version_target_ids.append(tid)
+        dep_repo.set_milestone_dependencies(
+            src_twin.id, vid, version_target_ids,
+            actor_id=actor_id,
+        )
+        record_audit(
+            db,
+            project_id=vid,
+            actor_id=actor_id,
+            action=ACTION_MILESTONE_DEPS_CASCADE,
+            before={
+                "milestone_id": src_twin.id,
+                "cloned_from_baseline_milestone_id": baseline_milestone_id,
+            },
+            after={"depends_on": version_target_ids},
         )
         count += 1
     db.commit()

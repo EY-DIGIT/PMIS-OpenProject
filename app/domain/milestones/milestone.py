@@ -1,7 +1,7 @@
 """Milestone domain entity."""
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 # Status choices — extensible by editing this tuple. Stored lowercase /
@@ -35,7 +35,10 @@ class Milestone:
     updated_by: Optional[int] = None
     deleted_at: Optional[datetime] = None
     status: str = MILESTONE_STATUS_DEFAULT
-    depends: Optional[List[Any]] = None
+    # Live milestone-dependency target ids (sorted), populated from the
+    # milestone_dependencies edge table by the repository on read. The legacy
+    # JSON ``depends`` column on the model is no longer surfaced.
+    depends_on: List[str] = field(default_factory=list)
     # (vendor_id, vendor_name) pairs attached to this milestone. Populated by
     # the repository on eager-load reads; empty list otherwise.
     vendors: List[Tuple[str, str]] = field(default_factory=list)
@@ -50,7 +53,7 @@ class Milestone:
             "end_date": self.end_date.isoformat() if self.end_date else None,
             "position": self.position,
             "status": self.status,
-            "depends": self.depends if self.depends is not None else [],
+            "depends_on": list(self.depends_on),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "created_by": self.created_by,

@@ -36,7 +36,7 @@ def format_milestone_response(m: dict, base_url: str = "/api/v3") -> Dict[str, A
         "endDate": m["end_date"],
         "position": m["position"],
         "status": m.get("status", "not_completed"),
-        "depends": m.get("depends", []) or [],
+        "dependsOn": m.get("depends_on", []) or [],
         "vendors": m.get("vendors", []) or [],
         "createdAt": m["created_at"],
         "updatedAt": m["updated_at"],
@@ -62,7 +62,7 @@ class MilestoneController:
             position=data.position,
             current_user_id=current_user_id,
             status=data.status,
-            depends=data.depends,
+            depends_on=data.depends_on,
             vendor_ids=data.vendors,
         )
         return BaseController.created(data=format_milestone_response(m.to_dict()))
@@ -106,7 +106,7 @@ class MilestoneController:
             position=data.position,
             current_user_id=current_user_id,
             status=data.status,
-            depends=data.depends,
+            depends_on=data.depends_on,
             vendor_ids=data.vendors,
         )
         return BaseController.ok(data=format_milestone_response(m.to_dict()))

@@ -1088,3 +1088,282 @@ class TestLegacyDepTableMigration:
         with engine.connect() as conn:
             dropped = _heal_legacy_dep_tables(conn)
         assert dropped == []
+
+
+# ===========================================================================
+# Doc 21 — cross-milestone explicit lock-in for A/T/S
+# ===========================================================================
+
+class TestCrossMilestoneActivityTaskSubtaskDeps:
+    """Lock in: A/T/S deps work across different milestones inside a project.
+
+    Cross-project rejection is already covered above; these are belt-and-
+    braces tests so a future regression that quietly tightens the filter to
+    same-milestone is caught."""
+
+    def test_activity_in_m1_can_depend_on_activity_in_m2(
+        self, client, admin_user, admin_headers,
+    ):
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(client, admin_headers, pid, name="M1")
+        m2 = _create_milestone(client, admin_headers, pid, name="M2")
+        a_in_m1 = _create_activity(client, admin_headers, m1, name="A").json()["data"]["id"]
+        # New activity in M2 depends on A1 (cross-milestone, same project).
+        resp = _create_activity(
+            client, admin_headers, m2, name="B", depends_on=[a_in_m1],
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["dependsOn"] == [a_in_m1]
+
+    def test_task_under_activity_in_m1_can_depend_on_task_under_activity_in_m2(
+        self, client, admin_user, admin_headers,
+    ):
+        # M1.A1 → A1's task. M2.A2 → A2's task. Both activities linked
+        # so the task hierarchy rule is satisfied. Then T2 depends on T1.
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(client, admin_headers, pid, name="M1")
+        m2 = _create_milestone(client, admin_headers, pid, name="M2")
+        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]["id"]
+        a2 = _create_activity(
+            client, admin_headers, m2, name="A2", depends_on=[a1],
+        ).json()["data"]["id"]
+        # publish + create version for T/S writes
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+        # locate version twins of A1, A2
+        v_acts = []
+        for m in client.get(
+            f"/api/v3/projects/{vid}/milestones", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]:
+            v_acts.extend(_list_activities_in(client, admin_headers, m["id"]))
+        v_a1 = next(a for a in v_acts if a["name"] == "A1")["id"]
+        v_a2 = next(a for a in v_acts if a["name"] == "A2")["id"]
+        t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
+        resp = _create_task(
+            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["dependsOn"] == [t1]
+
+    def test_subtask_under_task_in_m1_can_depend_on_subtask_under_task_in_m2(
+        self, client, admin_user, admin_headers,
+    ):
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(client, admin_headers, pid, name="M1")
+        m2 = _create_milestone(client, admin_headers, pid, name="M2")
+        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]["id"]
+        a2 = _create_activity(
+            client, admin_headers, m2, name="A2", depends_on=[a1],
+        ).json()["data"]["id"]
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+        v_acts = []
+        for m in client.get(
+            f"/api/v3/projects/{vid}/milestones", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]:
+            v_acts.extend(_list_activities_in(client, admin_headers, m["id"]))
+        v_a1 = next(a for a in v_acts if a["name"] == "A1")["id"]
+        v_a2 = next(a for a in v_acts if a["name"] == "A2")["id"]
+        t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
+        t2 = _create_task(
+            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+        ).json()["data"]["id"]
+        s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
+        resp = _create_subtask(
+            client, admin_headers, t2, name="S2", depends_on=[s1],
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["dependsOn"] == [s1]
+
+
+# ===========================================================================
+# Doc 21 — milestone-to-milestone dependencies
+# ===========================================================================
+
+class TestMilestoneDeps:
+    """Milestone-level dependency edges: same-project, no self, acyclic,
+    cascade-on-delete, propagated to active versions."""
+
+    def _make_three_milestones(self, client, admin_headers):
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(client, admin_headers, pid, name="M1")
+        m2 = _create_milestone(client, admin_headers, pid, name="M2")
+        m3 = _create_milestone(client, admin_headers, pid, name="M3")
+        return pid, m1, m2, m3
+
+    def _patch_milestone(self, client, admin_headers, mid, **body):
+        return client.patch(
+            f"/api/v3/milestones/{mid}", json=body, headers=admin_headers,
+        )
+
+    def _get_milestone(self, client, admin_headers, mid):
+        return client.get(f"/api/v3/milestones/{mid}", headers=admin_headers)
+
+    def test_create_with_empty_depends_on(self, client, admin_user, admin_headers):
+        pid, _, _, _ = self._make_three_milestones(client, admin_headers)
+        resp = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json={
+                "name": "M4",
+                "startDate": _future_iso(2),
+                "endDate": _future_iso(100),
+                "dependsOn": [],
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["dependsOn"] == []
+
+    def test_create_with_valid_depends_on(self, client, admin_user, admin_headers):
+        pid, m1, m2, _ = self._make_three_milestones(client, admin_headers)
+        resp = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json={
+                "name": "M4",
+                "startDate": _future_iso(2),
+                "endDate": _future_iso(100),
+                "dependsOn": [m1, m2],
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert sorted(resp.json()["data"]["dependsOn"]) == sorted([m1, m2])
+
+    def test_unknown_target_rejected(self, client, admin_user, admin_headers):
+        pid, _, _, _ = self._make_three_milestones(client, admin_headers)
+        bogus = str(uuid4())
+        resp = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            json={
+                "name": "M4",
+                "startDate": _future_iso(2),
+                "endDate": _future_iso(100),
+                "dependsOn": [bogus],
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+        assert "out-of-project" in resp.json()["error"]["message"]
+
+    def test_cross_project_target_rejected(self, client, admin_user, admin_headers):
+        _, m1, _, _ = self._make_three_milestones(client, admin_headers)
+        pid2 = _create_project(client, admin_headers, name="Other")
+        resp = client.post(
+            f"/api/v3/projects/{pid2}/milestones/create",
+            json={
+                "name": "Cross",
+                "startDate": _future_iso(2),
+                "endDate": _future_iso(100),
+                "dependsOn": [m1],
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+        assert m1 in resp.json()["error"]["message"]
+
+    def test_self_edge_rejected_on_update(self, client, admin_user, admin_headers):
+        _, m1, _, _ = self._make_three_milestones(client, admin_headers)
+        resp = self._patch_milestone(
+            client, admin_headers, m1, dependsOn=[m1],
+        )
+        assert resp.status_code == 422
+        assert "itself" in resp.json()["error"]["message"]
+
+    def test_cycle_rejected_on_update(self, client, admin_user, admin_headers):
+        _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
+        # Build M2 -> M1, M3 -> M2.
+        assert self._patch_milestone(
+            client, admin_headers, m2, dependsOn=[m1],
+        ).status_code == 200
+        assert self._patch_milestone(
+            client, admin_headers, m3, dependsOn=[m2],
+        ).status_code == 200
+        # Now M1 -> M3 would close the cycle (M1 -> M3 -> M2 -> M1).
+        resp = self._patch_milestone(
+            client, admin_headers, m1, dependsOn=[m3],
+        )
+        assert resp.status_code == 422
+        assert "cycle" in resp.json()["error"]["message"].lower()
+
+    def test_update_replace_list_semantics(self, client, admin_user, admin_headers):
+        _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
+        # Start: M3 depends on [M1, M2].
+        assert self._patch_milestone(
+            client, admin_headers, m3, dependsOn=[m1, m2],
+        ).status_code == 200
+        # Replace with [M1].
+        resp = self._patch_milestone(
+            client, admin_headers, m3, dependsOn=[m1],
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["dependsOn"] == [m1]
+        # GET reflects.
+        assert self._get_milestone(
+            client, admin_headers, m3,
+        ).json()["data"]["dependsOn"] == [m1]
+
+    def test_get_returns_depends_on(self, client, admin_user, admin_headers):
+        _, m1, m2, _ = self._make_three_milestones(client, admin_headers)
+        self._patch_milestone(
+            client, admin_headers, m2, dependsOn=[m1],
+        )
+        body = self._get_milestone(client, admin_headers, m2).json()["data"]
+        assert body["dependsOn"] == [m1]
+
+    def test_delete_milestone_cascades_dep_edges(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        from app.infrastructure.db.models.milestone_dependency import (
+            MilestoneDependencyModel,
+        )
+        _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
+        # M2 -> M1, M3 -> M2, M3 -> M1 (just to be sure incoming + outgoing
+        # both get wiped when M2 is deleted).
+        self._patch_milestone(client, admin_headers, m2, dependsOn=[m1])
+        self._patch_milestone(client, admin_headers, m3, dependsOn=[m2, m1])
+        # Sanity: 3 live edges.
+        live_before = (
+            db_session.query(MilestoneDependencyModel)
+            .filter(MilestoneDependencyModel.deleted_at.is_(None))
+            .count()
+        )
+        assert live_before == 3
+        # Delete M2 — wipes edges where M2 is source OR target (so 2 edges
+        # disappear: M2->M1 and M3->M2). M3->M1 stays live.
+        resp = client.delete(f"/api/v3/milestones/{m2}", headers=admin_headers)
+        assert resp.status_code == 204
+        live_after = (
+            db_session.query(MilestoneDependencyModel)
+            .filter(MilestoneDependencyModel.deleted_at.is_(None))
+            .count()
+        )
+        assert live_after == 1
+
+    def test_propagation_to_active_version(
+        self, client, admin_user, admin_headers,
+    ):
+        # Edges set on the baseline propagate to the active version twin.
+        pid, m1, m2, _ = self._make_three_milestones(client, admin_headers)
+        # Before publishing, set M2 -> M1 on baseline so the version clones it.
+        self._patch_milestone(client, admin_headers, m2, dependsOn=[m1])
+        _publish(client, admin_headers, pid)
+        vid = _create_version(client, admin_headers, pid)
+
+        # Locate the version's milestone twins.
+        ver_milestones = client.get(
+            f"/api/v3/projects/{vid}/milestones", headers=admin_headers,
+        ).json()["data"]["_embedded"]["elements"]
+        v_m1 = next(m for m in ver_milestones if m["name"] == "M1")["id"]
+        v_m2 = next(m for m in ver_milestones if m["name"] == "M2")["id"]
+        # The cloned edge is V_M2 -> V_M1.
+        assert self._get_milestone(
+            client, admin_headers, v_m2,
+        ).json()["data"]["dependsOn"] == [v_m1]
+
+        # Now mutate the baseline edge — drop it. Version twin should drop too.
+        assert self._patch_milestone(
+            client, admin_headers, m2, dependsOn=[],
+        ).status_code == 200
+        assert self._get_milestone(
+            client, admin_headers, v_m2,
+        ).json()["data"]["dependsOn"] == []

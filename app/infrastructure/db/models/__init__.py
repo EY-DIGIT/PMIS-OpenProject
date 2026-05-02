@@ -11,6 +11,7 @@ from .meeting import MeetingModel
 from .meeting_participant import MeetingParticipantModel
 from .meeting_agenda_item import MeetingAgendaItemModel
 from .milestone import MilestoneModel
+from .milestone_dependency import MilestoneDependencyModel
 from .milestone_vendor import MilestoneVendorModel
 from .activity import ActivityModel
 from .activity_dependency import ActivityDependencyModel
@@ -37,7 +38,7 @@ __all__ = [
     "RoleModel",
     "WorkPackageModel", "WorkPackageTypeModel", "MeetingModel",
     "MeetingParticipantModel", "MeetingAgendaItemModel",
-    "MilestoneModel", "MilestoneVendorModel",
+    "MilestoneModel", "MilestoneDependencyModel", "MilestoneVendorModel",
     "ActivityModel", "ActivityDependencyModel", "ActivityResourceModel",
     "TaskModel", "TaskDependencyModel", "TaskResourceModel",
     "SubtaskModel", "SubtaskDependencyModel", "SubtaskResourceModel",

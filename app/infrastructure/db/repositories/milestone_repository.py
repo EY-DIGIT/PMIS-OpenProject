@@ -36,8 +36,11 @@ class MilestoneRepository:
             updated_by=m.updated_by,
             deleted_at=m.deleted_at,
             status=getattr(m, "status", None) or "not_completed",
-            depends=getattr(m, "depends", None),
         )
+        # Live milestone-dependency target ids (sorted) come from the
+        # milestone_dependencies edge table. Local import to avoid cycles.
+        from .dependency_repository import DependencyRepository
+        dom.depends_on = DependencyRepository(self.db).list_milestone_dependencies(m.id)
         if with_vendors:
             from .vendor_repository import VendorRepository
             dom.vendors = VendorRepository(self.db).list_milestone_vendors(m.id)
@@ -93,7 +96,6 @@ class MilestoneRepository:
         position: int,
         created_by: Optional[int],
         status: str = "not_completed",
-        depends: Optional[list] = None,
     ) -> Milestone:
         m = MilestoneModel(
             project_id=project_id,
@@ -105,7 +107,6 @@ class MilestoneRepository:
             created_by=created_by,
             updated_by=created_by,
             status=status,
-            depends=depends,
         )
         self.db.add(m)
         self.db.commit()

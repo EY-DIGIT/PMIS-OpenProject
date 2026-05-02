@@ -1,6 +1,6 @@
 """Milestone API schemas (request/response)."""
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from ....domain.milestones.milestone import (
@@ -25,9 +25,15 @@ class MilestoneCreateRequest(BaseModel):
         MILESTONE_STATUS_DEFAULT,
         description=f"One of: {', '.join(MILESTONE_STATUS_CHOICES)}",
     )
-    # Reserved: a list of other milestone ids this one depends on. No
-    # referential integrity is enforced yet; stored as-is.
-    depends: Optional[List[Any]] = Field(None)
+    # Other milestone ids in the SAME project this milestone depends on.
+    # Same-project, no self-edge, acyclic — enforced in the service layer
+    # against the milestone_dependencies edge table. Empty / null = no
+    # dependencies.
+    depends_on: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("depends_on", "dependsOn"),
+        serialization_alias="dependsOn",
+    )
     # Optional subset of the project's vendors. Each id MUST also appear in
     # the project's vendor list (enforced by the service layer).
     #
@@ -74,7 +80,11 @@ class MilestoneUpdateRequest(BaseModel):
     end_date: Optional[datetime] = Field(None, alias="endDate")
     position: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None
-    depends: Optional[List[Any]] = None
+    depends_on: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("depends_on", "dependsOn"),
+        serialization_alias="dependsOn",
+    )
     # Same renaming + back-compat aliases as the create schema.
     vendors: Optional[List[str]] = Field(
         None,
