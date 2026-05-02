@@ -484,7 +484,9 @@ def second_admin_user(db_session):
     """A second admin so the last-active-admin guards don't block test
     operations on ``admin_user``. Status active, not deleted."""
     from app.core.security import hash_password
+    from app.infrastructure.db.models.role import RoleModel
     from app.infrastructure.db.models.user import UserModel
+    from app.infrastructure.db.models.user_role import UserRoleModel
 
     u = UserModel(
         login="admin2",
@@ -492,12 +494,18 @@ def second_admin_user(db_session):
         hashed_password=hash_password("admin123"),
         first_name="Admin",
         last_name="Two",
-        admin=True,
         status="active",
     )
     db_session.add(u)
     db_session.commit()
     db_session.refresh(u)
+    # Doc 21 part B: admin status comes from the seeded ``admin`` role.
+    admin_role = (
+        db_session.query(RoleModel).filter(RoleModel.name == "admin").first()
+    )
+    if admin_role is not None:
+        db_session.add(UserRoleModel(user_id=u.id, role_id=admin_role.id))
+        db_session.commit()
     return u
 
 

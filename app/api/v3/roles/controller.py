@@ -46,7 +46,8 @@ class RoleController:
             db=db,
             name=data.name,
             permissions=data.permissions,
-            builtin=data.builtin
+            builtin=False,  # custom roles are never builtin
+            description=data.description,
         )
 
         if result.is_success():
@@ -165,7 +166,8 @@ class RoleController:
             db=db,
             role_id=role_id,
             name=data.name,
-            permissions=data.permissions
+            permissions=data.permissions,
+            description=data.description,
         )
 
         if result.is_success():

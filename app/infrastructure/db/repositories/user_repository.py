@@ -12,13 +12,15 @@ soft-deleted projects) without N+1 lookups in the controller layer.
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import desc
+from sqlalchemy import and_, desc, exists
 from sqlalchemy.orm import Session
 
 from ....domain.users.user import User
 from ...db.models.project import ProjectModel
 from ...db.models.project_member import ProjectMemberModel
+from ...db.models.role import RoleModel
 from ...db.models.user import UserModel
+from ...db.models.user_role import UserRoleModel
 from ...db.models.vendor import VendorModel
 
 
@@ -30,6 +32,27 @@ def _utcnow() -> datetime:
 # list in API responses. Closed projects are "history"; soft-deleted ones
 # never appear in the UI. The mapping rows themselves stay in the DB.
 _HIDDEN_PROJECT_STATUSES = ("closed",)
+
+_ADMIN_ROLE_NAME = "admin"
+
+
+def _user_holds_admin_role(db: Session, user_id: int) -> bool:
+    """Check whether ``user_id`` is assigned the seeded ``admin`` role.
+
+    Replaces the legacy ``users.admin`` boolean column (dropped in doc 21
+    part B). Used by ``_to_domain`` to populate ``User.admin`` so existing
+    downstream code (response formatters, lockout guards) keeps working
+    without churn.
+    """
+    return db.query(
+        exists().where(
+            and_(
+                UserRoleModel.user_id == user_id,
+                UserRoleModel.role_id == RoleModel.id,
+                RoleModel.name == _ADMIN_ROLE_NAME,
+            )
+        )
+    ).scalar() or False
 
 
 class UserRepository:
@@ -52,7 +75,7 @@ class UserRepository:
             email=model.email,
             first_name=model.first_name,
             last_name=model.last_name,
-            admin=model.admin,
+            admin=_user_holds_admin_role(self.db, model.id),
             status=model.status,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -122,14 +145,19 @@ class UserRepository:
         division: Optional[str] = None,
         division_other: Optional[str] = None,
     ) -> User:
-        """Create a new user. Caller is responsible for committing."""
+        """Create a new user. Caller is responsible for committing.
+
+        Doc 21 part B: ``admin=True`` now translates to assigning the
+        seeded ``admin`` role rather than setting a column. Lookup of
+        the role is done lazily so callers using the same DB session see
+        the assignment immediately.
+        """
         user_model = UserModel(
             login=login,
             email=email,
             hashed_password=hashed_password,
             first_name=first_name,
             last_name=last_name,
-            admin=admin,
             status=status,
             vendor_id=vendor_id,
             division=division,
@@ -137,6 +165,17 @@ class UserRepository:
         )
         self.db.add(user_model)
         self.db.flush()
+        if admin:
+            admin_role = (
+                self.db.query(RoleModel)
+                .filter(RoleModel.name == _ADMIN_ROLE_NAME)
+                .first()
+            )
+            if admin_role is not None:
+                self.db.add(UserRoleModel(
+                    user_id=user_model.id, role_id=admin_role.id,
+                ))
+                self.db.flush()
         vendor = self._load_vendor(user_model.vendor_id)
         return self._to_domain(user_model, vendor=vendor, projects=[])
 
@@ -247,16 +286,17 @@ class UserRepository:
         ).scalar()
 
     def has_other_active_admin(self, exclude_user_id: int) -> bool:
-        """True if at least one OTHER active admin exists.
+        """True if at least one OTHER live user holds the ``admin`` role.
 
-        "Active" = ``admin=True AND deleted_at IS NULL``. Used by the
-        delete / update services to refuse the operation that would
-        leave the system with zero active admins (i.e. permanently
-        locked out of admin-only endpoints).
+        Doc 21 part B: derived from the user_roles join (replaces the
+        ``users.admin`` column). Used by delete / update services to
+        refuse operations that would leave zero active admins.
         """
         return (
             self.db.query(UserModel.id)
-            .filter(UserModel.admin.is_(True))
+            .join(UserRoleModel, UserRoleModel.user_id == UserModel.id)
+            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+            .filter(RoleModel.name == _ADMIN_ROLE_NAME)
             .filter(UserModel.deleted_at.is_(None))
             .filter(UserModel.id != exclude_user_id)
             .first()
@@ -304,7 +344,31 @@ class UserRepository:
         if last_name is not None:
             model.last_name = last_name
         if admin is not None:
-            model.admin = admin
+            # Doc 21 part B: admin status is derived from membership in the
+            # seeded 'admin' role. PATCH semantics: True → ensure the row
+            # exists; False → drop it. Lockout protection lives in the
+            # service layer (delete / update); we just toggle the row here.
+            admin_role = (
+                self.db.query(RoleModel)
+                .filter(RoleModel.name == _ADMIN_ROLE_NAME)
+                .first()
+            )
+            if admin_role is not None:
+                existing = (
+                    self.db.query(UserRoleModel)
+                    .filter(
+                        UserRoleModel.user_id == user_id,
+                        UserRoleModel.role_id == admin_role.id,
+                    )
+                    .first()
+                )
+                if admin and existing is None:
+                    self.db.add(UserRoleModel(
+                        user_id=user_id, role_id=admin_role.id,
+                    ))
+                elif not admin and existing is not None:
+                    self.db.delete(existing)
+                self.db.flush()
         if status is not None:
             model.status = status
         if vendor_id is not None:

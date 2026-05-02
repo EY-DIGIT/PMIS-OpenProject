@@ -1,202 +1,128 @@
+"""Role repository.
+
+Doc 21 part B: the JSON ``permissions`` column on ``roles`` is gone.
+Read paths join ``role_permissions`` to surface the current permission
+set; write paths replace the join-table contents through
+``RbacRepository.replace_role_permissions``.
 """
-Role repository for database operations.
-"""
-from typing import Optional, List, Tuple
-from sqlalchemy.orm import Session
+from typing import List, Optional, Tuple
+
 from sqlalchemy import func
-from ...db.models.role import RoleModel
+from sqlalchemy.orm import Session
+
 from ....domain.roles.role import Role
+from ..models.role import RoleModel
+from ..models.role_permission import RolePermissionModel
 
 
 class RoleRepository:
-    """Repository for Role database operations."""
-
     def __init__(self, db: Session):
-        """
-        Initialize repository.
-
-        Args:
-            db: Database session
-        """
         self.db = db
 
+    # -------------------------------------------------------------------
+    # Internal helpers
+    # -------------------------------------------------------------------
+
     def _to_domain(self, model: RoleModel) -> Role:
-        """
-        Convert database model to domain model.
-
-        Args:
-            model: Database model
-
-        Returns:
-            Domain model
-        """
+        codes = sorted(
+            r[0]
+            for r in self.db.query(RolePermissionModel.permission_code)
+            .filter(RolePermissionModel.role_id == model.id)
+            .all()
+        )
         return Role(
             id=model.id,
             name=model.name,
-            permissions=model.permissions if isinstance(model.permissions, list) else [],
+            description=getattr(model, "description", None),
+            permissions=codes,
             builtin=model.builtin,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
 
+    # -------------------------------------------------------------------
+    # CRUD
+    # -------------------------------------------------------------------
+
     def create(
-        self,
-        name: str,
-        permissions: List[str],
-        builtin: bool = False
+        self, name: str, permissions: List[str],
+        builtin: bool = False,
+        description: Optional[str] = None,
     ) -> Role:
-        """
-        Create a new role.
-
-        Args:
-            name: Role name
-            permissions: List of permissions
-            builtin: Whether role is builtin
-
-        Returns:
-            Created role domain model
-        """
-        role_model = RoleModel(
-            name=name,
-            permissions=permissions,
-            builtin=builtin,
-        )
-
-        self.db.add(role_model)
+        from .rbac_repository import RbacRepository
+        role = RoleModel(name=name, description=description, builtin=builtin)
+        self.db.add(role)
         self.db.commit()
-        self.db.refresh(role_model)
-
-        return self._to_domain(role_model)
+        self.db.refresh(role)
+        if permissions:
+            RbacRepository(self.db).replace_role_permissions(
+                role.id, list(dict.fromkeys(permissions)),
+            )
+            self.db.commit()
+        return self._to_domain(role)
 
     def get_by_id(self, role_id: int) -> Optional[Role]:
-        """
-        Get role by ID.
-
-        Args:
-            role_id: Role ID
-
-        Returns:
-            Role domain model if found, None otherwise
-        """
-        role_model = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
-
-        if role_model:
-            return self._to_domain(role_model)
-
-        return None
+        m = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
+        return self._to_domain(m) if m else None
 
     def get_by_name(self, name: str) -> Optional[Role]:
-        """
-        Get role by name.
-
-        Args:
-            name: Role name
-
-        Returns:
-            Role domain model if found, None otherwise
-        """
-        role_model = self.db.query(RoleModel).filter(RoleModel.name == name).first()
-
-        if role_model:
-            return self._to_domain(role_model)
-
-        return None
+        m = self.db.query(RoleModel).filter(RoleModel.name == name).first()
+        return self._to_domain(m) if m else None
 
     def list(self, offset: int = 0, limit: int = 20) -> Tuple[List[Role], int]:
-        """
-        List roles with pagination.
-
-        Args:
-            offset: Number of items to skip
-            limit: Maximum number of items to return
-
-        Returns:
-            Tuple of (list of roles, total count)
-        """
-        query = self.db.query(RoleModel)
-        total = query.count()
-
-        roles = query.offset(offset).limit(limit).all()
-
-        return [self._to_domain(role) for role in roles], total
+        q = self.db.query(RoleModel)
+        total = q.with_entities(func.count(RoleModel.id)).scalar() or 0
+        rows = q.order_by(RoleModel.id.asc()).offset(offset).limit(limit).all()
+        return [self._to_domain(r) for r in rows], total
 
     def update(
-        self,
-        role_id: int,
+        self, role_id: int,
         name: Optional[str] = None,
-        permissions: Optional[List[str]] = None
+        permissions: Optional[List[str]] = None,
+        description: Optional[str] = None,
     ) -> Optional[Role]:
-        """
-        Update a role.
-
-        Args:
-            role_id: Role ID
-            name: New role name
-            permissions: New permissions list
-
-        Returns:
-            Updated role domain model if found, None otherwise
-        """
-        role_model = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
-
-        if not role_model:
+        from .rbac_repository import RbacRepository
+        m = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
+        if not m:
             return None
-
         if name is not None:
-            role_model.name = name
-
+            m.name = name
+        if description is not None:
+            m.description = description
         if permissions is not None:
-            role_model.permissions = permissions
-
+            RbacRepository(self.db).replace_role_permissions(
+                role_id, list(dict.fromkeys(permissions)),
+            )
         self.db.commit()
-        self.db.refresh(role_model)
-
-        return self._to_domain(role_model)
+        self.db.refresh(m)
+        return self._to_domain(m)
 
     def delete(self, role_id: int) -> bool:
-        """
-        Delete a role.
-
-        Args:
-            role_id: Role ID
-
-        Returns:
-            True if role was deleted, False otherwise
-        """
-        role_model = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
-
-        if not role_model:
+        from .rbac_repository import RbacRepository
+        from sqlalchemy import delete as sql_delete
+        from ..models.user_role import UserRoleModel
+        m = self.db.query(RoleModel).filter(RoleModel.id == role_id).first()
+        if not m:
             return False
-
-        self.db.delete(role_model)
+        # Cascade: drop role-permission grants and user-role assignments.
+        self.db.execute(
+            sql_delete(RolePermissionModel).where(
+                RolePermissionModel.role_id == role_id
+            )
+        )
+        self.db.execute(
+            sql_delete(UserRoleModel).where(UserRoleModel.role_id == role_id)
+        )
+        self.db.delete(m)
         self.db.commit()
-
         return True
 
     def exists_by_name(self, name: str) -> bool:
-        """
-        Check if role exists by name.
-
-        Args:
-            name: Role name
-
-        Returns:
-            True if role exists, False otherwise
-        """
         return self.db.query(
             self.db.query(RoleModel).filter(RoleModel.name == name).exists()
         ).scalar()
 
     def exists_by_id(self, role_id: int) -> bool:
-        """
-        Check if role exists by ID.
-
-        Args:
-            role_id: Role ID
-
-        Returns:
-            True if role exists, False otherwise
-        """
         return self.db.query(
             self.db.query(RoleModel).filter(RoleModel.id == role_id).exists()
         ).scalar()

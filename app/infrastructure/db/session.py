@@ -590,26 +590,63 @@ def init_db() -> None:
     # Idempotent admin bootstrap. Creds come from env (BOOTSTRAP_ADMIN_*) so
     # ops can rotate them without code changes. If the configured login
     # already exists, skip — no overwrite, no demotion of an existing admin.
+    # RBAC seed (doc 21 part B): upsert built-in permissions, ensure the
+    # admin/member/viewer roles exist with the right grants. Must happen
+    # BEFORE the bootstrap admin user is created so the user-role
+    # assignment can find the admin role row.
     db = SessionLocal()
     try:
-        admin_exists = db.query(UserModel).filter(
+        from .repositories.rbac_repository import RbacRepository
+        RbacRepository(db).sync_builtin_permissions()
+        db.commit()
+    except Exception as e:
+        logging.warning("RBAC seed sync failed: %s", e)
+    finally:
+        db.close()
+
+    # Idempotent bootstrap admin. Doc 21 part B: admin status now derived
+    # from membership in the seeded ``admin`` role (created by the RBAC
+    # seed above). The ``UserModel`` no longer has an ``admin`` column.
+    db = SessionLocal()
+    try:
+        from .models.role import RoleModel
+        from .models.user_role import UserRoleModel
+
+        admin_user = db.query(UserModel).filter(
             UserModel.login == settings.BOOTSTRAP_ADMIN_LOGIN
         ).first()
 
-        if not admin_exists:
+        if admin_user is None:
             admin_user = UserModel(
                 login=settings.BOOTSTRAP_ADMIN_LOGIN,
                 email=settings.BOOTSTRAP_ADMIN_EMAIL,
                 hashed_password=hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD),
                 first_name="Administrator",
                 last_name="System",
-                admin=True,
                 status="active",
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+                updated_at=datetime.now(timezone.utc),
             )
             db.add(admin_user)
-            db.commit()
+            db.flush()
+
+        admin_role = (
+            db.query(RoleModel).filter(RoleModel.name == "admin").first()
+        )
+        if admin_role is not None:
+            already_admin = (
+                db.query(UserRoleModel)
+                .filter(
+                    UserRoleModel.user_id == admin_user.id,
+                    UserRoleModel.role_id == admin_role.id,
+                )
+                .first()
+            )
+            if already_admin is None:
+                db.add(UserRoleModel(
+                    user_id=admin_user.id, role_id=admin_role.id,
+                ))
+        db.commit()
     finally:
         db.close()
 

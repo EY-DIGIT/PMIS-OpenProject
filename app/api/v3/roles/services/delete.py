@@ -1,52 +1,40 @@
-"""
-Role deletion service.
+"""Role deletion service.
+
+Doc 21 part B: only the seeded ``admin`` role is fully protected.
+Other built-in roles (``member``, ``viewer``) and any custom roles are
+deletable. Cascade: dropping a role removes its role_permissions and
+user_roles rows so no foreign-key orphans are left behind.
 """
 from sqlalchemy.orm import Session
+
+from .....core.permissions import ADMIN_ROLE_NAME
 from .....infrastructure.db.repositories.role_repository import RoleRepository
 from .....shared.service_result import ServiceResult
 
 
-def delete_role(
-    db: Session,
-    role_id: int
-) -> ServiceResult[None]:
-    """
-    Delete a role.
-
-    Args:
-        db: Database session
-        role_id: Role ID to delete
-
-    Returns:
-        ServiceResult with None or error
-    """
+def delete_role(db: Session, role_id: int) -> ServiceResult[None]:
     repository = RoleRepository(db)
-
-    # Check if role exists and is not builtin
     role = repository.get_by_id(role_id)
     if not role:
         return ServiceResult.fail(
             error=f"Role with ID {role_id} not found",
-            error_type="not_found"
+            error_type="not_found",
         )
-
-    if role.builtin:
+    if role.name == ADMIN_ROLE_NAME:
         return ServiceResult.fail(
-            error="Cannot delete builtin roles",
-            error_type="forbidden"
+            error="The built-in 'admin' role cannot be deleted.",
+            error_type="forbidden",
         )
-
     try:
         success = repository.delete(role_id)
         if success:
             return ServiceResult.ok(None)
-        else:
-            return ServiceResult.fail(
-                error=f"Failed to delete role with ID {role_id}",
-                error_type="database_error"
-            )
+        return ServiceResult.fail(
+            error=f"Failed to delete role with ID {role_id}",
+            error_type="database_error",
+        )
     except Exception as e:
         return ServiceResult.fail(
             error=f"Failed to delete role: {str(e)}",
-            error_type="database_error"
+            error_type="database_error",
         )

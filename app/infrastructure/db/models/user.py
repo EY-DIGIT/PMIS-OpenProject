@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 def _utcnow():
     return datetime.now(timezone.utc)
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
 from ..session import Base
 
 
@@ -29,7 +29,10 @@ class UserModel(Base):
     hashed_password = Column(String(255), nullable=False)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
-    admin = Column(Boolean, default=False, nullable=False)
+    # ``admin`` boolean was removed in doc 21 part B. Superuser status is
+    # now derived from membership in the seeded ``admin`` role
+    # (user_roles → roles). The column is dropped by alembic; on SQLite the
+    # column may linger in the file but is no longer referenced anywhere.
     status = Column(String(50), default="active", nullable=False)
     created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

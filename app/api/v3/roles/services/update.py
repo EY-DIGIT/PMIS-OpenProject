@@ -1,10 +1,17 @@
+"""Role update service.
+
+Doc 21 part B: only the seeded ``admin`` role is fully locked (cannot be
+renamed and cannot have its permission list changed via the management
+endpoints — its permission set is auto-maintained by the startup sync).
+Other built-in roles can be renamed and edited freely.
 """
-Role update service.
-"""
-from typing import Optional, List
+from typing import List, Optional
+
 from sqlalchemy.orm import Session
-from .....infrastructure.db.repositories.role_repository import RoleRepository
+
+from .....core.permissions import ADMIN_ROLE_NAME
 from .....domain.roles.role import Role
+from .....infrastructure.db.repositories.role_repository import RoleRepository
 from .....shared.service_result import ServiceResult
 
 
@@ -12,76 +19,56 @@ def update_role(
     db: Session,
     role_id: int,
     name: Optional[str] = None,
-    permissions: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None,
+    description: Optional[str] = None,
 ) -> ServiceResult[Role]:
-    """
-    Update a role.
-
-    Args:
-        db: Database session
-        role_id: Role ID to update
-        name: New role name
-        permissions: New permissions list
-
-    Returns:
-        ServiceResult with updated role or error
-    """
     repository = RoleRepository(db)
 
-    # Check if role exists
     role = repository.get_by_id(role_id)
     if not role:
         return ServiceResult.fail(
             error=f"Role with ID {role_id} not found",
-            error_type="not_found"
+            error_type="not_found",
         )
 
-    # Cannot modify builtin roles
-    if role.builtin:
+    if role.name == ADMIN_ROLE_NAME:
         return ServiceResult.fail(
-            error="Cannot modify builtin roles",
-            error_type="forbidden"
+            error="The built-in 'admin' role cannot be modified.",
+            error_type="forbidden",
         )
 
-    # Validate name if provided
     if name is not None:
-        if not isinstance(name, str) or len(name) == 0:
+        if not isinstance(name, str) or len(name) == 0 or len(name) > 255:
             return ServiceResult.fail(
-                error="Role name must be a non-empty string",
-                error_type="validation_error"
+                error="Role name must be a non-empty string ≤ 255 chars",
+                error_type="validation_error",
             )
-
-        if len(name) > 255:
+        if name == ADMIN_ROLE_NAME:
             return ServiceResult.fail(
-                error="Role name must not exceed 255 characters",
-                error_type="validation_error"
+                error="Cannot rename a role to 'admin' (reserved).",
+                error_type="forbidden",
             )
-
-        # Check for duplicate name
         existing = repository.get_by_name(name)
         if existing and existing.id != role_id:
             return ServiceResult.fail(
                 error=f"Role with name '{name}' already exists",
-                error_type="already_exists"
+                error_type="already_exists",
             )
 
-    # Validate permissions if provided
-    if permissions is not None:
-        if not isinstance(permissions, list):
-            return ServiceResult.fail(
-                error="Permissions must be a list",
-                error_type="validation_error"
-            )
+    if permissions is not None and not isinstance(permissions, list):
+        return ServiceResult.fail(
+            error="Permissions must be a list",
+            error_type="validation_error",
+        )
 
     try:
-        updated_role = repository.update(
-            role_id=role_id,
-            name=name,
-            permissions=permissions
+        updated = repository.update(
+            role_id=role_id, name=name, permissions=permissions,
+            description=description,
         )
-        return ServiceResult.ok(updated_role)
+        return ServiceResult.ok(updated)
     except Exception as e:
         return ServiceResult.fail(
             error=f"Failed to update role: {str(e)}",
-            error_type="database_error"
+            error_type="database_error",
         )

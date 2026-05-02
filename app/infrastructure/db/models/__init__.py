@@ -5,6 +5,10 @@ from .project_audit_log import ProjectAuditLogModel
 from .project_member import ProjectMemberModel
 from .project_vendor import ProjectVendorModel
 from .role import RoleModel
+from .permission import PermissionModel
+from .role_permission import RolePermissionModel
+from .user_role import UserRoleModel
+from .user_permission import UserPermissionModel
 from .work_package import WorkPackageModel
 from .work_package_type import WorkPackageTypeModel
 from .meeting import MeetingModel
@@ -35,7 +39,8 @@ from .division import DivisionModel
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
     "ProjectMemberModel", "ProjectVendorModel",
-    "RoleModel",
+    "RoleModel", "PermissionModel", "RolePermissionModel",
+    "UserRoleModel", "UserPermissionModel",
     "WorkPackageModel", "WorkPackageTypeModel", "MeetingModel",
     "MeetingParticipantModel", "MeetingAgendaItemModel",
     "MilestoneModel", "MilestoneDependencyModel", "MilestoneVendorModel",

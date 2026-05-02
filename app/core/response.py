@@ -254,6 +254,7 @@ def format_role_response(
         },
         "id": role_id,
         "name": role_data.get("name"),
+        "description": role_data.get("description"),
         "permissions": role_data.get("permissions", []),
         "builtin": role_data.get("builtin", False),
         "createdAt": role_data.get("created_at"),

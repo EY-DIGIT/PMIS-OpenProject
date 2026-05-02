@@ -112,63 +112,97 @@ def client(db_engine, db_session):
 # Seed data fixtures
 # ---------------------------------------------------------------------------
 
+def _ensure_rbac_seed(db: Session):
+    """Idempotent test-side bootstrap of the RBAC tables (doc 21 part B).
+
+    Mirrors what ``init_db`` does at app startup: upserts the built-in
+    permissions and the seeded admin/member/viewer roles. Called by the
+    user fixtures so ``admin_user`` can be assigned the admin role
+    without depending on the production startup hook (which the test
+    client lifecycle short-circuits)."""
+    from app.infrastructure.db.repositories.rbac_repository import (
+        RbacRepository,
+    )
+    RbacRepository(db).sync_builtin_permissions()
+    db.commit()
+
+
+def _assign_role(db: Session, user_id: int, role_name: str):
+    from app.infrastructure.db.models.role import RoleModel
+    from app.infrastructure.db.models.user_role import UserRoleModel
+    role = (
+        db.query(RoleModel).filter(RoleModel.name == role_name).first()
+    )
+    if role is None:
+        return
+    existing = (
+        db.query(UserRoleModel)
+        .filter(
+            UserRoleModel.user_id == user_id,
+            UserRoleModel.role_id == role.id,
+        )
+        .first()
+    )
+    if existing is None:
+        db.add(UserRoleModel(user_id=user_id, role_id=role.id))
+        db.commit()
+
+
 @pytest.fixture(scope="function")
 def admin_user(db_session: Session):
-    """Create an admin user and return the model instance."""
+    """Create an admin user (assigned to the seeded ``admin`` role)."""
+    _ensure_rbac_seed(db_session)
     user = UserModel(
         login="admin",
         email="admin@example.com",
         hashed_password=hash_password("admin123"),
         first_name="Admin",
         last_name="User",
-        admin=True,
         status="active",
     )
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
+    _assign_role(db_session, user.id, "admin")
     return user
 
 
 @pytest.fixture(scope="function")
 def member_user(db_session: Session):
-    """Create a non-admin member user."""
+    """Create a non-admin member user (assigned to the seeded ``member`` role)."""
+    _ensure_rbac_seed(db_session)
     user = UserModel(
         login="member",
         email="member@example.com",
         hashed_password=hash_password("member123"),
         first_name="Member",
         last_name="User",
-        admin=False,
         status="active",
     )
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
+    _assign_role(db_session, user.id, "member")
     return user
 
 
 @pytest.fixture(scope="function")
 def admin_token(admin_user):
-    """JWT access token for the admin user."""
+    """JWT access token for the admin user (no role/is_admin claims; doc 21)."""
     return create_access_token({
         "sub": admin_user.login,
         "user_id": admin_user.id,
         "email": admin_user.email,
-        "role": "admin",
-        "is_admin": True,
     })
 
 
 @pytest.fixture(scope="function")
 def member_token(member_user):
-    """JWT access token for the member user."""
+    """JWT access token for the member user (no role/is_admin claims; doc 21)."""
     return create_access_token({
         "sub": member_user.login,
         "user_id": member_user.id,
         "email": member_user.email,
-        "role": "member",
-        "is_admin": False,
     })
 
 

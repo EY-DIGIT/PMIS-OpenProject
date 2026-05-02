@@ -283,3 +283,220 @@ def restore_user(
     Requires: USERS_DELETE_ALL permission (admin only)
     """
     return UserController.restore(request, user_id, db)
+
+
+# ---------------------------------------------------------------------------
+# RBAC user-side: roles + direct permissions (doc 21 part B)
+# ---------------------------------------------------------------------------
+from ....core.base_controller import BaseController
+from ....core.permissions import (
+    ADMIN_ROLE_NAME,
+    PERMISSIONS_READ,
+    RBAC_ASSIGN,
+)
+from ....core.response import format_error_response
+from ....infrastructure.db.repositories.rbac_repository import RbacRepository
+from ....infrastructure.db.repositories.user_repository import UserRepository
+
+
+def _get_user_or_404(db: Session, user_id: int):
+    return UserRepository(db).get_by_id(user_id)
+
+
+def _serialize_role(r) -> Dict[str, Any]:
+    return {
+        "_type": "Role",
+        "_links": {"self": {"href": f"/api/v3/roles/{r.id}"}},
+        "id": r.id,
+        "name": r.name,
+        "description": getattr(r, "description", None),
+        "builtin": r.builtin,
+    }
+
+
+@router.get(
+    "/me/permissions",
+    dependencies=[require_authenticated()],
+    summary="Effective permissions for the current user",
+)
+def get_my_permissions(
+    request: Request, db: Session = Depends(get_db),
+):
+    """Returns the caller's effective permission set + admin flag.
+
+    Used by the FE to decide which UI actions to show. Requires only
+    authentication — no separate permission to read your own grants.
+    """
+    user_id = getattr(request.state, "user_id", None)
+    repo = RbacRepository(db)
+    perms = sorted(repo.effective_permissions_for_user(user_id))
+    is_admin = repo.user_has_admin_role(user_id)
+    return BaseController.ok(data={
+        "_type": "EffectivePermissions",
+        "userId": user_id,
+        "permissions": perms,
+        "isAdmin": is_admin,
+    })
+
+
+@router.get(
+    "/{user_id}/permissions",
+    dependencies=[require_permission(PERMISSIONS_READ)],
+    summary="Effective permissions for a user (role-derived ∪ direct)",
+)
+def get_user_permissions(
+    request: Request, user_id: int, db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    repo = RbacRepository(db)
+    return BaseController.ok(data={
+        "_type": "EffectivePermissions",
+        "userId": user_id,
+        "permissions": sorted(repo.effective_permissions_for_user(user_id)),
+        "directPermissions": repo.list_direct_permissions_for_user(user_id),
+        "isAdmin": repo.user_has_admin_role(user_id),
+    })
+
+
+@router.post(
+    "/{user_id}/permissions/{code}",
+    dependencies=[require_permission(RBAC_ASSIGN)],
+    summary="Grant a direct permission to a user",
+)
+def grant_user_permission(
+    request: Request, user_id: int, code: str,
+    db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    repo = RbacRepository(db)
+    if repo.get_permission(code) is None:
+        return BaseController.error(
+            format_error_response(
+                "not_found", f"Permission {code} not found.",
+            ),
+            status=404,
+        )
+    actor_id = getattr(request.state, "user_id", None)
+    repo.grant_permission_to_user(user_id, code, actor_id=actor_id)
+    db.commit()
+    return BaseController.ok(data={
+        "userId": user_id,
+        "directPermissions": repo.list_direct_permissions_for_user(user_id),
+    })
+
+
+@router.delete(
+    "/{user_id}/permissions/{code}",
+    dependencies=[require_permission(RBAC_ASSIGN)],
+    summary="Revoke a direct permission from a user",
+)
+def revoke_user_permission(
+    request: Request, user_id: int, code: str,
+    db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    RbacRepository(db).revoke_permission_from_user(user_id, code)
+    db.commit()
+    return BaseController.no_content()
+
+
+@router.get(
+    "/{user_id}/roles",
+    dependencies=[require_permission(PERMISSIONS_READ)],
+    summary="List a user's roles",
+)
+def list_user_roles(
+    request: Request, user_id: int, db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    rows = RbacRepository(db).list_roles_for_user(user_id)
+    return BaseController.ok(data={
+        "_type": "Collection",
+        "userId": user_id,
+        "count": len(rows),
+        "_embedded": {"elements": [_serialize_role(r) for r in rows]},
+    })
+
+
+@router.post(
+    "/{user_id}/roles/{role_id}",
+    dependencies=[require_permission(RBAC_ASSIGN)],
+    summary="Assign a role to a user",
+)
+def assign_user_role(
+    request: Request, user_id: int, role_id: int,
+    db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    repo = RbacRepository(db)
+    if repo.get_role(role_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"Role {role_id} not found."),
+            status=404,
+        )
+    actor_id = getattr(request.state, "user_id", None)
+    repo.assign_role_to_user(user_id, role_id, actor_id=actor_id)
+    db.commit()
+    return BaseController.ok(data={
+        "userId": user_id,
+        "roles": [_serialize_role(r) for r in repo.list_roles_for_user(user_id)],
+    })
+
+
+@router.delete(
+    "/{user_id}/roles/{role_id}",
+    dependencies=[require_permission(RBAC_ASSIGN)],
+    summary="Unassign a role from a user (lockout-protected for 'admin')",
+)
+def unassign_user_role(
+    request: Request, user_id: int, role_id: int,
+    db: Session = Depends(get_db),
+):
+    if _get_user_or_404(db, user_id) is None:
+        return BaseController.error(
+            format_error_response("not_found", f"User {user_id} not found."),
+            status=404,
+        )
+    repo = RbacRepository(db)
+    role = repo.get_role(role_id)
+    if role is None:
+        return BaseController.error(
+            format_error_response("not_found", f"Role {role_id} not found."),
+            status=404,
+        )
+    # Lockout: removing the last live admin is rejected.
+    if role.name == ADMIN_ROLE_NAME:
+        currently_holding = repo.user_has_admin_role(user_id)
+        if currently_holding and repo.count_users_with_role(role_id) <= 1:
+            return BaseController.error(
+                format_error_response(
+                    "forbidden",
+                    "Cannot remove the last user holding the 'admin' role. "
+                    "Assign 'admin' to another user before removing it from "
+                    "this one.",
+                ),
+                status=403,
+            )
+    repo.unassign_role_from_user(user_id, role_id)
+    db.commit()
+    return BaseController.no_content()

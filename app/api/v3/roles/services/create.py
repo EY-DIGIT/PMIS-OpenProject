@@ -13,7 +13,8 @@ def create_role(
     db: Session,
     name: str,
     permissions: List[str],
-    builtin: bool = False
+    builtin: bool = False,
+    description: Optional[str] = None,
 ) -> ServiceResult[Role]:
     """
     Create a new role.
@@ -60,7 +61,8 @@ def create_role(
         role = repository.create(
             name=name,
             permissions=permissions,
-            builtin=builtin
+            builtin=builtin,
+            description=description,
         )
         return ServiceResult.ok(role)
     except Exception as e:

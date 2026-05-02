@@ -1,12 +1,19 @@
 """
 Role database model.
+
+Doc 21 part B: the legacy JSON ``permissions`` column was replaced by
+the ``role_permissions`` join table. The column is no longer present on
+the model; the alembic migration drops it on Postgres and the SQLite
+drift healer leaves the column ignored.
+
+``description`` was added for the role-management UI.
 """
 from datetime import datetime, timezone
 
 
 def _utcnow():
     return datetime.now(timezone.utc)
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index
 from ..session import Base
 
 
@@ -17,7 +24,7 @@ class RoleModel(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(255), unique=True, nullable=False, index=True)
-    permissions = Column(JSON, default=list, nullable=False)
+    description = Column(String(1024), nullable=True)
     builtin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
