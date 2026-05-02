@@ -146,7 +146,7 @@ class TestVendorsAndProjectVendors:
     def test_admin_can_create_vendor(self, client, admin_headers):
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Freshly Minted", "description": "demo"},
+            json={"name": "Freshly Minted", "description": "demo", "phoneNumber": "9876543210"},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
@@ -193,30 +193,40 @@ class TestVendorContactDetails:
     def test_create_vendor_rejects_invalid_email(self, client, admin_headers):
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Bad Email", "email": "not-an-email"},
+            json={"name": "Bad Email", "email": "not-an-email", "phoneNumber": "9876543210"},
             headers=admin_headers,
         )
         assert resp.status_code == 422
 
-    def test_create_vendor_contact_fields_optional(self, client, admin_headers):
-        """Old-style payload without contact fields still works — the
-        new fields default to None and the response carries nulls."""
+    def test_create_vendor_phone_number_required(self, client, admin_headers):
+        """Doc 23 flipped ``phoneNumber`` from optional to required on
+        vendor create (matches the new user schema). ``email`` and
+        ``contactPerson`` stay optional."""
+        # Without phoneNumber → 422.
         resp = client.post(
             "/api/v3/vendors/create",
             json={"name": "Minimal Vendor"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+
+        # With phoneNumber but no email/contactPerson → 201; those default null.
+        resp = client.post(
+            "/api/v3/vendors/create",
+            json={"name": "Minimal Vendor", "phoneNumber": "9876543210"},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
         assert d["email"] is None
         assert d["contactPerson"] is None
-        assert d["phoneNumber"] is None
+        assert d["phoneNumber"] == "9876543210"
 
     def test_patch_vendor_updates_contact_details(self, client, admin_headers):
         # Create with no contact info.
         c = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Vendor For Patch"},
+            json={"name": "Vendor For Patch", "phoneNumber": "9876543210"},
             headers=admin_headers,
         ).json()["data"]
         # Patch in contact details.
@@ -297,7 +307,7 @@ class TestVendorContactDetails:
     ):
         c = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Soon Deleted"},
+            json={"name": "Soon Deleted", "phoneNumber": "9876543210"},
             headers=admin_headers,
         ).json()["data"]
         client.delete(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
@@ -315,6 +325,7 @@ class TestVendorContactDetails:
                 "name": "Round Trip",
                 "email": "rt@example.com",
                 "contactPerson": "RT",
+                "phoneNumber": "9876543210",
             },
             headers=admin_headers,
         ).json()["data"]
@@ -356,15 +367,15 @@ class TestVendorLifecycleContracts:
     def test_list_vendors_newest_first(self, client, admin_headers):
         first  = client.post(
             "/api/v3/vendors/create",
-            json={"name": "ZZZ-First-V"}, headers=admin_headers,
+            json={"name": "ZZZ-First-V", "phoneNumber": "9876543210"}, headers=admin_headers,
         ).json()["data"]
         second = client.post(
             "/api/v3/vendors/create",
-            json={"name": "AAA-Second-V"}, headers=admin_headers,
+            json={"name": "AAA-Second-V", "phoneNumber": "9876543210"}, headers=admin_headers,
         ).json()["data"]
         third  = client.post(
             "/api/v3/vendors/create",
-            json={"name": "MMM-Third-V"}, headers=admin_headers,
+            json={"name": "MMM-Third-V", "phoneNumber": "9876543210"}, headers=admin_headers,
         ).json()["data"]
 
         items = client.get(
@@ -381,7 +392,7 @@ class TestVendorLifecycleContracts:
         soft-deleted should 409 with a hint to restore (doc 17 §4)."""
         c = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Recyclable Vendor"},
+            json={"name": "Recyclable Vendor", "phoneNumber": "9876543210"},
             headers=admin_headers,
         ).json()["data"]
         client.delete(f"/api/v3/vendors/{c['id']}", headers=admin_headers)
@@ -389,7 +400,7 @@ class TestVendorLifecycleContracts:
         # Same name → 409 with the restore hint.
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Recyclable Vendor"},
+            json={"name": "Recyclable Vendor", "phoneNumber": "9876543210"},
             headers=admin_headers,
         )
         assert resp.status_code == 409, resp.text
@@ -458,7 +469,7 @@ class TestVendorLifecycleContracts:
         snapshot rather than 409 (doc 17 §4 — idempotent)."""
         c = client.post(
             "/api/v3/vendors/create",
-            json={"name": "Already Live"},
+            json={"name": "Already Live", "phoneNumber": "9876543210"},
             headers=admin_headers,
         ).json()["data"]
         resp = client.post(
@@ -572,7 +583,7 @@ class TestCreateVendorWithProjects:
         p2 = self._make_active_project(client, admin_headers, name="VP-B")
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-with-projects", "projectIds": [p1["id"], p2["id"]]},
+            json={"name": "V-with-projects", "phoneNumber": "9876543210", "projectIds": [p1["id"], p2["id"]]},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
@@ -585,7 +596,7 @@ class TestCreateVendorWithProjects:
     ):
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-empty-list", "projectIds": []},
+            json={"name": "V-empty-list", "phoneNumber": "9876543210", "projectIds": []},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
@@ -597,7 +608,7 @@ class TestCreateVendorWithProjects:
         from uuid import uuid4
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-bad-id", "projectIds": [str(uuid4())]},
+            json={"name": "V-bad-id", "phoneNumber": "9876543210", "projectIds": [str(uuid4())]},
             headers=admin_headers,
         )
         assert resp.status_code == 422, resp.text
@@ -617,7 +628,7 @@ class TestCreateVendorWithProjects:
         assert cl.status_code == 200, cl.text
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-tries-closed", "projectIds": [p["id"]]},
+            json={"name": "V-tries-closed", "phoneNumber": "9876543210", "projectIds": [p["id"]]},
             headers=admin_headers,
         )
         assert resp.status_code == 422, resp.text
@@ -630,7 +641,7 @@ class TestCreateVendorWithProjects:
         client.delete(f"/api/v3/projects/{p['id']}", headers=admin_headers)
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-tries-deleted", "projectIds": [p["id"]]},
+            json={"name": "V-tries-deleted", "phoneNumber": "9876543210", "projectIds": [p["id"]]},
             headers=admin_headers,
         )
         assert resp.status_code == 422, resp.text
@@ -641,7 +652,7 @@ class TestCreateVendorWithProjects:
         p = self._make_active_project(client, admin_headers, name="VP-Once")
         resp = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-dupe", "projectIds": [p["id"], p["id"], p["id"]]},
+            json={"name": "V-dupe", "phoneNumber": "9876543210", "projectIds": [p["id"], p["id"], p["id"]]},
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text
@@ -656,7 +667,7 @@ class TestCreateVendorWithProjects:
         p = self._make_active_project(client, admin_headers, name="VP-Bidir")
         v = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-bidir", "projectIds": [p["id"]]},
+            json={"name": "V-bidir", "phoneNumber": "9876543210", "projectIds": [p["id"]]},
             headers=admin_headers,
         ).json()["data"]
         proj_resp = client.get(
@@ -678,7 +689,7 @@ class TestPatchVendorWithProjects:
         p2 = _create_project(client, admin_headers, name="VP-2").json()["data"]
         v = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-replace", "projectIds": [p1["id"]]},
+            json={"name": "V-replace", "phoneNumber": "9876543210", "projectIds": [p1["id"]]},
             headers=admin_headers,
         ).json()["data"]
         # Replace with a different project.
@@ -697,7 +708,7 @@ class TestPatchVendorWithProjects:
         p = _create_project(client, admin_headers, name="VP-clear").json()["data"]
         v = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-clear", "projectIds": [p["id"]]},
+            json={"name": "V-clear", "phoneNumber": "9876543210", "projectIds": [p["id"]]},
             headers=admin_headers,
         ).json()["data"]
         resp = client.patch(
@@ -714,7 +725,7 @@ class TestPatchVendorWithProjects:
         p = _create_project(client, admin_headers, name="VP-keep").json()["data"]
         v = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-keep", "projectIds": [p["id"]]},
+            json={"name": "V-keep", "phoneNumber": "9876543210", "projectIds": [p["id"]]},
             headers=admin_headers,
         ).json()["data"]
         # PATCH some other field; mapping should survive.
@@ -732,7 +743,7 @@ class TestPatchVendorWithProjects:
         from uuid import uuid4
         v = client.post(
             "/api/v3/vendors/create",
-            json={"name": "V-bad-patch"},
+            json={"name": "V-bad-patch", "phoneNumber": "9876543210"},
             headers=admin_headers,
         ).json()["data"]
         resp = client.patch(

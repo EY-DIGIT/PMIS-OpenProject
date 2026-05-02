@@ -68,6 +68,7 @@ def format_user_response(
         "vendor": vendor_block,
         "division": user_data.get("division"),
         "divisionOther": user_data.get("division_other"),
+        "phoneNumber": user_data.get("phone_number"),
         "projects": projects_block,
         "createdAt": user_data.get("created_at"),
         "updatedAt": user_data.get("updated_at"),

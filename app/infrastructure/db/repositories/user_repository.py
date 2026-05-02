@@ -83,6 +83,7 @@ class UserRepository:
             vendor_name=vendor.name if vendor else None,
             division=getattr(model, "division", None),
             division_other=getattr(model, "division_other", None),
+            phone_number=getattr(model, "phone_number", None),
             deleted_at=getattr(model, "deleted_at", None),
             deleted_by=getattr(model, "deleted_by", None),
             projects=projects or [],
@@ -144,6 +145,7 @@ class UserRepository:
         vendor_id: Optional[str] = None,
         division: Optional[str] = None,
         division_other: Optional[str] = None,
+        phone_number: Optional[str] = None,
     ) -> User:
         """Create a new user. Caller is responsible for committing.
 
@@ -162,6 +164,7 @@ class UserRepository:
             vendor_id=vendor_id,
             division=division,
             division_other=division_other,
+            phone_number=(phone_number.strip() if phone_number else None),
         )
         self.db.add(user_model)
         self.db.flush()
@@ -316,6 +319,7 @@ class UserRepository:
         vendor_id: Optional[str] = None,
         division: Optional[str] = None,
         division_other: Optional[str] = None,
+        phone_number: Optional[str] = None,
         clear_division_other: bool = False,
         restore: bool = False,
     ) -> Optional[User]:
@@ -379,6 +383,10 @@ class UserRepository:
             model.division_other = division_other
         if clear_division_other:
             model.division_other = None
+        if phone_number is not None:
+            # Normalize: trim whitespace; treat empty post-trim as a clear.
+            cleaned = phone_number.strip()
+            model.phone_number = cleaned if cleaned else None
         if restore:
             model.deleted_at = None
             model.deleted_by = None

@@ -456,6 +456,9 @@ def init_db() -> None:
                         ("division_other", "ALTER TABLE users ADD COLUMN division_other VARCHAR(255)"),
                         ("deleted_at", "ALTER TABLE users ADD COLUMN deleted_at DATETIME"),
                         ("deleted_by", "ALTER TABLE users ADD COLUMN deleted_by INTEGER REFERENCES users(id)"),
+                        # Doc 23: phone_number (required on wire create, nullable
+                        # in DB so the bootstrap admin + legacy rows stay valid).
+                        ("phone_number", "ALTER TABLE users ADD COLUMN phone_number VARCHAR(50)"),
                     ):
                         if col not in ucols:
                             try:

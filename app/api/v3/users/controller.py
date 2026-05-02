@@ -64,6 +64,7 @@ class UserController:
             division=data.division,
             division_other=data.divisionOther,
             project_ids=data.projectIds,
+            phone_number=data.phoneNumber,
         )
 
         if result.is_success():
@@ -281,6 +282,7 @@ class UserController:
             vendor_id=data.vendorId,
             division=data.division,
             division_other=data.divisionOther,
+            phone_number=data.phoneNumber,
             requesting_user_id=requesting_user_id,
             is_admin=is_admin
         )

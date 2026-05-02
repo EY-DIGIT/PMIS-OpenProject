@@ -60,6 +60,7 @@ def sample_project_for_user(db_session):
 def _create_body(*, login="newuser", email="new@example.com",
                  password="password123", vendor_id, project_ids,
                  division="tmd1", division_other=None,
+                 phone_number="9876543210",
                  first_name="New", last_name="User"):
     """Build a valid create payload with all required fields filled in."""
     body = {
@@ -72,6 +73,7 @@ def _create_body(*, login="newuser", email="new@example.com",
         "vendorId": vendor_id,
         "division": division,
         "projectIds": project_ids,
+        "phoneNumber": phone_number,
     }
     if division_other is not None:
         body["divisionOther"] = division_other

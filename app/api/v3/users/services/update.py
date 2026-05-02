@@ -42,6 +42,7 @@ def update_user(
     vendor_id: Optional[str] = None,
     division: Optional[str] = None,
     division_other: Optional[str] = None,
+    phone_number: Optional[str] = None,
     requesting_user_id: Optional[int] = None,
     is_admin: bool = False,
 ) -> ServiceResult[User]:
@@ -200,6 +201,7 @@ def update_user(
             vendor_id=vendor_id,
             division=division,
             division_other=division_other,
+            phone_number=phone_number,
             clear_division_other=clear_division_other,
             restore=restore,
         )

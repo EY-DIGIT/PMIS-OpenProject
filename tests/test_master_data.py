@@ -488,7 +488,7 @@ class TestMasterVendorsCRUD:
         create = client.post(
             "/api/v3/master/vendors/create",
             headers=admin_headers,
-            json={"name": "Acme Corp"},
+            json={"name": "Acme Corp", "phoneNumber": "9876543210"},
         )
         vendor_id = create.json()["data"]["id"]
 

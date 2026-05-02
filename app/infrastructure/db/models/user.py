@@ -73,6 +73,13 @@ class UserModel(Base):
     # Free-text label when division == 'others'; NULL otherwise.
     division_other = Column(String(255), nullable=True)
 
+    # Phone number (free-form, free-text — no regex format check; matches
+    # vendor's ``phone_number`` exactly). Nullable in the DB so the
+    # bootstrap admin (init_db) and any pre-feature legacy rows stay
+    # valid; the wire schema enforces it as REQUIRED on create. Edits
+    # leave the existing value alone unless the caller sends one.
+    phone_number = Column(String(50), nullable=True)
+
     # Soft-delete. A non-NULL deleted_at hides the user from list/get
     # endpoints by default. Project_members mappings stay intact so
     # restore (PATCH status=active) preserves history.

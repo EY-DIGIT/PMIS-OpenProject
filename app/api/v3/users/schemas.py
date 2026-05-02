@@ -58,6 +58,18 @@ class UserCreateRequest(BaseModel):
             "required. Each id must reference a non-deleted project."
         ),
     )
+    phoneNumber: str = Field(
+        ...,
+        alias="phone_number",
+        min_length=1,
+        max_length=50,
+        description=(
+            "User's phone / mobile number. Required on create. Free-form "
+            "string (no regex check — international formats vary; FE may "
+            "apply its own client-side mask). Mirrors the vendor schema's "
+            "``phoneNumber`` field exactly."
+        ),
+    )
 
     @field_validator("division")
     @classmethod
@@ -82,6 +94,16 @@ class UserUpdateRequest(BaseModel):
     division: Optional[str] = None
     divisionOther: Optional[str] = Field(
         None, alias="division_other", max_length=255,
+    )
+    phoneNumber: Optional[str] = Field(
+        None,
+        alias="phone_number",
+        max_length=50,
+        description=(
+            "Optional on PATCH. When supplied, replaces the user's stored "
+            "phone number; omit / null to leave unchanged. Mirrors the "
+            "vendor PATCH schema."
+        ),
     )
 
     @field_validator("status")

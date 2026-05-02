@@ -33,6 +33,11 @@ class User:
     division: Optional[str] = None
     division_other: Optional[str] = None
 
+    # Phone number — required on wire create, nullable in DB so the
+    # bootstrap admin row stays valid. Free-form string, max 50 chars.
+    # Mirrors vendor.phone_number exactly.
+    phone_number: Optional[str] = None
+
     # Soft-delete fields.
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[int] = None
@@ -64,6 +69,7 @@ class User:
             "vendor_name": self.vendor_name,
             "division": self.division,
             "division_other": self.division_other,
+            "phone_number": self.phone_number,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "deleted_by": self.deleted_by,
             "projects": list(self.projects or []),

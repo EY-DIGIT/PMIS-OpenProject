@@ -42,6 +42,7 @@ def create_user(
     *,
     vendor_id: str,
     division: str,
+    phone_number: str,
     division_other: Optional[str] = None,
     project_ids: Optional[List[str]] = None,
     first_name: Optional[str] = None,
@@ -98,6 +99,22 @@ def create_user(
                 error_type="validation_error",
             )
         division_other = None
+
+    # ---- Phone number (required) ---------------------------------------
+    # Schema already enforces non-empty + max 50; this guard catches the
+    # direct-service-call path (CLI / internal scripts) that bypasses the
+    # Pydantic layer. Mirrors the vendor_id guard below.
+    phone_number = (phone_number or "").strip()
+    if not phone_number:
+        return ServiceResult.fail(
+            error="phoneNumber is required.",
+            error_type="validation_error",
+        )
+    if len(phone_number) > 50:
+        return ServiceResult.fail(
+            error="phoneNumber must be 1-50 characters.",
+            error_type="validation_error",
+        )
 
     # ---- Vendor --------------------------------------------------------
     if not vendor_id:
@@ -165,6 +182,7 @@ def create_user(
             vendor_id=vendor_id,
             division=division,
             division_other=division_other,
+            phone_number=phone_number,
         )
 
         # Wire up project_members rows.
