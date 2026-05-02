@@ -20,9 +20,12 @@ Field selection
 ---------------
 For updates we carry forward the "shape" columns (name, description,
 start/end/position, plus resource_mode/resource_count/type on activities)
-but deliberately NOT ``status``, ``depends`` or ``dependency`` — those are
-version-local: each version tracks its own progress, and dependency id
-lists reference sibling rows that differ between versions.
+but deliberately NOT ``status`` or ``dependency`` — those are version-
+local: each version tracks its own progress, and dependency id lists
+reference sibling rows that differ between versions. (The legacy JSON
+``depends`` column on milestones was dropped in doc 22; milestone deps
+now live in the ``milestone_dependencies`` edge table and propagate via
+``propagate_milestone_dep_*`` below.)
 """
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -138,10 +141,12 @@ def propagate_milestone_create(
             start_date=baseline.start_date,
             end_date=baseline.end_date,
             position=baseline.position,
-            # Status/depends are version-local: fresh version milestones
-            # start in the default state with no dependency graph carried.
+            # Status is version-local: fresh version milestones start in
+            # the default state. The legacy ``depends`` column was dropped
+            # in doc 22 — milestone-to-milestone deps now live in the
+            # ``milestone_dependencies`` edge table and propagate via
+            # ``propagate_milestone_dep_*`` helpers below.
             status="not_completed",
-            depends=None,
             cloned_from_id=baseline.id,
             created_at=now,
             updated_at=now,
@@ -178,7 +183,8 @@ def propagate_milestone_update(
     Apply the same field patch to every active-version twin.
 
     ``updates`` is the dict the baseline service used; we intersect it
-    with the version-safe field list (``status`` and ``depends`` drop out).
+    with the version-safe field list (``status`` drops out — version-local —
+    and the legacy ``depends`` column no longer exists).
     Returns the number of version rows patched.
     """
     safe_updates = {

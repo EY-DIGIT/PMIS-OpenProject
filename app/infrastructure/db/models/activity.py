@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
+    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint, text,
 )
 from ..session import Base
 
@@ -78,6 +78,16 @@ class ActivityModel(Base):
         Index("idx_activities_milestone_live", "milestone_id", "deleted_at"),
         Index("idx_activities_milestone_position", "milestone_id", "position"),
         Index("idx_activities_project_live", "project_id", "deleted_at"),
+        # One LIVE activity per (milestone_id, position) — same rationale
+        # as the milestones uniqueness index. Source of truth for the rank
+        # used by display labels (A{m}.{a}).
+        Index(
+            "uq_activities_milestone_position_live",
+            "milestone_id", "position",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint,
+    Column, Integer, String, DateTime, ForeignKey, Text, Index, CheckConstraint, text,
 )
 from ..session import Base
 
@@ -59,6 +59,15 @@ class SubtaskModel(Base):
         Index("idx_subtasks_task_live", "task_id", "deleted_at"),
         Index("idx_subtasks_task_position", "task_id", "position"),
         Index("idx_subtasks_project_live", "project_id", "deleted_at"),
+        # One LIVE subtask per (task_id, position) — drives label rank
+        # for S{m}.{a}.{t}.{s}.
+        Index(
+            "uq_subtasks_task_position_live",
+            "task_id", "position",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:

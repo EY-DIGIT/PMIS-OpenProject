@@ -474,13 +474,16 @@ def init_db() -> None:
                 except Exception:
                     pass
 
-                # ---- NEW: milestones.status + milestones.depends ---------
+                # ---- NEW: milestones.status + milestones.cloned_from_id ----
+                # The legacy ``milestones.depends`` JSON column is no longer
+                # added — milestone-to-milestone deps live in the
+                # ``milestone_dependencies`` edge table (doc 21A) and the
+                # column was dropped in doc 22.
                 try:
                     res = conn.execute(text("PRAGMA table_info('milestones')"))
                     mcols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
                         ("status",         "ALTER TABLE milestones ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'not_completed'"),
-                        ("depends",        "ALTER TABLE milestones ADD COLUMN depends TEXT"),
                         # Lineage pointer for baseline → version propagation.
                         ("cloned_from_id", "ALTER TABLE milestones ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES milestones(id)"),
                     ):

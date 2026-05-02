@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    JSON, Column, Integer, String, DateTime, ForeignKey, Text, Index,
+    Column, Integer, String, DateTime, ForeignKey, Text, Index, text,
 )
 from ..session import Base
 
@@ -35,10 +35,10 @@ class MilestoneModel(Base):
     # (app/domain/milestones/milestone.py). Defaults to 'not_completed'.
     status = Column(String(32), nullable=False, default="not_completed", index=True)
 
-    # List of milestone ids this milestone depends on. Stored as JSON so we
-    # can extend later without a schema migration. Currently carried through
-    # the API unchanged — no referential integrity is enforced.
-    depends = Column(JSON, nullable=True)
+    # The legacy ``depends`` JSON column was removed in doc 22 (display-label
+    # rework). Milestone-to-milestone dependencies now live in the
+    # ``milestone_dependencies`` edge table (per doc 21A) and are surfaced
+    # through the API as ``dependsOn`` / ``dependsOnDisplay``.
 
     # Lineage pointer: when a version project is created from a baseline,
     # each cloned milestone records the id of its source baseline milestone
@@ -57,6 +57,17 @@ class MilestoneModel(Base):
     __table_args__ = (
         Index("idx_milestones_project_live", "project_id", "deleted_at"),
         Index("idx_milestones_project_position", "project_id", "position"),
+        # One LIVE milestone per (project_id, position). Position is the
+        # rank source for display labels (M1, M2, …); duplicates would make
+        # label resolution ambiguous. Soft-deleted rows can share positions
+        # with a live row (history kept).
+        Index(
+            "uq_milestones_project_position_live",
+            "project_id", "position",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
