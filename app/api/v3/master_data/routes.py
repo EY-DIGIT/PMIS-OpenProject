@@ -54,6 +54,39 @@ from ..vendors.routes import (
 )
 from ..vendors.schemas import VendorCreateRequest, VendorUpdateRequest
 
+# Role + permission catalog delegation (doc 21B follow-up). The CRUD on
+# the role / permission catalog rows is master data — it describes the
+# shape of access available in the system. The user-side assignment
+# endpoints (POST /users/{id}/roles/{role_id}, etc.) stay on /users
+# because they operate on a specific user, not on the catalog.
+from ..roles.routes import (
+    create_role as _role_create,
+    delete_role as _role_delete,
+    get_role as _role_get,
+    grant_role_permission as _role_grant_permission,
+    list_role_permissions as _role_list_permissions,
+    list_roles as _role_list,
+    replace_role_permissions as _role_replace_permissions,
+    revoke_role_permission as _role_revoke_permission,
+    update_role as _role_update,
+)
+from ..roles.schemas import (
+    RoleCreateRequest,
+    RolePermissionsReplaceRequest,
+    RoleUpdateRequest,
+)
+from ..permissions.routes import (
+    create_permission as _perm_create,
+    delete_permission as _perm_delete,
+    get_permission as _perm_get,
+    list_permissions as _perm_list,
+    update_permission as _perm_update,
+)
+from ..permissions.schemas import (
+    PermissionCreateRequest,
+    PermissionUpdateRequest,
+)
+
 from .schemas import (
     DivisionCreateRequest,
     DivisionUpdateRequest,
@@ -597,4 +630,234 @@ def list_master_vendor_projects(
 ) -> JSONResponse:
     return _without_deprecation(
         _vendor_list_projects(request=request, vendor_id=vendor_id, db=db),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Roles — delegate to handlers in ../roles/routes.py.
+# Auth on the master surface is gated by MASTER_DATA_*; the legacy
+# /api/v3/roles/* endpoints continue to use the per-resource ROLES_*
+# permissions and stamp Deprecation: true on every response.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/roles",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="List roles (delegates to GET /api/v3/roles)",
+)
+def list_master_roles(
+    request: Request,
+    offset: int = 1,
+    pageSize: int = 20,
+    db: Session = Depends(get_db),
+):
+    # Master surface uses 1-indexed page numbers (matches /master/divisions
+    # etc.). The legacy /roles handler treats ``offset`` as a literal SQL
+    # OFFSET, so translate before delegating.
+    sql_offset = (offset - 1) * pageSize if offset > 0 else 0
+    return _without_deprecation(
+        _role_list(
+            request=request, offset=sql_offset, pageSize=pageSize, db=db,
+        ),
+    )
+
+
+@router.get(
+    "/roles/{role_id}",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="Get a role (delegates to GET /api/v3/roles/{id})",
+)
+def get_master_role(
+    request: Request, role_id: int, db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_get(request=request, role_id=role_id, db=db),
+    )
+
+
+@router.post(
+    "/roles/create",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Create a role (delegates to POST /api/v3/roles/create)",
+    status_code=201,
+)
+def create_master_role(
+    request: Request,
+    data: RoleCreateRequest,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_create(request=request, data=data, db=db),
+    )
+
+
+@router.patch(
+    "/roles/{role_id}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Update a role (delegates to PATCH /api/v3/roles/{id})",
+)
+def update_master_role(
+    request: Request,
+    role_id: int,
+    data: RoleUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_update(request=request, role_id=role_id, data=data, db=db),
+    )
+
+
+@router.delete(
+    "/roles/{role_id}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Delete a role (delegates; built-in 'admin' role protected)",
+)
+def delete_master_role(
+    request: Request, role_id: int, db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_delete(request=request, role_id=role_id, db=db),
+    )
+
+
+@router.get(
+    "/roles/{role_id}/permissions",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="List a role's permissions (delegates)",
+)
+def list_master_role_permissions(
+    request: Request, role_id: int, db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_list_permissions(request=request, role_id=role_id, db=db),
+    )
+
+
+@router.put(
+    "/roles/{role_id}/permissions",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Replace a role's permission set (delegates)",
+)
+def replace_master_role_permissions(
+    request: Request,
+    role_id: int,
+    data: RolePermissionsReplaceRequest,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_replace_permissions(
+            request=request, role_id=role_id, data=data, db=db,
+        ),
+    )
+
+
+@router.post(
+    "/roles/{role_id}/permissions/{code}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Grant a permission to a role (delegates)",
+)
+def grant_master_role_permission(
+    request: Request, role_id: int, code: str,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_grant_permission(
+            request=request, role_id=role_id, code=code, db=db,
+        ),
+    )
+
+
+@router.delete(
+    "/roles/{role_id}/permissions/{code}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Revoke a permission from a role (delegates)",
+)
+def revoke_master_role_permission(
+    request: Request, role_id: int, code: str,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _role_revoke_permission(
+            request=request, role_id=role_id, code=code, db=db,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Permissions — delegate to handlers in ../permissions/routes.py.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/permissions",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="List the permission catalog (delegates)",
+)
+def list_master_permissions(
+    request: Request,
+    offset: int = 1,
+    pageSize: int = 100,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _perm_list(
+            request=request, offset=offset, pageSize=pageSize, db=db,
+        ),
+    )
+
+
+@router.get(
+    "/permissions/{code}",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="Get a permission row (delegates)",
+)
+def get_master_permission(
+    request: Request, code: str, db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _perm_get(request=request, code=code, db=db),
+    )
+
+
+@router.post(
+    "/permissions/create",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Create a custom permission (delegates)",
+    status_code=201,
+)
+def create_master_permission(
+    request: Request,
+    data: PermissionCreateRequest,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _perm_create(request=request, data=data, db=db),
+    )
+
+
+@router.patch(
+    "/permissions/{code}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Edit a permission's name/description (delegates)",
+)
+def update_master_permission(
+    request: Request,
+    code: str,
+    data: PermissionUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _perm_update(request=request, code=code, data=data, db=db),
+    )
+
+
+@router.delete(
+    "/permissions/{code}",
+    dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
+    summary="Delete a permission (built-ins protected)",
+)
+def delete_master_permission(
+    request: Request, code: str, db: Session = Depends(get_db),
+):
+    return _without_deprecation(
+        _perm_delete(request=request, code=code, db=db),
     )

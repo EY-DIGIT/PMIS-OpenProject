@@ -329,3 +329,126 @@ class TestDirectUserPermissions:
         assert resp.status_code == 204
         me = client.get("/api/v3/users/me/permissions", headers=headers)
         assert "projects:read" not in me.json()["data"]["permissions"]
+
+
+# ---------------------------------------------------------------------------
+# Master-router relocation (doc 21B follow-up)
+# ---------------------------------------------------------------------------
+
+class TestMasterRouterRolesPermissions:
+    """Roles + permission catalog CRUD now lives under /api/v3/master/*.
+
+    Legacy /api/v3/roles/* and /api/v3/permissions/* keep working with
+    Deprecation: true headers — same pattern as vendors and divisions.
+    """
+
+    def test_master_roles_list_works(self, client, admin_user, admin_headers):
+        resp = client.get("/api/v3/master/roles", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        # New surface — no Deprecation header.
+        assert "Deprecation" not in resp.headers
+        names = [
+            r["name"]
+            for r in resp.json()["data"]["_embedded"]["elements"]
+        ]
+        assert "admin" in names
+
+    def test_master_permissions_list_works(self, client, admin_user, admin_headers):
+        resp = client.get(
+            "/api/v3/master/permissions?pageSize=500", headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert "Deprecation" not in resp.headers
+        codes = [
+            p["code"]
+            for p in resp.json()["data"]["_embedded"]["elements"]
+        ]
+        assert "projects:create" in codes
+
+    def test_master_create_role_then_replace_permissions(
+        self, client, admin_user, admin_headers,
+    ):
+        created = client.post(
+            "/api/v3/master/roles/create",
+            json={
+                "name": "auditor",
+                "description": "read-only auditor",
+                "permissions": [],
+            },
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+        rid = created.json()["data"]["id"]
+
+        resp = client.put(
+            f"/api/v3/master/roles/{rid}/permissions",
+            json={"permissions": ["projects:read", "milestones:read"]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert sorted(resp.json()["data"]["permissions"]) == sorted([
+            "milestones:read", "projects:read",
+        ])
+
+    def test_master_create_custom_permission(
+        self, client, admin_user, admin_headers,
+    ):
+        resp = client.post(
+            "/api/v3/master/permissions/create",
+            json={
+                "code": "custom:thing",
+                "name": "Do thing",
+                "description": "Test perm via master.",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["isBuiltin"] is False
+
+    def test_legacy_roles_endpoints_stamp_deprecation(
+        self, client, admin_user, admin_headers,
+    ):
+        resp = client.get("/api/v3/roles", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.headers.get("Deprecation") == "true"
+        assert "/api/v3/master/roles" in resp.headers.get("Link", "")
+
+    def test_legacy_permissions_endpoints_stamp_deprecation(
+        self, client, admin_user, admin_headers,
+    ):
+        resp = client.get("/api/v3/permissions", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.headers.get("Deprecation") == "true"
+        assert "/api/v3/master/permissions" in resp.headers.get("Link", "")
+
+    def test_admin_role_protection_preserved_on_master_path(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        from app.infrastructure.db.models.role import RoleModel
+        admin_role_id = (
+            db_session.query(RoleModel)
+            .filter(RoleModel.name == "admin")
+            .one()
+            .id
+        )
+        resp = client.delete(
+            f"/api/v3/master/roles/{admin_role_id}", headers=admin_headers,
+        )
+        assert resp.status_code == 403, resp.text
+
+    def test_master_path_admin_role_perms_locked(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        from app.infrastructure.db.models.role import RoleModel
+        admin_role_id = (
+            db_session.query(RoleModel)
+            .filter(RoleModel.name == "admin")
+            .one()
+            .id
+        )
+        resp = client.put(
+            f"/api/v3/master/roles/{admin_role_id}/permissions",
+            json={"permissions": ["projects:create"]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 403

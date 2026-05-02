@@ -28,11 +28,20 @@ from .permissions import (
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
+def _stamp(resp, *, successor: str):
+    """Apply Deprecation + Link headers pointing at the master-router successor.
+
+    Doc 21B follow-up: role + permission CRUD now lives under
+    ``/api/v3/master/roles/*`` and ``/api/v3/master/permissions/*``. The
+    legacy paths keep working during the FE migration window.
+    """
+    return BaseController.stamp_deprecation(resp, successor_path=successor)
+
+
 @router.post(
     "/create",
     dependencies=[require_permission(ROLES_CREATE)],
-    summary="Create role",
-    description="Create a new role",
+    summary="Create role (DEPRECATED — use POST /api/v3/master/roles/create)",
     status_code=201
 )
 def create_role(
@@ -40,19 +49,16 @@ def create_role(
     data: RoleCreateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Create a new role.
-
-    Requires: ROLES_CREATE permission (admin only)
-    """
-    return RoleController.create(request, data, db)
+    return _stamp(
+        RoleController.create(request, data, db),
+        successor="/api/v3/master/roles/create",
+    )
 
 
 @router.get(
     "",
     dependencies=[require_permission(ROLES_READ)],
-    summary="List roles",
-    description="List all roles with pagination"
+    summary="List roles (DEPRECATED — use GET /api/v3/master/roles)",
 )
 def list_roles(
     request: Request,
@@ -60,39 +66,33 @@ def list_roles(
     pageSize: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    List roles with pagination.
-
-    Requires: ROLES_READ permission (admin only)
-    """
     query = RoleListQuery(offset=offset, pageSize=pageSize)
-    return RoleController.list(request, query, db)
+    return _stamp(
+        RoleController.list(request, query, db),
+        successor="/api/v3/master/roles",
+    )
 
 
 @router.get(
     "/{role_id}",
     dependencies=[require_permission(ROLES_READ)],
-    summary="Get role",
-    description="Get role by ID"
+    summary="Get role (DEPRECATED — use GET /api/v3/master/roles/{id})",
 )
 def get_role(
     request: Request,
     role_id: int,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Get role by ID.
-
-    Requires: ROLES_READ permission (admin only)
-    """
-    return RoleController.get(request, role_id, db)
+    return _stamp(
+        RoleController.get(request, role_id, db),
+        successor=f"/api/v3/master/roles/{role_id}",
+    )
 
 
 @router.patch(
     "/{role_id}",
     dependencies=[require_permission(ROLES_UPDATE)],
-    summary="Update role",
-    description="Update role details"
+    summary="Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})",
 )
 def update_role(
     request: Request,
@@ -100,34 +100,26 @@ def update_role(
     data: RoleUpdateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Update role details.
-
-    Requires: ROLES_UPDATE permission (admin only)
-    Note: Builtin roles cannot be modified
-    """
-    return RoleController.update(request, role_id, data, db)
+    return _stamp(
+        RoleController.update(request, role_id, data, db),
+        successor=f"/api/v3/master/roles/{role_id}",
+    )
 
 
 @router.delete(
     "/{role_id}",
     dependencies=[require_permission(ROLES_DELETE)],
-    summary="Delete role",
-    description="Delete a role"
+    summary="Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})",
 )
 def delete_role(
     request: Request,
     role_id: int,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    Delete a role.
-
-    Requires: ROLES_DELETE permission (admin only)
-    Note: The built-in 'admin' role cannot be deleted; other roles
-    (including the seeded 'member'/'viewer') are deletable.
-    """
-    return RoleController.delete(request, role_id, db)
+    return _stamp(
+        RoleController.delete(request, role_id, db),
+        successor=f"/api/v3/master/roles/{role_id}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +141,10 @@ def _admin_role_guard(role) -> Dict[str, Any]:
 @router.get(
     "/{role_id}/permissions",
     dependencies=[require_permission(ROLES_READ)],
-    summary="List a role's permissions",
+    summary=(
+        "List a role's permissions "
+        "(DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)"
+    ),
 )
 def list_role_permissions(
     request: Request, role_id: int, db: Session = Depends(get_db),
@@ -157,24 +152,37 @@ def list_role_permissions(
     repo = RbacRepository(db)
     role = repo.get_role(role_id)
     if role is None:
-        return BaseController.error(
-            format_error_response("not_found", f"Role {role_id} not found."),
-            status=404,
+        return _stamp(
+            BaseController.error(
+                format_error_response("not_found", f"Role {role_id} not found."),
+                status=404,
+            ),
+            successor=f"/api/v3/master/roles/{role_id}/permissions",
         )
     codes = repo.list_role_permissions(role_id)
-    return BaseController.ok(data={
-        "_type": "RolePermissions",
-        "_links": {"self": {"href": f"/api/v3/roles/{role_id}/permissions"}},
-        "roleId": role_id,
-        "roleName": role.name,
-        "permissions": codes,
-    })
+    return _stamp(
+        BaseController.ok(data={
+            "_type": "RolePermissions",
+            "_links": {
+                "self": {
+                    "href": f"/api/v3/master/roles/{role_id}/permissions",
+                }
+            },
+            "roleId": role_id,
+            "roleName": role.name,
+            "permissions": codes,
+        }),
+        successor=f"/api/v3/master/roles/{role_id}/permissions",
+    )
 
 
 @router.put(
     "/{role_id}/permissions",
     dependencies=[require_permission(ROLES_UPDATE)],
-    summary="Replace a role's permission set",
+    summary=(
+        "Replace a role's permission set "
+        "(DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)"
+    ),
 )
 def replace_role_permissions(
     request: Request, role_id: int,
@@ -184,84 +192,115 @@ def replace_role_permissions(
     repo = RbacRepository(db)
     role = repo.get_role(role_id)
     if role is None:
-        return BaseController.error(
-            format_error_response("not_found", f"Role {role_id} not found."),
-            status=404,
+        return _stamp(
+            BaseController.error(
+                format_error_response("not_found", f"Role {role_id} not found."),
+                status=404,
+            ),
+            successor=f"/api/v3/master/roles/{role_id}/permissions",
         )
     err = _admin_role_guard(role)
     if err is not None:
-        return BaseController.error(err, status=403)
-    # Validate every code exists.
+        return _stamp(
+            BaseController.error(err, status=403),
+            successor=f"/api/v3/master/roles/{role_id}/permissions",
+        )
     bogus = [c for c in data.permissions if repo.get_permission(c) is None]
     if bogus:
-        return BaseController.error(
-            format_error_response(
-                "validation_error",
-                f"Unknown permission code(s): {', '.join(bogus)}",
+        return _stamp(
+            BaseController.error(
+                format_error_response(
+                    "validation_error",
+                    f"Unknown permission code(s): {', '.join(bogus)}",
+                ),
+                status=422,
             ),
-            status=422,
+            successor=f"/api/v3/master/roles/{role_id}/permissions",
         )
     repo.replace_role_permissions(role_id, list(dict.fromkeys(data.permissions)))
     db.commit()
-    return BaseController.ok(data={
-        "roleId": role_id,
-        "permissions": repo.list_role_permissions(role_id),
-    })
+    return _stamp(
+        BaseController.ok(data={
+            "roleId": role_id,
+            "permissions": repo.list_role_permissions(role_id),
+        }),
+        successor=f"/api/v3/master/roles/{role_id}/permissions",
+    )
 
 
 @router.post(
     "/{role_id}/permissions/{code}",
     dependencies=[require_permission(ROLES_UPDATE)],
-    summary="Grant a single permission to a role",
+    summary=(
+        "Grant a single permission to a role "
+        "(DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})"
+    ),
 )
 def grant_role_permission(
     request: Request, role_id: int, code: str,
     db: Session = Depends(get_db),
 ):
+    successor = f"/api/v3/master/roles/{role_id}/permissions/{code}"
     repo = RbacRepository(db)
     role = repo.get_role(role_id)
     if role is None:
-        return BaseController.error(
-            format_error_response("not_found", f"Role {role_id} not found."),
-            status=404,
+        return _stamp(
+            BaseController.error(
+                format_error_response("not_found", f"Role {role_id} not found."),
+                status=404,
+            ),
+            successor=successor,
         )
     err = _admin_role_guard(role)
     if err is not None:
-        return BaseController.error(err, status=403)
+        return _stamp(BaseController.error(err, status=403), successor=successor)
     if repo.get_permission(code) is None:
-        return BaseController.error(
-            format_error_response(
-                "not_found", f"Permission {code} not found.",
+        return _stamp(
+            BaseController.error(
+                format_error_response(
+                    "not_found", f"Permission {code} not found.",
+                ),
+                status=404,
             ),
-            status=404,
+            successor=successor,
         )
     repo.grant_permissions_to_role(role_id, [code])
     db.commit()
-    return BaseController.ok(data={
-        "roleId": role_id,
-        "permissions": repo.list_role_permissions(role_id),
-    })
+    return _stamp(
+        BaseController.ok(data={
+            "roleId": role_id,
+            "permissions": repo.list_role_permissions(role_id),
+        }),
+        successor=successor,
+    )
 
 
 @router.delete(
     "/{role_id}/permissions/{code}",
     dependencies=[require_permission(ROLES_UPDATE)],
-    summary="Revoke a single permission from a role",
+    summary=(
+        "Revoke a single permission from a role "
+        "(DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})"
+    ),
 )
 def revoke_role_permission(
     request: Request, role_id: int, code: str,
     db: Session = Depends(get_db),
 ):
+    successor = f"/api/v3/master/roles/{role_id}/permissions/{code}"
     repo = RbacRepository(db)
     role = repo.get_role(role_id)
     if role is None:
-        return BaseController.error(
-            format_error_response("not_found", f"Role {role_id} not found."),
-            status=404,
+        return _stamp(
+            BaseController.error(
+                format_error_response("not_found", f"Role {role_id} not found."),
+                status=404,
+            ),
+            successor=successor,
         )
     err = _admin_role_guard(role)
     if err is not None:
-        return BaseController.error(err, status=403)
+        return _stamp(BaseController.error(err, status=403), successor=successor)
     repo.revoke_permission_from_role(role_id, code)
     db.commit()
-    return BaseController.no_content()
+    return _stamp(BaseController.no_content(), successor=successor)
