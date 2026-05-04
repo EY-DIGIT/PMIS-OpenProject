@@ -11,12 +11,40 @@ is derived from membership in the seeded ``admin`` role — the legacy
 The lookup is one indexed JOIN per authenticated request. For anonymous
 or revoked-token requests the lookup is skipped and ``user_permissions``
 stays empty, which causes every ``require_permission`` to reject with 401.
+
+Doc 27 hotfix — pre-doc-26 token guard: ``users.id`` was flipped from
+auto-incrementing integer to UUID String(36) in doc 26. JWTs minted
+before that change carry an integer ``user_id`` claim (e.g. ``1``)
+which can no longer be used to query the now-string ``user_roles.user_id``
+column without Postgres throwing ``operator does not exist:
+character varying = integer``. The guard below rejects any token whose
+``user_id`` claim isn't a UUID-shaped string — the request is treated
+as anonymous and downstream ``require_permission`` returns 401, which
+the FE handles as "session expired, re-login." Cleaner than a 500
+trace in the logs.
 """
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable
+from uuid import UUID
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from ..security import decode_access_token
+
+
+def _is_valid_user_id_claim(value: Any) -> bool:
+    """True iff ``value`` is a string that parses as a valid UUID.
+
+    Doc 27 hotfix: rejects pre-doc-26 integer claims (``1``, ``2``, …)
+    AND any malformed claim shape — protects every downstream call site
+    that assumes ``request.state.user_id`` is a UUID string.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        UUID(value)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -44,6 +72,18 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     return response
 
                 user_id = payload.get("user_id")
+                # Doc 27 hotfix — defensive guard. Pre-doc-26 tokens
+                # carry an integer user_id; passing that to any post-
+                # doc-26 query against the UUID-typed users.id column
+                # blows up with a 500 (psycopg2 ProgrammingError on
+                # Postgres). Reject the token cleanly here so the
+                # request is anonymous → require_permission returns 401
+                # → FE re-login flow kicks in. Same outcome as any
+                # other "expired token" case.
+                if not _is_valid_user_id_claim(user_id):
+                    response = await call_next(request)
+                    return response
+
                 request.state.user_id = user_id
                 request.state.user_login = payload.get("sub")
                 request.state.token_jti = jti
@@ -57,10 +97,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                         request.state.token_exp = None
 
                 # Hydrate effective permission set + admin flag from DB.
-                if user_id is not None:
-                    perms, is_admin = self._load_user_permissions(user_id)
-                    request.state.user_permissions = perms
-                    request.state.is_admin = is_admin
+                perms, is_admin = self._load_user_permissions(user_id)
+                request.state.user_permissions = perms
+                request.state.is_admin = is_admin
 
         response = await call_next(request)
         return response
