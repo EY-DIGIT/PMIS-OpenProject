@@ -84,17 +84,15 @@ ac5a2d47-df49-4503-b27e-7f734e1c5ee9
 **Expect 200** with `rfp`, `asg`, `ccn`. Copy the `id` of `rfp` — you'll use it as `typeOfResourceId` on a resource activity later.
 c272a938-0dc7-4aa8-8593-ca217b845020
 
-### 1c. List status transitions catalog (added in doc 15)
+### 1c. List status transitions catalog
 
-**`GET /project_status_transitions`** — Execute.
+**`GET /api/v3/master/project_status_transitions`** — Execute. (Doc 20: master-data router consolidation. The legacy `GET /api/v3/project_status_transitions` still works but stamps `Deprecation: true`.)
 
-**Expect 200**. The response lists every `(fromStatus, toStatus)` edge in the project lifecycle plus the seed row (`fromStatus: null, toStatus: "new"`) marking the initial status. Each row carries `requiresAdmin` and `versionOnly` flags so the FE can render context-aware next-step dropdowns. The create-project endpoint validates the `status` field against this catalog — sending `"status": "inprogress"` returns `error_type: invalid_status`.
+**Expect 200**. The response lists every `(fromStatus, toStatus)` edge in the project lifecycle plus the seed row (`fromStatus: null, toStatus: "new"`) marking the initial status. Each row carries `requiresAdmin` and `versionOnly` flags so the FE can render context-aware next-step dropdowns. The create-project endpoint validates `status` against this catalog — sending `"status": "inprogress"` returns `error_type: invalid_status`.
 
-### 1d. List project owners catalog (added in doc 15)
+### 1d. Owner is a division code (no project_owners catalog)
 
-**`GET /project_owners`** — Execute.
-
-**Expect 200** with the bootstrap admin pre-seeded. Only users in this whitelist are accepted as a project's `owner`. To add a new owner, an admin calls `POST /api/v3/project_owners/create` with either `{"login": "..."}` or `{"userId": N}` and an optional `displayName`. `DELETE /api/v3/project_owners/{user_id}` soft-deactivates a row (toggles `active=False`; never hard-deletes).
+Doc 18 made `project.owner` a strict division code (`tmd1` / `tmd2` / `others`) instead of a user-login lookup. Doc 20 then dropped the per-user `project_owners` whitelist + table + endpoints entirely. To pick a different "owner" name, manage divisions via `GET/POST/PATCH /api/v3/master/divisions[/…]`.
 
 ---
 
@@ -106,15 +104,19 @@ c272a938-0dc7-4aa8-8593-ca217b845020
 {
   "name": "New Ingestion Pipeline",
   "description": "Demo project for PMIS walkthrough",
-  "owner": "admin",
+  "owner": "tmd1",
   "active": true,
   "isPublic": false,
   "category": "MSIP",
   "startDate": "2026-05-01T09:00:00Z",
   "endDate": "2026-12-31T17:00:00Z",
-  "vendorIds": ["<INFOSYS_VENDOR_ID>87b1c7c6-a843-41ee-95c9-1ab0cdc34178"]
+  "vendors": ["<INFOSYS_VENDOR_ID>87b1c7c6-a843-41ee-95c9-1ab0cdc34178"]
 }
 ```
+
+> **Doc 24 part 1:** `startDate` may be in the past — entering an in-progress project no longer requires backdating "now". Only `endDate` keeps the future-only check.
+> **Doc 18:** `owner` is a strict division code (`tmd1` / `tmd2` / `others`).
+> **Doc 15:** the canonical wire field is `vendors` (legacy `vendorIds` / `vendor_ids` aliases still accepted on input).
 
 **Expect 201.** The response shows a fresh UUID `data.id`, `data.projectCode` starting with `UIDAI-PR`, `data.status: "new"`, `data.isVersion: false`, and `data.vendors` listing Infosys.
 
@@ -420,25 +422,14 @@ d8c27bd7-137b-4ef7-9342-3ddc765ee75c
 
 If you tried to create a task under a `resource` activity without supplying `resourceMode`, you'd get **422** — the inherited type is `resource`, so `resourceMode` (and the matching count or details body) is required. Same constraint as activities, just applied per the parent's type.
 
-### 12b. Task dependsOn with hierarchy check
+### 12b. Task dependsOn (no hierarchy rule — doc 24 part 3)
 
-Try to make T1 depend on T2 via **`PATCH /tasks/{T1_ID}`**:
+The legacy parent-activity hierarchy rule was dropped in doc 24 part 3. Tasks now follow the same dependency rules as activities — same project, no self-edge, no cycle. So either direction works as long as both tasks live in the same version project:
 
-```json
-{ "dependsOn": ["<T2_ID>d8c27bd7-137b-4ef7-9342-3ddc765ee75c"] }
-```
+**`PATCH /tasks/{T1_ID}`** with `{ "dependsOn": ["<T2_ID>"] }` — **expect 200**.
+**`PATCH /tasks/{T2_ID}`** with `{ "dependsOn": ["<T1_ID>"] }` — would only fail with 422 if it created a cycle (which it would here, since T1 already depends on T2 from the previous patch). Reset with `{ "dependsOn": [] }` first if you want to flip the direction.
 
-This should succeed. Why? Because T1 lives under VERSION_A1 and T2 lives under VERSION_A3, and from Step 4e (cloned into the version) VERSION_A3 depends on VERSION_A1 — **but** the hierarchy rule says the source's parent activity must depend on the target's parent activity. Since T1's parent (VERSION_A1) does NOT depend on T2's parent (VERSION_A3) — the dependency goes the other way — this will fail.
-
-**Expect 422** with `"Cannot add task dependency on task '<T2_ID>': the source's parent activity does not depend on that task's parent activity. Add the activity-level dependency first."`.
-
-Now reverse it — make T2 depend on T1 via **`PATCH /tasks/{T2_ID}`**:
-
-```json
-{ "dependsOn": ["<T1_ID>"] }
-```
-
-**Expect 200.** This works because T2's parent (VERSION_A3) → VERSION_A1 (T1's parent) is a valid activity-level edge.
+`dependsOn` also accepts display labels (doc 22): `{ "dependsOn": ["T1.1.1.1"] }` resolves to the corresponding UUID at write time.
 
 ### 12c. Add a subtask under `T1_ID`
 
@@ -447,7 +438,6 @@ Now reverse it — make T2 depend on T1 via **`PATCH /tasks/{T2_ID}`**:
 ```json
 {
   "name": "ST1 — Subtask for T1",
-  "type": "resource",
   "startDate": "2026-05-18T09:00:00Z",
   "endDate": "2026-06-18T17:00:00Z",
   "resourceMode": "details",
@@ -459,7 +449,25 @@ Now reverse it — make T2 depend on T1 via **`PATCH /tasks/{T2_ID}`**:
 }
 ```
 
-**Expect 201.** Copy `data.id` as `ST1_ID`.
+> **Doc 15:** the subtask body no longer accepts `type` — the service derives it from the parent task's type (which itself was inherited from its parent activity). T1 inherits `resource` from its parent activity, so `resourceMode` + `resource` are required here.
+
+**Expect 201.** Copy `data.id` as `ST1_ID`. The response includes `parentSubtaskId: null` (top-level under the task) and `displayCode` like `S1.1.1.1.1`.
+
+#### 12c.1 Nest a subtask under `ST1_ID` (doc 24 part 2)
+
+**`POST /api/v3/subtasks/{parent_subtask_id}/subtasks/create`** — substitute `ST1_ID`:
+
+```json
+{
+  "name": "ST1.1 — Nested under ST1",
+  "startDate": "2026-05-19T09:00:00Z",
+  "endDate": "2026-06-15T17:00:00Z",
+  "resourceMode": "count",
+  "resourceCount": 2
+}
+```
+
+**Expect 201.** The response shows `parentSubtaskId: <ST1_ID>`, `taskId: <T1_ID>` (root task carried through), and `displayCode: S1.1.1.1.1.1` (one extra segment per nesting level — variable depth, no upper limit unless `SUBTASK_MAX_NESTING_DEPTH` env var is set). Subtask deps follow the same rules as activities — same project, no self, no cycle, no parent-task hierarchy requirement (doc 24 part 3). Resource subtasks may have child subtasks (doc 24 part 2).
 
 ### 12d. Activity status-completion gate
 
@@ -575,9 +583,11 @@ The happy path has demonstrated:
 - Category "others" + division "others" free-text pattern
 - Vendor catalog + project/milestone subset rule
 - Resource types catalog + resource classification columns
-- Milestone status/depends (pass-through); activity status (standard-only)
-- **Activity `dependsOn`** with existence check, self-edge rejection, cycle detection
-- **Task/subtask `dependsOn`** with the hierarchy rule (parent must already depend)
+- Milestone status; activity status (standard-only)
+- **Milestone `dependsOn`** (doc 21A) — typed edge table, propagates from baseline to active versions
+- **Activity / task / subtask `dependsOn`** with existence check, self-edge rejection, cycle detection — **same project, no parent-hierarchy rule** (doc 24 part 3 dropped the parent-activity / parent-task hierarchy rules)
+- **Display labels** (doc 22) — `M1` / `A1.2` / `T1.2.3` / `S1.2.3.4[.5.6…]` accepted on `dependsOn` input; every response includes `displayCode` + `dependsOnDisplay`
+- **Nested subtasks** (doc 24 part 2) — `POST /api/v3/subtasks/{parent_subtask_id}/subtasks/create`; unlimited depth (cap via `SUBTASK_MAX_NESTING_DEPTH` env); cascade-soft-delete recursively kills the descendant subtree
 - **Status-completion gate** on activities (can't mark completed with incomplete deps)
 - Save Project (`new → draft`) wired to the milestone-exists gate
 - Publish state machine (`{new, draft} → published`, admin only, idempotent with 409 on re-publish)

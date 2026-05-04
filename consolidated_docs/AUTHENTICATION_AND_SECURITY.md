@@ -30,10 +30,10 @@ Include in all protected requests: `Authorization: Bearer <access_token>`
 
 ### Token Details
 - Algorithm: HS256
-- Access Token TTL: 15 minutes (configurable)
-- Refresh Token TTL: 7 days
-- JWT Payload: user_id, sub (login), role, is_admin, exp, iat, jti
-- Refresh token tracked via JTI stored in users table — single-active-jti rotation
+- Access Token TTL: 15 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
+- Refresh Token TTL: 7 days (configurable via `REFRESH_TOKEN_EXPIRE_DAYS`)
+- **JWT Payload (doc 21B): `sub` (login), `user_id`, `email`, `jti`, `iat`, `exp`** — `role` and `is_admin` are no longer carried; the auth middleware looks up the user's effective permission set from the DB on every request. Tokens issued before doc 21B that still carry `role`/`is_admin` keep working — those claims are simply ignored.
+- Refresh token tracked via JTI stored in `users.refresh_token_jti` plus a 120-second grace slot (`previous_refresh_token_jti` + `previous_refresh_token_jti_valid_until`, doc 19) that lets a just-rotated-out token still satisfy a concurrent refresh / multi-tab login / stale retry.
 
 ### Token Introspection (RFC 7662, read-only)
 **`POST /api/v3/users/introspect`** — pure metadata lookup. NEVER rotates.
@@ -51,9 +51,11 @@ Single-token response (flat):
   "issuedAt":  "2026-04-28T18:00:00+00:00",
   "jti": "...", "sub": "admin", "username": "admin",
   "userId": 1, "email": "admin@example.com",
-  "role": "admin", "isAdmin": true
+  "role": null, "isAdmin": true
 }
 ```
+
+> Doc 21B: `role` is no longer a JWT claim and is returned as `null` for back-compat. `isAdmin` is resolved from the DB (membership in the `admin` role) at introspect time. Use `GET /api/v3/users/me/permissions` for the authoritative effective permission set.
 
 Both-token response (split):
 ```json
@@ -88,15 +90,17 @@ Response:
 }
 ```
 
-After a successful refresh, the OLD refresh token is rejected on next
-use (jti rotated out). Two concurrent refresh attempts can only
-succeed once — the rotation uses a conditional UPDATE that requires
-the old jti to still match.
+After a successful refresh, the previous JTI is held in a **grace slot**
+on the user row for `REFRESH_TOKEN_GRACE_SECONDS` (default 120 — doc 19).
+During the grace window either the current OR the previous JTI is
+accepted, so a concurrent refresh / multi-tab login / stale retry
+queued before the rotation no longer 401s. Outside the window, only
+the current JTI is valid.
 
 Failure modes (401):
 - Invalid / expired refresh token
-- Refresh token already rotated (jti no longer matches user row)
-- User has been logged out (jti cleared on logout)
+- JTI matches neither the current nor the in-grace previous slot
+- User has been logged out (logout clears all 4 refresh-tracking columns)
 - Posting an access token where the refresh token is expected
 
 ## Password Security
@@ -106,22 +110,48 @@ Failure modes (401):
 - Never stored or returned in plaintext
 
 ## Middleware Stack
-1. CORSMiddleware - CORS configuration (allow_origins from settings)
-2. LoggingMiddleware - Request/response logging, X-Request-ID header
-3. AuthenticationMiddleware - JWT extraction and validation from Authorization header, sets request.state: user_id, user_login, user_role, is_admin
+1. **CORSMiddleware** — CORS configuration (allow_origins from settings)
+2. **LoggingMiddleware** — Request/response logging, X-Request-ID header
+3. **AuthenticationMiddleware (doc 21B)** — JWT decode + revoked-jti blacklist check + per-request permission hydration. Sets `request.state`:
+   - `user_id`, `user_login`, `token_jti`, `token_exp`
+   - `user_permissions: Set[str]` — the user's effective permission set, resolved once per request from `RbacRepository.effective_permissions_for_user(user_id)` (one DB query)
+   - `is_admin: bool` — derived from membership in the seeded `admin` role
+   For anonymous / revoked / decode-failure requests, `user_id` is `None` and `user_permissions` is empty — every `require_permission` rejects with 401.
 
-## RBAC (Role-Based Access Control)
+## RBAC (DB-driven, doc 21B)
 
-### Roles
-- ADMIN: Full system access
-- MEMBER: Create, read, update most resources
-- VIEWER: Read-only access
-- ANONYMOUS: No access (unauthenticated)
+### Model
+
+- **Permissions** are string codes (`projects:create`, `master_data:manage`, `rbac:assign`, …). The canonical list lives in [app/core/permissions.py](../app/core/permissions.py); each code is upserted into the `permissions` table on every boot.
+- **Roles** are arbitrary named bundles. Three are seeded:
+  - **`admin`** — auto-syncs to hold every registered permission. Cannot be deleted, renamed, or have its permission set changed via the API. Holders bypass nothing structurally — they simply hold every code.
+  - **`member`** — default contributor set (CRUD on M/A/T/S, read on master data).
+  - **`viewer`** — read-only.
+- **Users** can be assigned any number of roles via the `user_roles` table. Direct grants in `user_permissions` are additive on top of role-derived permissions. There is no deny semantics — to revoke, delete the row.
+- **Effective permissions** = union of role-derived ∪ direct grants. Hydrated per request by the auth middleware.
+
+### Lockout protections
+
+- Removing the last user holding the `admin` role → 403.
+- Deleting / renaming / mutating the `admin` role → 403.
+- Self-delete or self-demote of a sole admin → 422.
 
 ### Permission Enforcement
-- Route-level via `require_permission(Permission)` dependency
-- Services and controllers do NOT check permissions
-- All RBAC rules centralized in `app/core/rbac.py`
+
+- Route-level via `require_permission("module:action")` (string code) — accepts the legacy `Permission` enum too for back-compat.
+- Services and controllers do NOT re-check permissions.
+- The decorator does an `O(1)` lookup against `request.state.user_permissions`.
+
+### Endpoints to know
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v3/users/me/permissions` | Caller's effective permission set + `isAdmin` flag — FE uses this to draw UI |
+| `GET /api/v3/master/permissions` | Browse the permission catalog |
+| `GET /api/v3/master/roles` | Browse roles |
+| `PUT /api/v3/master/roles/{id}/permissions` | Replace a role's permission set |
+| `POST/DELETE /api/v3/users/{id}/roles/{role_id}` | Assign / unassign a role |
+| `POST/DELETE /api/v3/users/{id}/permissions/{code}` | Direct grant / revoke |
 
 ## Swagger/OpenAPI Configuration
 
@@ -210,8 +240,8 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 - Fix: Login again, copy new token, re-authorize in Swagger
 
 ### 403 Forbidden
-- Authenticated but insufficient permissions
-- Fix: Verify user role has required permission in app/core/rbac.py
+- Authenticated but the required permission is not in the caller's effective set, OR a protection guard fired (admin role lockout, admin role mutation, last-admin removal).
+- Fix: Inspect `GET /api/v3/users/me/permissions`. To grant the missing code, either assign a role that holds it (`POST /api/v3/users/{id}/roles/{role_id}`) or add a direct grant (`POST /api/v3/users/{id}/permissions/{code}`).
 
 ### Token not being sent in Swagger
 - Fix: Click Authorize button, paste token without "Bearer" prefix

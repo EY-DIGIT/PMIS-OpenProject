@@ -38,6 +38,11 @@ DEBUG=False
 CORS_ORIGINS=["https://yourdomain.com"]
 ACCESS_TOKEN_EXPIRE_MINUTES=15
 REFRESH_TOKEN_EXPIRE_DAYS=7
+REFRESH_TOKEN_GRACE_SECONDS=120          # doc 19 — refresh-token concurrent-rotation grace
+SUBTASK_MAX_NESTING_DEPTH=               # doc 24 part 2 — None / unset = unlimited
+BOOTSTRAP_ADMIN_LOGIN=admin
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=admin123
 ```
 
 ### Default Settings (app/core/config.py)
@@ -45,6 +50,8 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 - SECRET_KEY: "change-in-production"
 - DEFAULT_PAGE_SIZE: 20
 - MAX_PAGE_SIZE: 100
+- REFRESH_TOKEN_GRACE_SECONDS: 120
+- SUBTASK_MAX_NESTING_DEPTH: None (unlimited)
 
 ### Default Admin Credentials
 ```
@@ -52,7 +59,7 @@ Login: admin
 Password: admin123
 Email: admin@example.com
 ```
-**Change these in production!**
+**Change these in production!** The bootstrap admin user is auto-assigned to the seeded `admin` role on first boot (doc 21B). The user can be deleted later as long as another user holds the `admin` role — the last-admin lockout guard prevents leaving the system without an administrator.
 
 ## Database
 
@@ -67,10 +74,12 @@ DATABASE_URL=postgresql://user:password@host:5432/pmis
 
 ### Initialization
 The database is initialized automatically on startup:
-- Tables created if they don't exist
-- Schema drift handled for SQLite (missing columns added)
-- Default admin user created if none exists
-- Built-in work package types created (Task, Bug, Feature, Story, Milestone)
+- **PostgreSQL**: `alembic upgrade head` runs as a subprocess on boot (idempotent — already-applied migrations are no-ops). The full migration chain is in [alembic/versions/](../alembic/versions/) — single head as of doc 24.
+- **SQLite**: `Base.metadata.create_all` rebuilds missing tables; the SQLite drift healer adds any column that was added to the model after the on-disk file was created.
+- RBAC seed (doc 21B): every permission code in [app/core/permissions.py](../app/core/permissions.py) is upserted into the `permissions` table; the seeded `admin` / `member` / `viewer` roles are created if missing; the `admin` role is auto-synced to hold every registered code.
+- Bootstrap user `admin/admin123` is created if missing and assigned to the `admin` role.
+- Built-in master data is seeded: divisions (`tmd1`, `tmd2`, `others`), resource types (RFP/ASG/CCN), project_status_transitions catalog.
+- Built-in work package types are seeded if missing (legacy work-package module — not part of the doc-19+ M/A/T/S flow).
 
 ## Pre-Deployment Checklist
 

@@ -44,6 +44,7 @@ CREATE INDEX ix_activities_milestone_id ON activities (milestone_id);
 CREATE INDEX ix_activities_name ON activities (name);
 CREATE INDEX ix_activities_project_id ON activities (project_id);
 CREATE INDEX ix_activities_status ON activities (status);
+CREATE UNIQUE INDEX uq_activities_milestone_position_live ON activities (milestone_id, position) WHERE deleted_at IS NULL;
 
 -- ===== activity_dependencies =====
 CREATE TABLE activity_dependencies (
@@ -103,6 +104,70 @@ CREATE INDEX ix_activity_resources_id ON activity_resources (id);
 CREATE INDEX ix_activity_resources_project_id ON activity_resources (project_id);
 CREATE INDEX ix_activity_resources_type_of_resource_id ON activity_resources (type_of_resource_id);
 CREATE UNIQUE INDEX uq_activity_resources_activity_live ON activity_resources (activity_id) WHERE deleted_at IS NULL;
+
+-- ===== attachments =====
+CREATE TABLE attachments (
+	id VARCHAR(36) NOT NULL, 
+	comment_id VARCHAR(36), 
+	target_kind VARCHAR(20), 
+	target_id VARCHAR(36), 
+	original_filename VARCHAR(500) NOT NULL, 
+	storage_key VARCHAR(500) NOT NULL, 
+	mime_type VARCHAR(100) NOT NULL, 
+	size_bytes BIGINT NOT NULL, 
+	uploaded_by_user_id INTEGER NOT NULL, 
+	uploaded_at DATETIME NOT NULL, 
+	deleted_at DATETIME, 
+	deleted_by INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(comment_id) REFERENCES comments (id), 
+	UNIQUE (storage_key), 
+	FOREIGN KEY(uploaded_by_user_id) REFERENCES users (id), 
+	FOREIGN KEY(deleted_by) REFERENCES users (id)
+);
+CREATE INDEX idx_attachments_target ON attachments (target_kind, target_id);
+CREATE INDEX idx_attachments_target_active ON attachments (target_kind, target_id, deleted_at);
+CREATE INDEX idx_attachments_uploaded_at ON attachments (uploaded_at);
+CREATE INDEX ix_attachments_comment_id ON attachments (comment_id);
+CREATE INDEX ix_attachments_deleted_at ON attachments (deleted_at);
+CREATE INDEX ix_attachments_uploaded_by_user_id ON attachments (uploaded_by_user_id);
+
+-- ===== comments =====
+CREATE TABLE comments (
+	id VARCHAR(36) NOT NULL, 
+	target_kind VARCHAR(20) NOT NULL, 
+	target_id VARCHAR(36) NOT NULL, 
+	body TEXT NOT NULL, 
+	author_user_id INTEGER NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	updated_at DATETIME NOT NULL, 
+	deleted_at DATETIME, 
+	deleted_by INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(author_user_id) REFERENCES users (id), 
+	FOREIGN KEY(deleted_by) REFERENCES users (id)
+);
+CREATE INDEX idx_comments_created_at ON comments (created_at);
+CREATE INDEX idx_comments_target ON comments (target_kind, target_id);
+CREATE INDEX idx_comments_target_active ON comments (target_kind, target_id, deleted_at);
+CREATE INDEX ix_comments_author_user_id ON comments (author_user_id);
+CREATE INDEX ix_comments_deleted_at ON comments (deleted_at);
+
+-- ===== divisions =====
+CREATE TABLE divisions (
+	id INTEGER NOT NULL, 
+	code VARCHAR(64) NOT NULL, 
+	label VARCHAR(255) NOT NULL, 
+	is_builtin BOOLEAN NOT NULL, 
+	requires_other BOOLEAN NOT NULL, 
+	active BOOLEAN NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	updated_at DATETIME NOT NULL, 
+	PRIMARY KEY (id)
+);
+CREATE INDEX idx_divisions_code_active ON divisions (code, active);
+CREATE INDEX ix_divisions_active ON divisions (active);
+CREATE UNIQUE INDEX ix_divisions_code ON divisions (code);
 
 -- ===== meeting_agenda_items =====
 CREATE TABLE meeting_agenda_items (
@@ -173,6 +238,31 @@ CREATE INDEX ix_meetings_project_id ON meetings (project_id);
 CREATE INDEX ix_meetings_scheduled_at ON meetings (scheduled_at);
 CREATE INDEX ix_meetings_title ON meetings (title);
 
+-- ===== milestone_dependencies =====
+CREATE TABLE milestone_dependencies (
+	id VARCHAR(36) NOT NULL, 
+	source_milestone_id VARCHAR(36) NOT NULL, 
+	target_milestone_id VARCHAR(36) NOT NULL, 
+	project_id VARCHAR(36) NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	deleted_at DATETIME, 
+	deleted_by INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(source_milestone_id) REFERENCES milestones (id), 
+	FOREIGN KEY(target_milestone_id) REFERENCES milestones (id), 
+	FOREIGN KEY(project_id) REFERENCES projects (id), 
+	FOREIGN KEY(deleted_by) REFERENCES users (id)
+);
+CREATE INDEX idx_milestone_deps_project_live ON milestone_dependencies (project_id, deleted_at);
+CREATE INDEX idx_milestone_deps_source_live ON milestone_dependencies (source_milestone_id, deleted_at);
+CREATE INDEX idx_milestone_deps_target_live ON milestone_dependencies (target_milestone_id, deleted_at);
+CREATE INDEX ix_milestone_dependencies_deleted_at ON milestone_dependencies (deleted_at);
+CREATE INDEX ix_milestone_dependencies_id ON milestone_dependencies (id);
+CREATE INDEX ix_milestone_dependencies_project_id ON milestone_dependencies (project_id);
+CREATE INDEX ix_milestone_dependencies_source_milestone_id ON milestone_dependencies (source_milestone_id);
+CREATE INDEX ix_milestone_dependencies_target_milestone_id ON milestone_dependencies (target_milestone_id);
+CREATE UNIQUE INDEX uq_milestone_deps_pair_live ON milestone_dependencies (source_milestone_id, target_milestone_id) WHERE deleted_at IS NULL;
+
 -- ===== milestone_vendors =====
 CREATE TABLE milestone_vendors (
 	milestone_id VARCHAR(36) NOT NULL, 
@@ -197,7 +287,6 @@ CREATE TABLE milestones (
 	end_date DATETIME NOT NULL, 
 	position INTEGER NOT NULL, 
 	status VARCHAR(32) NOT NULL, 
-	depends JSON, 
 	cloned_from_id VARCHAR(36), 
 	created_at DATETIME NOT NULL, 
 	updated_at DATETIME NOT NULL, 
@@ -218,6 +307,18 @@ CREATE INDEX ix_milestones_id ON milestones (id);
 CREATE INDEX ix_milestones_name ON milestones (name);
 CREATE INDEX ix_milestones_project_id ON milestones (project_id);
 CREATE INDEX ix_milestones_status ON milestones (status);
+CREATE UNIQUE INDEX uq_milestones_project_position_live ON milestones (project_id, position) WHERE deleted_at IS NULL;
+
+-- ===== permissions =====
+CREATE TABLE permissions (
+	code VARCHAR(128) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	description VARCHAR(1024), 
+	is_builtin BOOLEAN NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	updated_at DATETIME NOT NULL, 
+	PRIMARY KEY (code)
+);
 
 -- ===== project_audit_logs =====
 CREATE TABLE project_audit_logs (
@@ -259,21 +360,6 @@ CREATE INDEX idx_project_members_user_id ON project_members (user_id);
 CREATE INDEX ix_project_members_id ON project_members (id);
 CREATE INDEX ix_project_members_project_id ON project_members (project_id);
 CREATE INDEX ix_project_members_user_id ON project_members (user_id);
-
--- ===== project_owners =====
-CREATE TABLE project_owners (
-	id INTEGER NOT NULL, 
-	user_id INTEGER NOT NULL, 
-	display_name VARCHAR(255), 
-	active BOOLEAN NOT NULL, 
-	created_at DATETIME NOT NULL, 
-	updated_at DATETIME NOT NULL, 
-	PRIMARY KEY (id), 
-	CONSTRAINT uq_project_owners_user_id UNIQUE (user_id), 
-	FOREIGN KEY(user_id) REFERENCES users (id)
-);
-CREATE INDEX idx_project_owners_active_user ON project_owners (active, user_id);
-CREATE INDEX ix_project_owners_active ON project_owners (active);
 
 -- ===== project_status_transitions =====
 CREATE TABLE project_status_transitions (
@@ -323,11 +409,13 @@ CREATE TABLE projects (
 	version_no INTEGER, 
 	status VARCHAR(50) NOT NULL, 
 	owner VARCHAR(255), 
+	owner_other VARCHAR(255), 
 	category VARCHAR(50), 
 	category_other VARCHAR(255), 
 	category_other_reason VARCHAR(1000), 
 	start_date DATETIME, 
 	end_date DATETIME, 
+	actual_start_date DATETIME, 
 	actual_end_date DATETIME, 
 	is_version BOOLEAN NOT NULL, 
 	created_by INTEGER, 
@@ -403,11 +491,23 @@ CREATE INDEX ix_revoked_tokens_expires_at ON revoked_tokens (expires_at);
 CREATE INDEX ix_revoked_tokens_jti ON revoked_tokens (jti);
 CREATE INDEX ix_revoked_tokens_user_id ON revoked_tokens (user_id);
 
+-- ===== role_permissions =====
+CREATE TABLE role_permissions (
+	role_id INTEGER NOT NULL, 
+	permission_code VARCHAR(128) NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (role_id, permission_code), 
+	FOREIGN KEY(role_id) REFERENCES roles (id), 
+	FOREIGN KEY(permission_code) REFERENCES permissions (code)
+);
+CREATE INDEX idx_role_permissions_permission ON role_permissions (permission_code);
+CREATE INDEX idx_role_permissions_role ON role_permissions (role_id);
+
 -- ===== roles =====
 CREATE TABLE roles (
 	id INTEGER NOT NULL, 
 	name VARCHAR(255) NOT NULL, 
-	permissions JSON NOT NULL, 
+	description VARCHAR(1024), 
 	builtin BOOLEAN NOT NULL, 
 	created_at DATETIME NOT NULL, 
 	updated_at DATETIME NOT NULL, 
@@ -477,6 +577,7 @@ CREATE TABLE subtasks (
 	id VARCHAR(36) NOT NULL, 
 	project_id VARCHAR(36) NOT NULL, 
 	task_id VARCHAR(36) NOT NULL, 
+	parent_subtask_id VARCHAR(36), 
 	name VARCHAR(255) NOT NULL, 
 	description TEXT, 
 	type VARCHAR(20) NOT NULL, 
@@ -498,6 +599,7 @@ CREATE TABLE subtasks (
 	CONSTRAINT ck_subtasks_resource_count_positive CHECK (resource_count IS NULL OR resource_count >= 1), 
 	FOREIGN KEY(project_id) REFERENCES projects (id), 
 	FOREIGN KEY(task_id) REFERENCES tasks (id), 
+	CONSTRAINT fk_subtasks_parent_subtask_id FOREIGN KEY(parent_subtask_id) REFERENCES subtasks (id), 
 	FOREIGN KEY(created_by) REFERENCES users (id), 
 	FOREIGN KEY(updated_by) REFERENCES users (id)
 );
@@ -507,8 +609,11 @@ CREATE INDEX idx_subtasks_task_position ON subtasks (task_id, position);
 CREATE INDEX ix_subtasks_deleted_at ON subtasks (deleted_at);
 CREATE INDEX ix_subtasks_id ON subtasks (id);
 CREATE INDEX ix_subtasks_name ON subtasks (name);
+CREATE INDEX ix_subtasks_parent_subtask_id ON subtasks (parent_subtask_id);
 CREATE INDEX ix_subtasks_project_id ON subtasks (project_id);
 CREATE INDEX ix_subtasks_task_id ON subtasks (task_id);
+CREATE UNIQUE INDEX uq_subtasks_subtask_position_live ON subtasks (parent_subtask_id, position) WHERE deleted_at IS NULL AND parent_subtask_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_subtasks_task_position_top_live ON subtasks (task_id, position) WHERE deleted_at IS NULL AND parent_subtask_id IS NULL;
 
 -- ===== task_dependencies =====
 CREATE TABLE task_dependencies (
@@ -601,6 +706,35 @@ CREATE INDEX ix_tasks_deleted_at ON tasks (deleted_at);
 CREATE INDEX ix_tasks_id ON tasks (id);
 CREATE INDEX ix_tasks_name ON tasks (name);
 CREATE INDEX ix_tasks_project_id ON tasks (project_id);
+CREATE UNIQUE INDEX uq_tasks_activity_position_live ON tasks (activity_id, position) WHERE deleted_at IS NULL;
+
+-- ===== user_permissions =====
+CREATE TABLE user_permissions (
+	user_id INTEGER NOT NULL, 
+	permission_code VARCHAR(128) NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	created_by INTEGER, 
+	PRIMARY KEY (user_id, permission_code), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(permission_code) REFERENCES permissions (code), 
+	FOREIGN KEY(created_by) REFERENCES users (id)
+);
+CREATE INDEX idx_user_permissions_permission ON user_permissions (permission_code);
+CREATE INDEX idx_user_permissions_user ON user_permissions (user_id);
+
+-- ===== user_roles =====
+CREATE TABLE user_roles (
+	user_id INTEGER NOT NULL, 
+	role_id INTEGER NOT NULL, 
+	created_at DATETIME NOT NULL, 
+	created_by INTEGER, 
+	PRIMARY KEY (user_id, role_id), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(role_id) REFERENCES roles (id), 
+	FOREIGN KEY(created_by) REFERENCES users (id)
+);
+CREATE INDEX idx_user_roles_role ON user_roles (role_id);
+CREATE INDEX idx_user_roles_user ON user_roles (user_id);
 
 -- ===== users =====
 CREATE TABLE users (
@@ -610,20 +744,35 @@ CREATE TABLE users (
 	hashed_password VARCHAR(255) NOT NULL, 
 	first_name VARCHAR(255), 
 	last_name VARCHAR(255), 
-	admin BOOLEAN NOT NULL, 
 	status VARCHAR(50) NOT NULL, 
 	created_at DATETIME NOT NULL, 
 	updated_at DATETIME NOT NULL, 
 	refresh_token_jti VARCHAR(64), 
 	refresh_token_expires_at DATETIME, 
-	PRIMARY KEY (id)
+	previous_refresh_token_jti VARCHAR(64), 
+	previous_refresh_token_jti_valid_until DATETIME, 
+	vendor_id VARCHAR(36), 
+	division VARCHAR(32), 
+	division_other VARCHAR(255), 
+	phone_number VARCHAR(50), 
+	deleted_at DATETIME, 
+	deleted_by INTEGER, 
+	PRIMARY KEY (id), 
+	CONSTRAINT fk_users_vendor_id FOREIGN KEY(vendor_id) REFERENCES vendors (id), 
+	FOREIGN KEY(deleted_by) REFERENCES users (id)
 );
+CREATE INDEX idx_users_created_at ON users (created_at);
+CREATE INDEX idx_users_deleted_at ON users (deleted_at);
 CREATE INDEX idx_users_email ON users (email);
 CREATE INDEX idx_users_login ON users (login);
 CREATE INDEX idx_users_status ON users (status);
+CREATE INDEX idx_users_vendor_id ON users (vendor_id);
+CREATE INDEX ix_users_created_at ON users (created_at);
+CREATE INDEX ix_users_deleted_at ON users (deleted_at);
 CREATE UNIQUE INDEX ix_users_email ON users (email);
 CREATE INDEX ix_users_id ON users (id);
 CREATE UNIQUE INDEX ix_users_login ON users (login);
+CREATE INDEX ix_users_vendor_id ON users (vendor_id);
 
 -- ===== vendors =====
 CREATE TABLE vendors (
@@ -631,12 +780,24 @@ CREATE TABLE vendors (
 	name VARCHAR(255) NOT NULL, 
 	description TEXT, 
 	active BOOLEAN NOT NULL, 
+	email VARCHAR(255), 
+	contact_person VARCHAR(255), 
+	phone_number VARCHAR(50), 
 	created_at DATETIME NOT NULL, 
 	updated_at DATETIME NOT NULL, 
-	PRIMARY KEY (id)
+	deleted_at DATETIME, 
+	deleted_by INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(deleted_by) REFERENCES users (id)
 );
 CREATE INDEX idx_vendors_active_name ON vendors (active, name);
+CREATE INDEX idx_vendors_created_at ON vendors (created_at);
+CREATE INDEX idx_vendors_deleted_at ON vendors (deleted_at);
+CREATE INDEX idx_vendors_email ON vendors (email);
 CREATE INDEX ix_vendors_active ON vendors (active);
+CREATE INDEX ix_vendors_created_at ON vendors (created_at);
+CREATE INDEX ix_vendors_deleted_at ON vendors (deleted_at);
+CREATE INDEX ix_vendors_email ON vendors (email);
 CREATE INDEX ix_vendors_id ON vendors (id);
 CREATE UNIQUE INDEX ix_vendors_name ON vendors (name);
 
@@ -698,15 +859,21 @@ CREATE INDEX ix_work_packages_subject ON work_packages (subject);
 CREATE INDEX ix_work_packages_type_id ON work_packages (type_id);
 
 -- FK-correct creation order (use this if running by hand):
+--   divisions
+--   permissions
 --   project_status_transitions
 --   resource_types
 --   roles
 --   users
---   vendors
 --   work_package_types
---   project_owners
+--   comments
 --   projects
 --   revoked_tokens
+--   role_permissions
+--   user_permissions
+--   user_roles
+--   vendors
+--   attachments
 --   meetings
 --   milestones
 --   project_audit_logs
@@ -716,6 +883,7 @@ CREATE INDEX ix_work_packages_type_id ON work_packages (type_id);
 --   activities
 --   meeting_agenda_items
 --   meeting_participants
+--   milestone_dependencies
 --   milestone_vendors
 --   activity_dependencies
 --   activity_resources
