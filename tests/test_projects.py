@@ -480,3 +480,49 @@ class TestProjectInclusiveDateValidation:
             headers=admin_headers,
         )
         assert resp.status_code == 422
+
+
+class TestProjectPastStartDate:
+    """Doc 24 part 1: ``startDate`` is allowed in the past (project entered
+    after work has already begun). ``endDate`` keeps the future-only rule."""
+
+    def test_past_start_with_future_end_succeeds(
+        self, client, admin_user, admin_headers,
+    ):
+        from datetime import datetime, timedelta, timezone
+        past_start = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        future_end = (
+            datetime.now(timezone.utc) + timedelta(days=60)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        resp = client.post(
+            "/api/v3/projects/create",
+            json={
+                "name": "Already started", "owner": "tmd1",
+                "startDate": past_start, "endDate": future_end,
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_past_end_still_rejected(
+        self, client, admin_user, admin_headers,
+    ):
+        from datetime import datetime, timedelta, timezone
+        past_start = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        past_end = (
+            datetime.now(timezone.utc) - timedelta(days=5)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        resp = client.post(
+            "/api/v3/projects/create",
+            json={
+                "name": "Already finished", "owner": "tmd1",
+                "startDate": past_start, "endDate": past_end,
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+        assert "future" in resp.text.lower()

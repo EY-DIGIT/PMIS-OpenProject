@@ -97,9 +97,12 @@ class ProjectCreateRequest(BaseModel):
             )
         return v
 
-    @field_validator("start_date", "end_date")
+    @field_validator("end_date")
     @classmethod
-    def validate_dates_in_future(cls, v):
+    def validate_end_date_in_future(cls, v):
+        # Doc 24: ``start_date`` is now allowed in the past — projects
+        # may be entered after work has already begun. ``end_date`` keeps
+        # the future-only constraint; finished projects are out of scope.
         if v is not None:
             now = datetime.now(timezone.utc)
             check_v = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
@@ -173,9 +176,12 @@ class ProjectUpdateRequest(BaseModel):
             )
         return v
 
-    @field_validator("start_date", "end_date")
+    @field_validator("end_date")
     @classmethod
-    def validate_dates_in_future(cls, v):
+    def validate_end_date_in_future(cls, v):
+        # Doc 24: ``start_date`` is now allowed in the past — projects
+        # may be entered after work has already begun. ``end_date`` keeps
+        # the future-only constraint; finished projects are out of scope.
         if v is not None:
             now = datetime.now(timezone.utc)
             check_v = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
@@ -259,9 +265,12 @@ class ProjectUpsertRequest(BaseModel):
             )
         return v
 
-    @field_validator("start_date", "end_date")
+    @field_validator("end_date")
     @classmethod
-    def validate_dates_in_future(cls, v):
+    def validate_end_date_in_future(cls, v):
+        # Doc 24: ``start_date`` is now allowed in the past — projects
+        # may be entered after work has already begun. ``end_date`` keeps
+        # the future-only constraint; finished projects are out of scope.
         if v is not None:
             now = datetime.now(timezone.utc)
             check_v = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
