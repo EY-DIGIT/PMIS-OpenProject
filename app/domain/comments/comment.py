@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
+from ...shared.datetime import iso_utc
 
 
 @dataclass
@@ -40,9 +41,9 @@ class Comment:
                 "last_name": self.author_last_name,
                 "email": self.author_email,
             },
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+            "deleted_at": iso_utc(self.deleted_at),
             "attachments": [a.to_dict() for a in (self.attachments or [])],
         }
 

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -53,13 +54,13 @@ class VendorModel(Base):
     contact_person = Column(String(255), nullable=True)
     phone_number = Column(String(50), nullable=True)
 
-    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False, index=True)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Soft-delete. A non-NULL deleted_at hides the vendor from the catalog
     # endpoint and from picker validation, but the project_vendors /
     # milestone_vendors mapping rows are intentionally NOT touched.
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
     # Doc 26: UUID FK to users.id (was Integer pre-doc-26).
     deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 

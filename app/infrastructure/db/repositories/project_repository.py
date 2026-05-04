@@ -151,6 +151,14 @@ class ProjectRepository:
         )
         self.db.add(model)
         self.db.flush()
+        # Doc 27 part 2: refresh so the in-memory object reflects the
+        # canonical naive UTC values written by the UtcDateTime column
+        # type. Without this, the response would echo whatever
+        # tz-aware string the FE sent (e.g. ``+05:30``) while sibling
+        # entities (milestones, etc.) emit naive UTC after their own
+        # refresh — confusing the FE with apparent date drift even
+        # though both represent the same instant.
+        self.db.refresh(model)
         return self._to_domain(model, with_vendors=False)
 
     def upsert_by_id(
@@ -281,6 +289,10 @@ class ProjectRepository:
             model.updated_by = updated_by
 
         self.db.flush()
+        # Doc 27 part 2: refresh so the patched datetime fields come
+        # back as canonical naive UTC (after UtcDateTime normalization),
+        # matching what other entities' responses emit.
+        self.db.refresh(model)
         return self._to_domain(model)
 
     def soft_delete(

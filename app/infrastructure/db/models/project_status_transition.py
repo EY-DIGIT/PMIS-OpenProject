@@ -34,6 +34,7 @@ from sqlalchemy import (
     Boolean, Column, DateTime, Index, Integer, String, UniqueConstraint,
 )
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -58,8 +59,8 @@ class ProjectStatusTransitionModel(Base):
 
     description = Column(String(500), nullable=True)
 
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         UniqueConstraint(

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, DateTime, Index, ForeignKey, Text
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -22,8 +23,8 @@ class MeetingAgendaItemModel(Base):
     description = Column(Text, nullable=True)
     position = Column(Integer, nullable=False, index=True)
     work_package_id = Column(Integer, ForeignKey("work_packages.id"), nullable=True, index=True)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Indexes
     __table_args__ = (

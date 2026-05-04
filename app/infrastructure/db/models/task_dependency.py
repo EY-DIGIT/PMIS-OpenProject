@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, text
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -48,8 +49,8 @@ class TaskDependencyModel(Base):
         nullable=False,
         index=True,
     )
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
     # Doc 26: users.id flipped to UUID String(36).
     deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 

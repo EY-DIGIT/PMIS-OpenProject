@@ -17,6 +17,7 @@ from sqlalchemy import (
     Column, DateTime, ForeignKey, Index, Integer, String, Text,
 )
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -47,11 +48,11 @@ class CommentModel(Base):
         String(36), ForeignKey("users.id"), nullable=False, index=True,
     )
 
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Soft delete (cascade-soft when parent target is soft-deleted).
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
     deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (

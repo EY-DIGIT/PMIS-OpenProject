@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, DateTime, Index, ForeignKey, UniqueConstraint
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -19,7 +20,7 @@ class MeetingParticipantModel(Base):
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False, index=True)
     # Doc 26: users.id flipped to UUID String(36).
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
 
     # Unique constraint: one participation per meeting-user pair
     __table_args__ = (

@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from ...shared.datetime import iso_utc
 
 
 @dataclass
@@ -42,8 +43,8 @@ class Attachment:
                 "first_name": self.uploader_first_name,
                 "last_name": self.uploader_last_name,
             },
-            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
-            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "uploaded_at": iso_utc(self.uploaded_at),
+            "deleted_at": iso_utc(self.deleted_at),
             # storage_key is an internal detail — never returned to clients.
         }
 

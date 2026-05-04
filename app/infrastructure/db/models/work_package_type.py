@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, UniqueConstraint
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -19,8 +20,8 @@ class WorkPackageTypeModel(Base):
     is_builtin = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     position = Column(Integer, default=0, nullable=False, index=True)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('internal_name', name='uq_work_package_types_internal_name'),

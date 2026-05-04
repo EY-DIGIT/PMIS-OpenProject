@@ -4,6 +4,7 @@ Project domain model.
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Tuple
+from ...shared.datetime import iso_utc
 
 
 @dataclass
@@ -70,12 +71,12 @@ class Project:
             "status": self.status,
             "owner": self.owner,
             "category": self.category,
-            "start_date": self.start_date.isoformat() if self.start_date else None,
-            "end_date": self.end_date.isoformat() if self.end_date else None,
-            "actual_start_date": self.actual_start_date.isoformat() if self.actual_start_date else None,
-            "actual_end_date": self.actual_end_date.isoformat() if self.actual_end_date else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "start_date": iso_utc(self.start_date),
+            "end_date": iso_utc(self.end_date),
+            "actual_start_date": iso_utc(self.actual_start_date),
+            "actual_end_date": iso_utc(self.actual_end_date),
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
             "parent_id": self.parent_id,
             "is_version": self.is_version,
             "version_of": self.version_of,
@@ -83,7 +84,7 @@ class Project:
             "version_no": self.version_no,
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "deleted_at": iso_utc(self.deleted_at),
             "deleted_by": self.deleted_by,
             "category_other": self.category_other,
             "category_other_reason": self.category_other_reason,

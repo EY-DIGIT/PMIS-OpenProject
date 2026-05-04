@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -27,7 +28,7 @@ class UserPermissionModel(Base):
         primary_key=True,
         nullable=False,
     )
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (

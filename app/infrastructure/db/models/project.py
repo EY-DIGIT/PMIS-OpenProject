@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index, ForeignKey, Text, text
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -66,14 +67,14 @@ class ProjectModel(Base):
     # category (MSAP/MSIP/BSP). Required when category == 'others'; NULL
     # otherwise. Captured for governance / category-curation review.
     category_other_reason = Column(String(1000), nullable=True)
-    start_date = Column(DateTime, nullable=True, index=True)
-    end_date = Column(DateTime, nullable=True, index=True)
+    start_date = Column(UtcDateTime, nullable=True, index=True)
+    end_date = Column(UtcDateTime, nullable=True, index=True)
     # Actual dates — recorded when work actually begins / ends. Both are
     # version-only editable per project lifecycle rules; baselines leave
     # them NULL. Mirrors the design's "Actual Start Date" / "Actual End
     # Date" fields on the project details panel.
-    actual_start_date = Column(DateTime, nullable=True)
-    actual_end_date = Column(DateTime, nullable=True)
+    actual_start_date = Column(UtcDateTime, nullable=True)
+    actual_end_date = Column(UtcDateTime, nullable=True)
 
     # Versioning marker.
     is_version = Column(Boolean, default=False, nullable=False, index=True)
@@ -82,11 +83,11 @@ class ProjectModel(Base):
     # so all user-FK columns here become String(36) too.
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
     deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Enforces "one active version per baseline" at the DB layer.
     # Active = is_version AND status != 'suspended' AND not soft-deleted.

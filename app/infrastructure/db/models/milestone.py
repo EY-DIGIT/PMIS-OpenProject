@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Index, text,
 )
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -26,8 +27,8 @@ class MilestoneModel(Base):
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
 
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
+    start_date = Column(UtcDateTime, nullable=False)
+    end_date = Column(UtcDateTime, nullable=False)
 
     position = Column(Integer, nullable=False, default=0)
 
@@ -48,12 +49,12 @@ class MilestoneModel(Base):
         String(36), ForeignKey("milestones.id"), nullable=True, index=True,
     )
 
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     # Doc 26: users.id flipped to UUID String(36).
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
 
     __table_args__ = (
         Index("idx_milestones_project_live", "project_id", "deleted_at"),

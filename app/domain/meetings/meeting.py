@@ -4,6 +4,7 @@ Meeting domain model.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from ...shared.datetime import iso_utc
 
 
 @dataclass
@@ -38,10 +39,10 @@ class Meeting:
             "project_id": self.project_id,
             "title": self.title,
             "description": self.description,
-            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "scheduled_at": iso_utc(self.scheduled_at),
             "duration_minutes": self.duration_minutes,
             "location": self.location,
             "created_by_id": self.created_by_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
         }

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, DateTime, Index, ForeignKey, JSON
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -22,7 +23,7 @@ class ProjectAuditLogModel(Base):
     action = Column(String(64), nullable=False, index=True)
     before = Column(JSON, nullable=True)
     after = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False, index=True)
 
     __table_args__ = (
         Index("idx_project_audit_logs_project_id", "project_id"),

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -22,7 +23,7 @@ class RolePermissionModel(Base):
         primary_key=True,
         nullable=False,
     )
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
 
     __table_args__ = (
         Index("idx_role_permissions_role", "role_id"),

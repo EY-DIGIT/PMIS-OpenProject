@@ -8,6 +8,7 @@ def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Text, DateTime, Index, ForeignKey
 from sqlalchemy.orm import relationship
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -27,10 +28,10 @@ class WorkPackageModel(Base):
     status = Column(String(100), default="new", nullable=False, index=True)
     priority = Column(String(100), default="normal", nullable=False, index=True)
     done_ratio = Column(Integer, default=0, nullable=False)  # 0-100
-    start_date = Column(DateTime, nullable=True)
-    end_date = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    start_date = Column(UtcDateTime, nullable=True)
+    end_date = Column(UtcDateTime, nullable=True)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Relationships
     project = relationship("ProjectModel", foreign_keys=[project_id])

@@ -16,6 +16,7 @@ from uuid import uuid4
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -51,18 +52,18 @@ class UserModel(Base):
     # (user_roles → roles). The column is dropped by alembic; on SQLite the
     # column may linger in the file but is no longer referenced anywhere.
     status = Column(String(50), default="active", nullable=False)
-    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False, index=True)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     # Refresh token tracking for stateless rotation
     refresh_token_jti = Column(String(64), nullable=True, index=False)
-    refresh_token_expires_at = Column(DateTime, nullable=True)
+    refresh_token_expires_at = Column(UtcDateTime, nullable=True)
     # Grace window: the just-rotated-out jti is held here for
     # REFRESH_TOKEN_GRACE_SECONDS (see settings) so concurrent /refresh
     # races, multi-tab login, and stale-token retry queues don't get
     # locked out by the atomic-swap losing path. NULL once expired or
     # cleared on explicit logout.
     previous_refresh_token_jti = Column(String(64), nullable=True)
-    previous_refresh_token_jti_valid_until = Column(DateTime, nullable=True)
+    previous_refresh_token_jti_valid_until = Column(UtcDateTime, nullable=True)
 
     # Vendor association (single vendor per user). Nullable so the
     # bootstrap admin (created by init_db) and any pre-feature legacy
@@ -100,7 +101,7 @@ class UserModel(Base):
     # Soft-delete. A non-NULL deleted_at hides the user from list/get
     # endpoints by default. Project_members mappings stay intact so
     # restore (PATCH status=active) preserves history.
-    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(UtcDateTime, nullable=True, index=True)
     # Doc 26: UUID FK to users.id (was Integer pre-doc-26).
     deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 

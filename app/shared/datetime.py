@@ -35,6 +35,33 @@ def format_datetime(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat()
 
 
+def iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    """Format a datetime as a tz-aware UTC ISO 8601 string.
+
+    Doc 27 part 2 (response-format consistency): every API response
+    should emit datetimes with an explicit ``+00:00`` (UTC) suffix, so
+    FE date pickers / locale converters can reliably interpret them
+    without having to guess whether a naive value means UTC or local.
+
+    Behavior:
+      - ``None`` → ``None``
+      - Naive datetime → assumed UTC; suffix attached.
+      - tz-aware datetime → converted to UTC; suffix attached.
+
+    Pairs with ``app/infrastructure/db/utc_datetime.UtcDateTime``: that
+    type guarantees stored values are canonical naive UTC; this helper
+    guarantees responses re-attach the ``+00:00`` so FE never sees a
+    bare naive datetime.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
 def parse_datetime(dt_str: str) -> Optional[datetime]:
     """
     Parse ISO 8601 datetime string.

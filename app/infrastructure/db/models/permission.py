@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, String
 
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -28,8 +29,8 @@ class PermissionModel(Base):
     name = Column(String(255), nullable=False)
     description = Column(String(1024), nullable=True)
     is_builtin = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     def __repr__(self) -> str:
         return f"<PermissionModel(code='{self.code}', is_builtin={self.is_builtin})>"

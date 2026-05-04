@@ -4,6 +4,7 @@ Meeting Agenda Item domain model.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+from ...shared.datetime import iso_utc
 
 
 @dataclass
@@ -41,6 +42,6 @@ class AgendaItem:
             "description": self.description,
             "position": self.position,
             "work_package_id": self.work_package_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
         }

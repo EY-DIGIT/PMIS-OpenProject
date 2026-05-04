@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 def _utcnow():
     return datetime.now(timezone.utc)
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Index
+from ..utc_datetime import UtcDateTime
 from ..session import Base
 
 
@@ -26,8 +27,8 @@ class RoleModel(Base):
     name = Column(String(255), unique=True, nullable=False, index=True)
     description = Column(String(1024), nullable=True)
     builtin = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
+    updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
     # Indexes
     __table_args__ = (
