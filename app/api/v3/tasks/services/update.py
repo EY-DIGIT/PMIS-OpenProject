@@ -32,7 +32,7 @@ from .....domain.tasks.task import (
 )
 from .....domain.tasks.task_resource import TaskResource
 
-from .create import _validate_task_deps_hierarchy
+from .create import _validate_task_deps_same_project
 
 
 def update_task(
@@ -159,9 +159,8 @@ def update_task(
         if task_id in candidates:
             raise ValidationError("A task cannot depend on itself.")
         if candidates:
-            _validate_task_deps_hierarchy(
+            _validate_task_deps_same_project(
                 db,
-                source_activity_id=model.activity_id,
                 project_id=model.project_id,
                 target_task_ids=candidates,
             )

@@ -25,7 +25,7 @@ from .....domain.subtasks.subtask import (
 )
 from .....domain.subtasks.subtask_resource import SubtaskResource
 
-from .create import _validate_subtask_deps_hierarchy
+from .create import _validate_subtask_deps_same_project
 
 
 def update_subtask(
@@ -148,9 +148,8 @@ def update_subtask(
         if subtask_id in candidates:
             raise ValidationError("A subtask cannot depend on itself.")
         if candidates:
-            _validate_subtask_deps_hierarchy(
+            _validate_subtask_deps_same_project(
                 db,
-                source_task_id=model.task_id,
                 project_id=model.project_id,
                 target_subtask_ids=candidates,
             )

@@ -479,10 +479,11 @@ class TestTaskDeps:
         assert t2.status_code == 201, t2.text
         assert t2.json()["data"]["dependsOn"] == [t1_id]
 
-    def test_create_task_violating_hierarchy_rejected(
+    def test_task_dep_across_unlinked_activities_now_allowed(
         self, client, admin_user, admin_headers,
     ):
-        # Setup: version with NO activity dep between A1 and A2.
+        # Doc 24: the old "parent activities must be linked" rule was
+        # dropped. Tasks can depend on any task in the same project.
         pid, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
         _publish(client, admin_headers, pid)
         vid = _create_version(client, admin_headers, pid)
@@ -494,12 +495,12 @@ class TestTaskDeps:
                     v_a1 = act["id"]
                 if act["name"] == "A2":
                     v_a2 = act["id"]
-        # T1 under v_a1, then try T2 under v_a2 depending on T1.
         t1 = _create_task(client, admin_headers, v_a1, name="T1")
         t1_id = t1.json()["data"]["id"]
+        # No activity-level edge between A1 and A2; this used to 422.
         t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1_id])
-        assert t2.status_code == 422, t2.text
-        assert "activity-level" in t2.json()["error"]["message"]
+        assert t2.status_code == 201, t2.text
+        assert t2.json()["data"]["dependsOn"] == [t1_id]
 
     def test_same_activity_task_dep_always_allowed(
         self, client, admin_user, admin_headers,
@@ -557,16 +558,13 @@ class TestSubtaskDeps:
         assert s2.status_code == 201, s2.text
         assert s2.json()["data"]["dependsOn"] == [s1]
 
-    def test_subtask_dep_violating_hierarchy_rejected(
+    def test_subtask_dep_across_unlinked_tasks_now_allowed(
         self, client, admin_user, admin_headers,
     ):
-        # Same setup but WITHOUT the task-level edge.
+        # Doc 24: the old "parent tasks must be linked" rule was dropped.
+        # Subtasks can depend on any subtask in the same project.
         pid, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
-        client.patch(
-            f"/api/v3/activities/{a2}",
-            json={"dependsOn": [a1]},
-            headers=admin_headers,
-        )
+        # No activity-level edge needed any more; tasks no longer require it.
         _publish(client, admin_headers, pid)
         vid = _create_version(client, admin_headers, pid)
         tree = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers)
@@ -578,12 +576,12 @@ class TestSubtaskDeps:
                 if act["name"] == "A2":
                     v_a2 = act["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
-        # T2 with NO dep on T1.
+        # T2 with NO dep on T1 — used to make the subtask dep below 422.
         t2 = _create_task(client, admin_headers, v_a2, name="T2").json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
         s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1])
-        assert s2.status_code == 422
-        assert "task-level" in s2.json()["error"]["message"]
+        assert s2.status_code == 201, s2.text
+        assert s2.json()["data"]["dependsOn"] == [s1]
 
 
 # ===========================================================================

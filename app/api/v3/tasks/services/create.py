@@ -1,7 +1,8 @@
-"""Create a task under an activity. Validates ``depends_on`` against the
-hierarchy rule: target tasks must live in the same project, and the source's
-parent activity must already depend on the target's parent activity (per the
-activity_dependencies edge set). Same-activity targets are always allowed."""
+"""Create a task under an activity. ``depends_on`` rules: target tasks
+must live in the same project, source != target (cycle prevention kicks
+in on update). The legacy parent-activity hierarchy rule was dropped in
+doc 24 — tasks may now depend on any task in the same project regardless
+of parent activity linkage."""
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -26,36 +27,26 @@ from .....domain.tasks.task import (
 from .....domain.tasks.task_resource import TaskResource
 
 
-def _validate_task_deps_hierarchy(
+def _validate_task_deps_same_project(
     db: Session,
     *,
-    source_activity_id: str,
     project_id: str,
     target_task_ids: List[str],
 ) -> None:
-    """Ensure each target task lives in the same project AND its parent
-    activity is referenced by the source's parent activity in
-    activity_dependencies. Same-activity targets are allowed without an
-    activity-level edge.
-    """
+    """Targets must live in the same project. Doc 24: dropped the
+    parent-activity hierarchy rule — any task in the project is a valid
+    dependency target now."""
     if not target_task_ids:
         return
     dep_repo = DependencyRepository(db)
     found = dep_repo.existing_target_tasks(project_id, target_task_ids)
-    if len(found) != len({tid for tid in target_task_ids if tid}):
-        ok_ids = {tid for tid, _ in found}
-        missing = [tid for tid in target_task_ids if tid and tid not in ok_ids]
+    ok_ids = {tid for tid, _ in found}
+    missing = [tid for tid in target_task_ids if tid and tid not in ok_ids]
+    if missing:
         raise ValidationError(
             f"Unknown or out-of-project task dependency target(s): "
             f"{', '.join(missing)}"
         )
-    for tid, parent_act in found:
-        if not dep_repo.activity_pair_is_dependent(source_activity_id, parent_act):
-            raise ValidationError(
-                f"Cannot add task dependency on task '{tid}': the source's "
-                f"parent activity does not depend on that task's parent "
-                f"activity. Add the activity-level dependency first."
-            )
 
 
 def create_task(
@@ -181,12 +172,9 @@ def create_task(
             expected_kind=KIND_TASK,
             raw_inputs=depends_on,
         )
-        # No self-edge needed (new id doesn't exist yet); cycle impossible.
-        # _validate_task_deps_hierarchy runs the same-project + parent-
-        # activity-edge check; existence is folded in there.
-        _validate_task_deps_hierarchy(
+        # No self-edge / cycle needed (new id doesn't exist yet).
+        _validate_task_deps_same_project(
             db,
-            source_activity_id=activity_id,
             project_id=activity.project_id,
             target_task_ids=candidates,
         )
