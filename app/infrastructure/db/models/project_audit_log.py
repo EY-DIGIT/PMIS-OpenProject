@@ -17,7 +17,8 @@ class ProjectAuditLogModel(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
-    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    actor_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     action = Column(String(64), nullable=False, index=True)
     before = Column(JSON, nullable=True)
     after = Column(JSON, nullable=True)

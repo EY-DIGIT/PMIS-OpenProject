@@ -22,7 +22,8 @@ class MeetingModel(Base):
     scheduled_at = Column(DateTime, nullable=False, index=True)
     duration_minutes = Column(Integer, nullable=True)
     location = Column(String(255), nullable=True)
-    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    created_by_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 

@@ -18,7 +18,7 @@ def close_project(
     db: Session,
     project_id: str,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
     actor_is_admin: bool,
     reason: Optional[str] = None,
 ) -> ServiceResult[Project]:

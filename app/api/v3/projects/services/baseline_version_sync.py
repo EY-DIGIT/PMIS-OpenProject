@@ -114,7 +114,7 @@ def propagate_milestone_create(
     db: Session,
     *,
     baseline_milestone_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Mirror a newly-created baseline milestone into every active version.
@@ -177,7 +177,7 @@ def propagate_milestone_update(
     *,
     baseline_milestone_id: str,
     updates: Dict[str, Any],
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Apply the same field patch to every active-version twin.
@@ -249,7 +249,7 @@ def propagate_milestone_soft_delete(
     db: Session,
     *,
     baseline_milestone_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Soft-delete every version twin (and its subtree) in active versions.
@@ -358,7 +358,7 @@ def propagate_milestone_dependency_change(
     db: Session,
     *,
     baseline_milestone_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Mirror this baseline milestone's LIVE dependency targets onto every
@@ -465,7 +465,7 @@ def propagate_activity_create(
     db: Session,
     *,
     baseline_activity_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Mirror a newly-created baseline activity into every active version.
@@ -555,7 +555,7 @@ def propagate_activity_update(
     *,
     baseline_activity_id: str,
     updates: Dict[str, Any],
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """
     Apply matching field patch to active-version twins of this activity.
@@ -624,7 +624,7 @@ def propagate_activity_soft_delete(
     db: Session,
     *,
     baseline_activity_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> int:
     """Soft-delete activity twins (and their subtree) on active versions."""
     baseline = (
@@ -715,7 +715,7 @@ def propagate_activity_soft_delete(
 
 
 def _soft_delete_milestone_subtree(
-    db: Session, milestone_id: str, *, actor_id: Optional[int], now: datetime,
+    db: Session, milestone_id: str, *, actor_id: Optional[str], now: datetime,
 ) -> None:
     """Soft-delete one milestone row plus every activity/task/subtask row
     (and their resource rows) beneath it. No commit — caller commits."""
@@ -763,7 +763,7 @@ def _soft_delete_milestone_subtree(
 
 
 def _soft_delete_activity_subtree(
-    db: Session, activity_id: str, *, actor_id: Optional[int], now: datetime,
+    db: Session, activity_id: str, *, actor_id: Optional[str], now: datetime,
 ) -> None:
     task_ids = select(TaskModel.id).where(
         TaskModel.activity_id == activity_id,

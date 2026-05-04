@@ -38,7 +38,7 @@ def delete_project(
     db: Session,
     project_id: str,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> ServiceResult[None]:
     """
     Soft-delete a project: stamp ``deleted_at`` / ``deleted_by``, flip status

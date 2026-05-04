@@ -213,7 +213,7 @@ class VendorRepository:
 
     # ---- Soft delete / restore ---------------------------------------
 
-    def soft_delete(self, vendor_id: str, *, actor_id: Optional[int]) -> Optional[Vendor]:
+    def soft_delete(self, vendor_id: str, *, actor_id: Optional[str]) -> Optional[Vendor]:
         """Mark a vendor deleted. Idempotent on already-deleted rows.
 
         Sets ``deleted_at`` + ``deleted_by`` and flips ``active`` to False so

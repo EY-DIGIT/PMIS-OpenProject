@@ -25,7 +25,7 @@ def create_version(
     db: Session,
     source_id: str,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> ServiceResult[Project]:
     repo = ProjectRepository(db)
     source = repo.get_by_id(source_id)

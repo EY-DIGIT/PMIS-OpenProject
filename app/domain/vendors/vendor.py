@@ -13,7 +13,7 @@ class Vendor:
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[int] = None
+    deleted_by: Optional[str] = None  # doc 26: UUID string
     # Contact details (doc 18). All three nullable; the FE renders an
     # empty cell when missing. None of them participate in soft-delete
     # / restore semantics — they're plain attributes.

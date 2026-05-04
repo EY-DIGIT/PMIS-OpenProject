@@ -64,7 +64,7 @@ class ParticipantAddRequest(BaseModel):
         }
     })
 
-    user_id: int = Field(..., gt=0, description="User ID to add as participant")
+    user_id: str = Field(..., gt=0, description="User ID to add as participant")
 
 
 # Agenda Item Request Schemas

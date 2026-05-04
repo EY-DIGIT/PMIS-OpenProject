@@ -23,7 +23,7 @@ from .....infrastructure.db.models.subtask_resource import SubtaskResourceModel
 
 
 def cascade_soft_delete_project(
-    db: Session, project_id: str, deleted_by: Optional[int] = None,
+    db: Session, project_id: str, deleted_by: Optional[str] = None,
 ) -> None:
     """
     Stamp deleted_at on every live row under the project, across all seven

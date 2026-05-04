@@ -113,7 +113,7 @@ class TaskRepository:
         project_id: str, activity_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
-        position: int, created_by: Optional[int],
+        position: int, created_by: Optional[str],
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
     ) -> Task:
@@ -137,7 +137,7 @@ class TaskRepository:
         self.db.flush()
         return self._to_domain(t)
 
-    def update(self, task_id: str, *, updates: dict, updated_by: Optional[int]) -> Task:
+    def update(self, task_id: str, *, updates: dict, updated_by: Optional[str]) -> Task:
         t = self.get_model(task_id)
         if t is None:
             raise LookupError(f"Task {task_id} not found")
@@ -203,7 +203,7 @@ class TaskRepository:
 
     # ---------- delete + cascade (task subtree) ----------
 
-    def soft_delete_with_cascade(self, task_id: str, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, task_id: str, deleted_by: Optional[str]) -> None:
         now = datetime.now(timezone.utc)
         subtask_ids = select(SubtaskModel.id).where(
             SubtaskModel.task_id == task_id,

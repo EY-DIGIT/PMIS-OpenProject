@@ -378,7 +378,7 @@ def assert_transition_allowed(
 def transition_to_draft_if_new(
     db: Session,
     project_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
 ) -> Optional[Project]:
     """
     Flip status from 'new' to 'draft' when the M/A/T/S contributor's save

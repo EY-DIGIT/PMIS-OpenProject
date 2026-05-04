@@ -28,7 +28,8 @@ class RevokedTokenModel(Base):
     # The JWT's ``jti`` claim is a 32-char hex (uuid4().hex). We use it as
     # the natural primary key so duplicate revocations are a no-op.
     jti = Column(String(64), primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     revoked_at = Column(DateTime, default=_utcnow, nullable=False)
     # The token's natural exp claim, in UTC. Once now > expires_at, this row
     # no longer has any effect on auth (the JWT verifier rejects expired

@@ -17,7 +17,7 @@ def create_meeting(
     project_id: str,
     title: str,
     scheduled_at: datetime,
-    created_by_id: int,
+    created_by_id: str,
     description: Optional[str] = None,
     duration_minutes: Optional[int] = None,
     location: Optional[str] = None,

@@ -182,7 +182,7 @@ class SubtaskRepository:
         project_id: str, task_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
-        position: int, created_by: Optional[int],
+        position: int, created_by: Optional[str],
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
         parent_subtask_id: Optional[str] = None,
@@ -208,7 +208,7 @@ class SubtaskRepository:
         self.db.flush()
         return self._to_domain(s)
 
-    def update(self, subtask_id: str, *, updates: dict, updated_by: Optional[int]) -> Subtask:
+    def update(self, subtask_id: str, *, updates: dict, updated_by: Optional[str]) -> Subtask:
         s = self.get_model(subtask_id)
         if s is None:
             raise LookupError(f"Subtask {subtask_id} not found")
@@ -274,7 +274,7 @@ class SubtaskRepository:
 
     # ---------- delete (subtask + its descendant subtree, doc 24) ----------
 
-    def soft_delete(self, subtask_id: str, deleted_by: Optional[int]) -> List[str]:
+    def soft_delete(self, subtask_id: str, deleted_by: Optional[str]) -> List[str]:
         """Soft-delete a subtask + every nested descendant subtask.
 
         Doc 24: with nesting, deleting a subtask must cascade to all

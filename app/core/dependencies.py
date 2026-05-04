@@ -10,7 +10,8 @@ from typing import Optional, Set
 from fastapi import Request
 
 
-def get_current_user_id(request: Request) -> Optional[int]:
+def get_current_user_id(request: Request) -> Optional[str]:
+    """Doc 26: returns the caller's UUID (was int pre-doc-26)."""
     return getattr(request.state, "user_id", None)
 
 

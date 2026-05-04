@@ -34,13 +34,14 @@ from ....infrastructure.db.repositories.user_repository import UserRepository
 
 
 def _resolve_user_id(db: Session, user_id):
-    """Resolve either an integer/numeric-string id or a ``US-...`` code
-    to the canonical integer id. Returns ``None`` if the input doesn't
-    map to a live user (caller surfaces 404).
+    """Resolve either a UUID or a ``US-...`` code to the canonical UUID.
+    Returns ``None`` if the input doesn't map to a live user (caller
+    surfaces 404).
 
-    Doc 25: every controller action that takes a path-param user id
-    funnels through here so the rest of the call chain (service layer)
-    keeps working with the integer ``id`` it already expects.
+    Doc 26: ``users.id`` is now a UUID string (was integer pre-doc-26),
+    so this is identical to vendor's ``resolve_id`` — UUID-or-code, no
+    int coercion. Every controller action that takes a path-param user
+    id funnels through here.
     """
     return UserRepository(db).resolve_id(user_id)
 

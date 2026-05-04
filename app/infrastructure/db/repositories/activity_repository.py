@@ -124,7 +124,7 @@ class ActivityRepository:
         project_id: str, milestone_id: str, name: str, description: Optional[str],
         type: str, start_date: datetime, end_date: datetime,
         actual_start_date: Optional[datetime], actual_end_date: Optional[datetime],
-        position: int, created_by: Optional[int],
+        position: int, created_by: Optional[str],
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
         status: Optional[str] = None,
@@ -150,7 +150,7 @@ class ActivityRepository:
         self.db.flush()  # get the id without committing -- caller may also create resource in same txn
         return self._to_domain(a)
 
-    def update(self, activity_id: str, *, updates: dict, updated_by: Optional[int]) -> Activity:
+    def update(self, activity_id: str, *, updates: dict, updated_by: Optional[str]) -> Activity:
         a = self.get_model(activity_id)
         if a is None:
             raise LookupError(f"Activity {activity_id} not found")
@@ -231,7 +231,7 @@ class ActivityRepository:
 
     # ---------- delete + cascade (activity subtree) ----------
 
-    def soft_delete_with_cascade(self, activity_id: str, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, activity_id: str, deleted_by: Optional[str]) -> None:
         now = datetime.now(timezone.utc)
         task_ids = select(TaskModel.id).where(
             TaskModel.activity_id == activity_id,

@@ -17,7 +17,7 @@ class Membership:
 
     id: int
     project_id: str
-    user_id: int
+    user_id: str  # doc 26: UUID string
     roles: List[str]
     created_at: datetime
     updated_at: datetime

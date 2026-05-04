@@ -24,9 +24,9 @@ from .....shared.service_result import ServiceResult
 
 def restore_user(
     db: Session,
-    user_id: int,
+    user_id: str,
     *,
-    requesting_user_id: Optional[int] = None,
+    requesting_user_id: Optional[str] = None,
     is_admin: bool = False,
 ) -> ServiceResult[User]:
     """Clear soft-delete flags + set status='active' on a user.

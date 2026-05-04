@@ -52,7 +52,7 @@ class CommentRepository:
         target_kind: str,
         target_id: str,
         body: str,
-        author_user_id: int,
+        author_user_id: str,
     ) -> Comment:
         model = CommentModel(
             target_kind=target_kind,

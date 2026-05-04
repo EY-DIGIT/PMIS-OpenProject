@@ -54,7 +54,7 @@ def project_snapshot(project: Project) -> Dict[str, Any]:
 def record_audit(
     db: Session,
     project_id: str,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
     action: str,
     before: Optional[Dict[str, Any]] = None,
     after: Optional[Dict[str, Any]] = None,

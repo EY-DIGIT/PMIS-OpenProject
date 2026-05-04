@@ -48,7 +48,7 @@ class MeetingRepository:
         project_id: str,
         title: str,
         scheduled_at,
-        created_by_id: int,
+        created_by_id: str,
         description: Optional[str] = None,
         duration_minutes: Optional[int] = None,
         location: Optional[str] = None,

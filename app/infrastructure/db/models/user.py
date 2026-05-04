@@ -10,6 +10,7 @@ per user, per product spec). `division` is one of DIVISION_CHOICES
 required and stored in `division_other`.
 """
 from datetime import datetime, timezone
+from uuid import uuid4
 
 
 def _utcnow():
@@ -23,13 +24,22 @@ class UserModel(Base):
 
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    # Doc 26: ``id`` is now a UUID (String(36)) — replaces the legacy
+    # auto-incrementing integer. Aligns with every other resource
+    # (projects, vendors, milestones, tasks, …) so ID handling is
+    # uniform across the API surface. The ``user_code`` column (doc 25)
+    # is still the human-readable display identifier; ``id`` is the
+    # canonical machine identifier and FK target.
+    id = Column(
+        String(36),
+        primary_key=True,
+        index=True,
+        default=lambda: str(uuid4()),
+    )
     # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
-    # Coexists with the integer ``id``: ``id`` stays the canonical machine
-    # FK target; ``user_code`` is what UI / search / cross-entity references
-    # show to humans. Generated at create time from ``login`` + ``created_at``
-    # (see app/shared/code_generators.py). Nullable in the DB so legacy /
-    # bootstrap rows stay valid; UNIQUE so picker validation can rely on it.
+    # Snapshot of ``login`` + ``created_at`` taken at create time;
+    # immutable on rename. UI / search / cross-entity references show
+    # the code; ``id`` is what FKs / joins use under the hood.
     user_code = Column(String(50), nullable=True, unique=True, index=True)
     login = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
@@ -91,7 +101,8 @@ class UserModel(Base):
     # endpoints by default. Project_members mappings stay intact so
     # restore (PATCH status=active) preserves history.
     deleted_at = Column(DateTime, nullable=True, index=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Doc 26: UUID FK to users.id (was Integer pre-doc-26).
+    deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # Indexes
     __table_args__ = (

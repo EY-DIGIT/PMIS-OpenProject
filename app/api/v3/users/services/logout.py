@@ -39,7 +39,7 @@ from .....shared.service_result import ServiceResult
 def logout_user(
     db: Session,
     *,
-    user_id: int,
+    user_id: str,
     token_jti: Optional[str],
     token_exp: Optional[datetime],
 ) -> ServiceResult[dict]:

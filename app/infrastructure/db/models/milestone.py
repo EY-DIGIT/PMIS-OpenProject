@@ -50,8 +50,9 @@ class MilestoneModel(Base):
 
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
 
     __table_args__ = (

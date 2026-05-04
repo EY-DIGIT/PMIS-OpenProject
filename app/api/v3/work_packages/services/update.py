@@ -22,7 +22,7 @@ def update_work_package(
     work_package_id: int,
     subject: Optional[str] = None,
     description: Optional[str] = None,
-    assignee_id: Optional[int] = None,
+    assignee_id: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     done_ratio: Optional[int] = None,

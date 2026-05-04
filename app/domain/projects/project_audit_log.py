@@ -10,7 +10,8 @@ from typing import Optional, Any, Dict
 class ProjectAuditLog:
     id: int
     project_id: str
-    actor_id: Optional[int]
+    # Doc 26: actor_id is a UUID string (was int pre-doc-26).
+    actor_id: Optional[str]
     action: str
     before: Optional[Dict[str, Any]]
     after: Optional[Dict[str, Any]]

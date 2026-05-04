@@ -50,7 +50,8 @@ class TaskDependencyModel(Base):
     )
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     deleted_at = Column(DateTime, nullable=True, index=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
         Index("idx_task_deps_source_live", "source_task_id", "deleted_at"),

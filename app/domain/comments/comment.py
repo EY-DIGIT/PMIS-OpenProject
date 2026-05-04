@@ -10,11 +10,12 @@ class Comment:
     target_kind: str       # one of TARGET_KINDS
     target_id: str         # UUID of the target (M/A/T/S id)
     body: str
-    author_user_id: int
+    # Doc 26: user-id fields are UUID strings.
+    author_user_id: str
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[int] = None
+    deleted_by: Optional[str] = None
 
     # Embedded author info (filled by repo when joined). Not always present.
     author_login: Optional[str] = None

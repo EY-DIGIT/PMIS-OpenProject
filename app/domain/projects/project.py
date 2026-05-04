@@ -40,10 +40,11 @@ class Project:
     version_of: Optional[str] = None
     baseline_id: Optional[str] = None
     version_no: Optional[int] = None
-    created_by: Optional[int] = None
-    updated_by: Optional[int] = None
+    # Doc 26: user-id fields are UUID strings (was int pre-doc-26).
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[int] = None
+    deleted_by: Optional[str] = None
     # Present when category == 'others'; otherwise None.
     category_other: Optional[str] = None
     # Reason explaining why category='others' was chosen instead of one of

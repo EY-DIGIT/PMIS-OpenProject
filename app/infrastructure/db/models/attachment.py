@@ -51,14 +51,15 @@ class AttachmentModel(Base):
     mime_type = Column(String(100), nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
 
+    # Doc 26: users.id flipped to UUID String(36).
     uploaded_by_user_id = Column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True,
+        String(36), ForeignKey("users.id"), nullable=False, index=True,
     )
     uploaded_at = Column(DateTime, default=_utcnow, nullable=False)
 
     # Soft delete (the storage cleanup cron purges bytes after retention).
     deleted_at = Column(DateTime, nullable=True, index=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
         Index("idx_attachments_target", "target_kind", "target_id"),

@@ -17,7 +17,7 @@ class MeetingParticipant:
 
     id: int
     meeting_id: int
-    user_id: int
+    user_id: str  # doc 26: UUID string
     created_at: datetime
 
     def to_dict(self) -> dict:

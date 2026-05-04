@@ -94,7 +94,7 @@ class MilestoneRepository:
         project_id: str, name: str, description: Optional[str],
         start_date: datetime, end_date: datetime,
         position: int,
-        created_by: Optional[int],
+        created_by: Optional[str],
         status: str = "not_completed",
     ) -> Milestone:
         m = MilestoneModel(
@@ -114,7 +114,7 @@ class MilestoneRepository:
         return self._to_domain(m, with_vendors=False)
 
     def update(
-        self, milestone_id: str, *, updates: dict, updated_by: Optional[int],
+        self, milestone_id: str, *, updates: dict, updated_by: Optional[str],
     ) -> Milestone:
         m = self.get_model(milestone_id)
         if m is None:
@@ -128,7 +128,7 @@ class MilestoneRepository:
 
     # ---------- soft delete + cascade ----------
 
-    def soft_delete_with_cascade(self, milestone_id: str, deleted_by: Optional[int]) -> None:
+    def soft_delete_with_cascade(self, milestone_id: str, deleted_by: Optional[str]) -> None:
         """
         Soft-delete a milestone and every descendant (activities, their
         resources, tasks, their resources, subtasks, their resources).

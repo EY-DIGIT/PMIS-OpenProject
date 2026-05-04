@@ -49,7 +49,7 @@ def create_comment(
     target_id: str,
     body: str,
     files: Optional[List[UploadFile]],
-    author_user_id: int,
+    author_user_id: str,
 ) -> ServiceResult[Comment]:
     files = files or []
 

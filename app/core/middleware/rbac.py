@@ -11,7 +11,7 @@ decode.
 Anonymous (no token, revoked token, decode failure) requests have an
 empty permissions set → every ``require_permission`` rejects with 401.
 """
-from typing import Set, Union
+from typing import Optional, Set, Union
 from fastapi import Depends, Request
 
 from ..errors import AuthenticationError, AuthorizationError
@@ -21,7 +21,8 @@ def _user_permissions(request: Request) -> Set[str]:
     return getattr(request.state, "user_permissions", set()) or set()
 
 
-def _user_id(request: Request) -> int:
+def _user_id(request: Request) -> Optional[str]:
+    """Doc 26: returns the caller's UUID (was int pre-doc-26)."""
     return getattr(request.state, "user_id", None)
 
 

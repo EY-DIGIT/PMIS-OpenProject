@@ -37,7 +37,7 @@ class MeetingParticipantRepository:
             created_at=model.created_at,
         )
 
-    def create(self, meeting_id: int, user_id: int) -> MeetingParticipant:
+    def create(self, meeting_id: int, user_id: str) -> MeetingParticipant:
         """
         Add a participant to a meeting.
 
@@ -89,7 +89,7 @@ class MeetingParticipantRepository:
         ).all()
         return [self._to_domain(m) for m in models]
 
-    def exists(self, meeting_id: int, user_id: int) -> bool:
+    def exists(self, meeting_id: int, user_id: str) -> bool:
         """
         Check if user is a participant in meeting.
 
@@ -107,7 +107,7 @@ class MeetingParticipantRepository:
             ).exists()
         ).scalar()
 
-    def delete(self, meeting_id: int, user_id: int) -> bool:
+    def delete(self, meeting_id: int, user_id: str) -> bool:
         """
         Remove a participant from a meeting.
 

@@ -37,7 +37,7 @@ def update_project(
     db: Session,
     project_id: str,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
     patch: Dict[str, Any],
     vendor_ids: Optional[List[str]] = None,
 ) -> ServiceResult[Project]:

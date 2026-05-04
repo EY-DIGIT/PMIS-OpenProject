@@ -41,7 +41,7 @@ _HIDDEN_PROJECT_STATUSES = ("closed",)
 _ADMIN_ROLE_NAME = "admin"
 
 
-def _user_holds_admin_role(db: Session, user_id: int) -> bool:
+def _user_holds_admin_role(db: Session, user_id: str) -> bool:
     """Check whether ``user_id`` is assigned the seeded ``admin`` role.
 
     Replaces the legacy ``users.admin`` boolean column (dropped in doc 21
@@ -95,7 +95,7 @@ class UserRepository:
             projects=projects or [],
         )
 
-    def _load_projects_for_user(self, user_id: int) -> List[dict]:
+    def _load_projects_for_user(self, user_id: str) -> List[dict]:
         """Return slim project dicts for embedding in user responses.
 
         Joins project_members → projects, filters out hidden statuses
@@ -208,7 +208,7 @@ class UserRepository:
     # ---- Read ----------------------------------------------------------
 
     def get_by_id(
-        self, user_id: int, *, include_deleted: bool = False,
+        self, user_id: str, *, include_deleted: bool = False,
     ) -> Optional[User]:
         q = self.db.query(UserModel).filter(UserModel.id == user_id)
         if not include_deleted:
@@ -238,33 +238,31 @@ class UserRepository:
         self, identifier, *, include_deleted: bool = False,
     ) -> Optional[User]:
         """Polymorphic lookup: dispatches to ``get_by_code`` if the
-        identifier looks like a user code, otherwise to ``get_by_id``.
+        identifier looks like a ``US-...`` code, otherwise treats it as
+        the canonical UUID and dispatches to ``get_by_id``.
 
-        Used by every endpoint whose path param accepts either form.
-        Path params arrive as strings even for the integer-id case;
-        we coerce to int after rejecting the code shape. Non-numeric
-        non-code inputs return None (caller raises 404).
+        Doc 26: ``users.id`` is now a UUID string (was integer pre-doc-26)
+        so the dispatch is identical to vendors — UUID or code, no int
+        coercion. Non-string inputs return None (caller raises 404).
         """
-        # ``looks_like_user_code`` rejects ints / non-strings safely.
+        # Strings only — anything else (int, bytes, None) is invalid.
+        if not isinstance(identifier, str) or not identifier:
+            return None
         if looks_like_user_code(identifier):
             return self.get_by_code(identifier, include_deleted=include_deleted)
-        # Otherwise treat as the integer id. Accept both int and string
-        # forms (FastAPI converts path params to str by default unless the
-        # signature is typed int; we tolerate either).
-        try:
-            uid = int(identifier)
-        except (TypeError, ValueError):
-            return None
-        return self.get_by_id(uid, include_deleted=include_deleted)
+        return self.get_by_id(identifier, include_deleted=include_deleted)
 
-    def resolve_id(self, identifier) -> Optional[int]:
-        """Return the canonical integer id for either an int / numeric
-        string or a ``US-...`` code. Returns ``None`` if a code is given
-        and no LIVE user matches.
+    def resolve_id(self, identifier) -> Optional[str]:
+        """Return the canonical UUID for either a UUID or a ``US-...``
+        code. Returns ``None`` if a code is given and no LIVE user
+        matches.
 
         Used by upstream callers that already work in terms of
-        ``user_id`` (int) but want to accept a code on input.
+        ``user_id`` (UUID string) but want to accept a code on input.
+        Doc 26: returns string (was int pre-doc-26).
         """
+        if not isinstance(identifier, str) or not identifier:
+            return None
         if looks_like_user_code(identifier):
             row = (
                 self.db.query(UserModel.id)
@@ -273,10 +271,7 @@ class UserRepository:
                 .first()
             )
             return row[0] if row else None
-        try:
-            return int(identifier)
-        except (TypeError, ValueError):
-            return None
+        return identifier  # already a UUID; existence check is downstream
 
     def get_by_login(
         self, login: str, *, include_deleted: bool = False,
@@ -304,7 +299,7 @@ class UserRepository:
         projects = self._load_projects_for_user(model.id)
         return self._to_domain(model, vendor=vendor, projects=projects)
 
-    def get_password_hash(self, user_id: int) -> Optional[str]:
+    def get_password_hash(self, user_id: str) -> Optional[str]:
         """Used by login/auth — bypasses soft-delete filter (we want to
         reject login for inactive/deleted users with a dedicated message)."""
         model = (
@@ -369,7 +364,7 @@ class UserRepository:
             self.db.query(UserModel).filter(UserModel.email == email).exists()
         ).scalar()
 
-    def has_other_active_admin(self, exclude_user_id: int) -> bool:
+    def has_other_active_admin(self, exclude_user_id: str) -> bool:
         """True if at least one OTHER live user holds the ``admin`` role.
 
         Doc 21 part B: derived from the user_roles join (replaces the
@@ -391,7 +386,7 @@ class UserRepository:
 
     def update(
         self,
-        user_id: int,
+        user_id: str,
         email: Optional[str] = None,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
@@ -477,7 +472,7 @@ class UserRepository:
         projects = self._load_projects_for_user(model.id)
         return self._to_domain(model, vendor=vendor, projects=projects)
 
-    def update_password(self, user_id: int, hashed_password: str) -> bool:
+    def update_password(self, user_id: str, hashed_password: str) -> bool:
         model = (
             self.db.query(UserModel)
             .filter(UserModel.id == user_id)
@@ -491,7 +486,7 @@ class UserRepository:
 
     def rotate_refresh_token(
         self,
-        user_id: int,
+        user_id: str,
         new_jti: Optional[str],
         new_expires_at,
         grace_seconds: int = 0,
@@ -544,7 +539,7 @@ class UserRepository:
     # concurrent-refresh race that this rewrite fixes.
     def update_refresh_token_metadata(
         self,
-        user_id: int,
+        user_id: str,
         jti: Optional[str],
         expires_at,
         expected_old_jti: Optional[str] = None,  # noqa: ARG002 — kept for compat
@@ -553,7 +548,7 @@ class UserRepository:
             user_id, jti, expires_at, grace_seconds=0,
         )
 
-    def get_refresh_metadata(self, user_id: int):
+    def get_refresh_metadata(self, user_id: str):
         """Return ``(current_jti, current_expires_at)``.
 
         Kept for callers that don't need the grace-window fields.
@@ -567,7 +562,7 @@ class UserRepository:
             return None, None
         return model.refresh_token_jti, model.refresh_token_expires_at
 
-    def get_refresh_metadata_with_grace(self, user_id: int):
+    def get_refresh_metadata_with_grace(self, user_id: str):
         """Return ``(current_jti, current_expires, previous_jti, previous_valid_until)``.
 
         Used by /refresh and /introspect to honour the grace window: a
@@ -590,7 +585,7 @@ class UserRepository:
 
     # ---- Soft delete ---------------------------------------------------
 
-    def soft_delete(self, user_id: int, actor_id: Optional[int]) -> bool:
+    def soft_delete(self, user_id: str, actor_id: Optional[str]) -> bool:
         """Idempotent soft-delete. Sets deleted_at + deleted_by + status='inactive'.
         Returns True if a row was updated, False if user not found."""
         model = (
@@ -608,5 +603,5 @@ class UserRepository:
         return True
 
     # Legacy method kept for backward compat — now delegates to soft_delete.
-    def delete(self, user_id: int) -> bool:
+    def delete(self, user_id: str) -> bool:
         return self.soft_delete(user_id, actor_id=None)

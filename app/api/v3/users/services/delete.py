@@ -28,9 +28,9 @@ from .....shared.service_result import ServiceResult
 
 def delete_user(
     db: Session,
-    user_id: int,
+    user_id: str,
     *,
-    actor_id: Optional[int] = None,
+    actor_id: Optional[str] = None,
 ) -> ServiceResult[bool]:
     """Soft-delete a user. Idempotent on already-deleted rows."""
     repository = UserRepository(db)

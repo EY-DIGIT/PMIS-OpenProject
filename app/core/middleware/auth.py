@@ -78,7 +78,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             db.close()
 
     @staticmethod
-    def _load_user_permissions(user_id: int):
+    def _load_user_permissions(user_id: str):
         """Returns (permissions: Set[str], is_admin: bool)."""
         from ...infrastructure.db.session import SessionLocal
         from ...infrastructure.db.repositories.rbac_repository import (

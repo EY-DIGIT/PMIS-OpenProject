@@ -56,7 +56,7 @@ class AttachmentRepository:
         storage_key: str,
         mime_type: str,
         size_bytes: int,
-        uploaded_by_user_id: int,
+        uploaded_by_user_id: str,
     ) -> Attachment:
         # Invariant: either comment_id is set, or both target_kind+target_id are set.
         if comment_id is None and (target_kind is None or target_id is None):

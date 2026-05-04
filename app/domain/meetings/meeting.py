@@ -22,7 +22,7 @@ class Meeting:
     scheduled_at: datetime
     duration_minutes: Optional[int]
     location: Optional[str]
-    created_by_id: int
+    created_by_id: str  # doc 26: UUID string
     created_at: datetime
     updated_at: datetime
 

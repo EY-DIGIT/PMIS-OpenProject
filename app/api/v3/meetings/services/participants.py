@@ -13,7 +13,7 @@ from app.shared.service_result import ServiceResult
 def add_participant(
     db: Session,
     meeting_id: int,
-    user_id: int,
+    user_id: str,
     project_id: str,
 ) -> ServiceResult[MeetingParticipant]:
     """
@@ -101,7 +101,7 @@ def list_participants(
 def remove_participant(
     db: Session,
     meeting_id: int,
-    user_id: int,
+    user_id: str,
 ) -> ServiceResult[bool]:
     """
     Remove a participant from a meeting.

@@ -22,7 +22,8 @@ class WorkPackageModel(Base):
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("work_packages.id"), nullable=True, index=True)
     type_id = Column(Integer, ForeignKey("work_package_types.id"), nullable=True, index=True)
-    assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Doc 26: users.id flipped to UUID String(36).
+    assignee_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     status = Column(String(100), default="new", nullable=False, index=True)
     priority = Column(String(100), default="normal", nullable=False, index=True)
     done_ratio = Column(Integer, default=0, nullable=False)  # 0-100

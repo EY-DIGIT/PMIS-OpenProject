@@ -337,7 +337,7 @@ class MeetingController:
     def remove_participant(
         request: Request,
         meeting_id: int,
-        user_id: int,
+        user_id: str,
         db: Session
     ) -> JSONResponse:
         """

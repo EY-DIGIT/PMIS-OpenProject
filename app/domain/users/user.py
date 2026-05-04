@@ -14,7 +14,8 @@ class User:
     This represents the business model of a user, separate from database concerns.
     """
 
-    id: int
+    # Doc 26: ``id`` is now a UUID string (was integer pre-doc-26).
+    id: str
     login: str
     email: str
     first_name: Optional[str]
@@ -40,7 +41,8 @@ class User:
 
     # Soft-delete fields.
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[int] = None
+    # Doc 26: deleted_by holds a UUID string (was int pre-doc-26).
+    deleted_by: Optional[str] = None
 
     # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
     # Snapshot of ``login`` + ``created_at`` taken at create time; immutable

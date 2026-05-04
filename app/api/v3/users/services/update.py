@@ -34,7 +34,7 @@ _USER_STATUS_CHOICES = ("active", "inactive", "locked", "registered")
 
 def update_user(
     db: Session,
-    user_id: int,
+    user_id: str,
     email: Optional[str] = None,
     first_name: Optional[str] = None,
     last_name: Optional[str] = None,
@@ -44,7 +44,7 @@ def update_user(
     division: Optional[str] = None,
     division_other: Optional[str] = None,
     phone_number: Optional[str] = None,
-    requesting_user_id: Optional[int] = None,
+    requesting_user_id: Optional[str] = None,
     is_admin: bool = False,
 ) -> ServiceResult[User]:
     """Update a user's mutable fields."""
@@ -230,9 +230,9 @@ def update_user(
 
 def update_password(
     db: Session,
-    user_id: int,
+    user_id: str,
     new_password: str,
-    requesting_user_id: Optional[int] = None,
+    requesting_user_id: Optional[str] = None,
     is_admin: bool = False,
 ) -> ServiceResult[bool]:
     """Update a user's password. Self or admin only."""

@@ -30,7 +30,7 @@ from .transitions import (
 def create_project(
     db: Session,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
     name: str,
     description: Optional[str] = None,
     active: bool = True,

@@ -41,7 +41,7 @@ class RbacRepository:
     # Effective permissions for a user
     # -------------------------------------------------------------------
 
-    def effective_permissions_for_user(self, user_id: int) -> Set[str]:
+    def effective_permissions_for_user(self, user_id: str) -> Set[str]:
         """Union of role-derived and direct grants for the user."""
         if user_id is None:
             return set()
@@ -61,7 +61,7 @@ class RbacRepository:
         }
         return role_codes | direct_codes
 
-    def user_has_admin_role(self, user_id: int) -> bool:
+    def user_has_admin_role(self, user_id: str) -> bool:
         if user_id is None:
             return False
         return (
@@ -236,7 +236,7 @@ class RbacRepository:
     # User-role assignments
     # -------------------------------------------------------------------
 
-    def list_roles_for_user(self, user_id: int) -> List[RoleModel]:
+    def list_roles_for_user(self, user_id: str) -> List[RoleModel]:
         return (
             self.db.query(RoleModel)
             .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
@@ -246,7 +246,7 @@ class RbacRepository:
         )
 
     def assign_role_to_user(
-        self, user_id: int, role_id: int, *, actor_id: Optional[int] = None,
+        self, user_id: str, role_id: int, *, actor_id: Optional[str] = None,
     ) -> bool:
         existing = (
             self.db.query(UserRoleModel)
@@ -264,7 +264,7 @@ class RbacRepository:
         self.db.flush()
         return True
 
-    def unassign_role_from_user(self, user_id: int, role_id: int) -> bool:
+    def unassign_role_from_user(self, user_id: str, role_id: int) -> bool:
         row = (
             self.db.query(UserRoleModel)
             .filter(
@@ -295,7 +295,7 @@ class RbacRepository:
     # Direct user-permission grants
     # -------------------------------------------------------------------
 
-    def list_direct_permissions_for_user(self, user_id: int) -> List[str]:
+    def list_direct_permissions_for_user(self, user_id: str) -> List[str]:
         return sorted(
             r[0]
             for r in self.db.query(UserPermissionModel.permission_code)
@@ -304,7 +304,7 @@ class RbacRepository:
         )
 
     def grant_permission_to_user(
-        self, user_id: int, code: str, *, actor_id: Optional[int] = None,
+        self, user_id: str, code: str, *, actor_id: Optional[str] = None,
     ) -> bool:
         existing = (
             self.db.query(UserPermissionModel)
@@ -324,7 +324,7 @@ class RbacRepository:
         self.db.flush()
         return True
 
-    def revoke_permission_from_user(self, user_id: int, code: str) -> bool:
+    def revoke_permission_from_user(self, user_id: str, code: str) -> bool:
         row = (
             self.db.query(UserPermissionModel)
             .filter(

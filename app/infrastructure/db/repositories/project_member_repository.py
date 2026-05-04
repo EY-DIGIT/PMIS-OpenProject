@@ -42,7 +42,7 @@ class ProjectMemberRepository:
     def create(
         self,
         project_id: str,
-        user_id: int,
+        user_id: str,
         roles: List[str],
     ) -> Membership:
         """
@@ -83,7 +83,7 @@ class ProjectMemberRepository:
         ).first()
         return self._to_domain(model) if model else None
 
-    def get_by_project_and_user(self, project_id: str, user_id: int) -> Optional[Membership]:
+    def get_by_project_and_user(self, project_id: str, user_id: str) -> Optional[Membership]:
         """
         Get membership by project and user.
 
@@ -100,7 +100,7 @@ class ProjectMemberRepository:
         ).first()
         return self._to_domain(model) if model else None
 
-    def exists_by_project_and_user(self, project_id: str, user_id: int) -> bool:
+    def exists_by_project_and_user(self, project_id: str, user_id: str) -> bool:
         """
         Check if a project member exists for given project and user.
 
@@ -153,7 +153,7 @@ class ProjectMemberRepository:
 
     def list_by_user(
         self,
-        user_id: int,
+        user_id: str,
         page: int = 1,
         page_size: int = 20,
     ) -> Tuple[List[Membership], int]:
@@ -231,7 +231,7 @@ class ProjectMemberRepository:
 
         return True
 
-    def delete_by_project_and_user(self, project_id: str, user_id: int) -> bool:
+    def delete_by_project_and_user(self, project_id: str, user_id: str) -> bool:
         """
         Delete a membership by project and user.
 
@@ -255,7 +255,7 @@ class ProjectMemberRepository:
 
         return True
 
-    def exists(self, project_id: str, user_id: int) -> bool:
+    def exists(self, project_id: str, user_id: str) -> bool:
         """
         Check if a membership exists.
 
@@ -272,7 +272,7 @@ class ProjectMemberRepository:
                 ProjectMemberModel.user_id == user_id,
             ).exists()
         ).scalar()
-    def is_member(self, project_id: str, user_id: int) -> bool:
+    def is_member(self, project_id: str, user_id: str) -> bool:
         """
         Check if a user is a member of a project.
 

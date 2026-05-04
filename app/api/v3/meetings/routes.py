@@ -190,7 +190,7 @@ def list_participants(
 def remove_participant(
     request: Request,
     meeting_id: int,
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db)
 ) -> None:
     """

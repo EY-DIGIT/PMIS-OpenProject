@@ -107,7 +107,7 @@ class ProjectRepository:
         version_of: Optional[str] = None,
         baseline_id: Optional[str] = None,
         version_no: Optional[int] = None,
-        created_by: Optional[int] = None,
+        created_by: Optional[str] = None,
         # Caller may inject a pre-computed id (e.g. from the URL path of a
         # PUT upsert call). If omitted, a fresh uuid4 is generated.
         id: Optional[str] = None,
@@ -255,7 +255,7 @@ class ProjectRepository:
         self,
         project_id: str,
         *,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[str] = None,
         include_deleted: bool = False,
         **fields,
     ) -> Optional[Project]:
@@ -286,7 +286,7 @@ class ProjectRepository:
     def soft_delete(
         self,
         project_id: str,
-        actor_id: Optional[int],
+        actor_id: Optional[str],
         when: Optional[datetime] = None,
     ) -> Optional[Project]:
         """Mark a project deleted. Idempotent on already-deleted rows."""

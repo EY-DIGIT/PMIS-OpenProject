@@ -19,7 +19,7 @@ def suspend_version(
     db: Session,
     project_id: str,
     *,
-    actor_id: Optional[int],
+    actor_id: Optional[str],
     actor_is_admin: bool,
 ) -> ServiceResult[Project]:
     repo = ProjectRepository(db)

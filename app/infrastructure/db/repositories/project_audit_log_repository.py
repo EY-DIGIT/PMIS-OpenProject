@@ -33,7 +33,7 @@ class ProjectAuditLogRepository:
     def add(
         self,
         project_id: str,
-        actor_id: Optional[int],
+        actor_id: Optional[str],
         action: str,
         before: Optional[Dict[str, Any]] = None,
         after: Optional[Dict[str, Any]] = None,

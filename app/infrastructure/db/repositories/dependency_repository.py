@@ -66,7 +66,7 @@ class DependencyRepository:
         project_id: str,
         target_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         """Replace the source milestone's LIVE dependency target list.
 
@@ -160,7 +160,7 @@ class DependencyRepository:
         return None
 
     def cascade_remove_milestone_targets(
-        self, target_milestone_id: str, *, actor_id: Optional[int] = None,
+        self, target_milestone_id: str, *, actor_id: Optional[str] = None,
     ) -> None:
         """Soft-delete every live edge pointing at or leaving this milestone.
         Does NOT commit."""
@@ -222,7 +222,7 @@ class DependencyRepository:
         project_id: str,
         target_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         """Replace the source's LIVE dependency target list.
 
@@ -315,7 +315,7 @@ class DependencyRepository:
         return None
 
     def cascade_remove_activity_targets(
-        self, target_activity_id: str, *, actor_id: Optional[int] = None,
+        self, target_activity_id: str, *, actor_id: Optional[str] = None,
     ) -> None:
         """Soft-delete every live dep edge pointing at or leaving this
         activity. Does NOT commit."""
@@ -360,7 +360,7 @@ class DependencyRepository:
         project_id: str,
         target_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         targets = list(dict.fromkeys(target_ids))
         existing_live = set(
@@ -462,7 +462,7 @@ class DependencyRepository:
         return None
 
     def cascade_remove_task_targets(
-        self, target_task_id: str, *, actor_id: Optional[int] = None,
+        self, target_task_id: str, *, actor_id: Optional[str] = None,
     ) -> None:
         now = _utcnow()
         self.db.execute(
@@ -502,7 +502,7 @@ class DependencyRepository:
         project_id: str,
         target_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         targets = list(dict.fromkeys(target_ids))
         existing_live = set(
@@ -601,7 +601,7 @@ class DependencyRepository:
         return None
 
     def cascade_remove_subtask_targets(
-        self, target_subtask_id: str, *, actor_id: Optional[int] = None,
+        self, target_subtask_id: str, *, actor_id: Optional[str] = None,
     ) -> None:
         now = _utcnow()
         self.db.execute(
@@ -632,7 +632,7 @@ class DependencyRepository:
         task_ids: Sequence[str],
         subtask_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         """Soft-delete every dep edge (incoming + outgoing) that touches
         ``activity_id`` and every task / subtask in its cascaded subtree.
@@ -688,7 +688,7 @@ class DependencyRepository:
         task_id: str,
         subtask_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         """Soft-delete edges for a task and its cascaded subtasks."""
         now = _utcnow()
@@ -719,7 +719,7 @@ class DependencyRepository:
         task_ids: Sequence[str],
         subtask_ids: Sequence[str],
         *,
-        actor_id: Optional[int] = None,
+        actor_id: Optional[str] = None,
     ) -> None:
         """Soft-delete every dep edge across a milestone's A/T/S subtree.
 

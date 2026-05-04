@@ -16,10 +16,11 @@ class Attachment:
     storage_key: str           # relative path under storage base
     mime_type: str
     size_bytes: int
-    uploaded_by_user_id: int
+    # Doc 26: user-id fields are UUID strings.
+    uploaded_by_user_id: str
     uploaded_at: datetime
     deleted_at: Optional[datetime] = None
-    deleted_by: Optional[int] = None
+    deleted_by: Optional[str] = None
 
     # Optional embedded uploader info.
     uploader_login: Optional[str] = None

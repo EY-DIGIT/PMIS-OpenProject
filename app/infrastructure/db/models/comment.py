@@ -42,8 +42,9 @@ class CommentModel(Base):
 
     body = Column(Text, nullable=False)
 
+    # Doc 26: users.id flipped to UUID String(36).
     author_user_id = Column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True,
+        String(36), ForeignKey("users.id"), nullable=False, index=True,
     )
 
     created_at = Column(DateTime, default=_utcnow, nullable=False)
@@ -51,7 +52,7 @@ class CommentModel(Base):
 
     # Soft delete (cascade-soft when parent target is soft-deleted).
     deleted_at = Column(DateTime, nullable=True, index=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
         Index("idx_comments_target", "target_kind", "target_id"),

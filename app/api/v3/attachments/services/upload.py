@@ -33,7 +33,7 @@ def upload_standalone_attachment(
     target_kind: str,
     target_id: str,
     upload: UploadFile,
-    uploaded_by_user_id: int,
+    uploaded_by_user_id: str,
 ) -> ServiceResult[Attachment]:
     if not is_valid_target_kind(target_kind):
         return ServiceResult.fail(

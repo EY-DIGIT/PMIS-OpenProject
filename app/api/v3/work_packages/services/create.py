@@ -35,7 +35,7 @@ def create_work_package(
     subject: str,
     description: Optional[str] = None,
     parent_id: Optional[int] = None,
-    assignee_id: Optional[int] = None,
+    assignee_id: Optional[str] = None,
     status: str = "new",
     priority: str = "normal",
     done_ratio: int = 0,

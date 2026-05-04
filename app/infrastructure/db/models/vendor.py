@@ -60,7 +60,8 @@ class VendorModel(Base):
     # endpoint and from picker validation, but the project_vendors /
     # milestone_vendors mapping rows are intentionally NOT touched.
     deleted_at = Column(DateTime, nullable=True, index=True)
-    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Doc 26: UUID FK to users.id (was Integer pre-doc-26).
+    deleted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
         Index("idx_vendors_active_name", "active", "name"),

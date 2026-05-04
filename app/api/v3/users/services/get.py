@@ -10,8 +10,8 @@ from .....shared.service_result import ServiceResult
 
 def get_user_by_id(
     db: Session,
-    user_id: int,
-    requesting_user_id: Optional[int] = None,
+    user_id: str,
+    requesting_user_id: Optional[str] = None,
     is_admin: bool = False
 ) -> ServiceResult[User]:
     """

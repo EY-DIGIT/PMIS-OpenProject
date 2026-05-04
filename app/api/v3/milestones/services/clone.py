@@ -38,7 +38,7 @@ def clone_tree_for_version(
     *,
     source_project_id: str,
     target_project_id: str,
-    created_by: Optional[int] = None,
+    created_by: Optional[str] = None,
 ) -> Dict[str, int]:
     """
     Clone all live M/A/T/S + resource rows from source project to target.
