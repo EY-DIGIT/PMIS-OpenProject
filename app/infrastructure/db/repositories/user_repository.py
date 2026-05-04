@@ -16,6 +16,11 @@ from sqlalchemy import and_, desc, exists
 from sqlalchemy.orm import Session
 
 from ....domain.users.user import User
+from ....shared.code_generators import (
+    build_code,
+    generate_unique_code,
+    looks_like_user_code,
+)
 from ...db.models.project import ProjectModel
 from ...db.models.project_member import ProjectMemberModel
 from ...db.models.role import RoleModel
@@ -86,6 +91,7 @@ class UserRepository:
             phone_number=getattr(model, "phone_number", None),
             deleted_at=getattr(model, "deleted_at", None),
             deleted_by=getattr(model, "deleted_by", None),
+            user_code=getattr(model, "user_code", None),
             projects=projects or [],
         )
 
@@ -153,7 +159,21 @@ class UserRepository:
         seeded ``admin`` role rather than setting a column. Lookup of
         the role is done lazily so callers using the same DB session see
         the assignment immediately.
+
+        Doc 25: human-readable ``user_code`` is generated BEFORE insert
+        from ``(login, created_at)`` so the model row + returned domain
+        object both carry it. ``created_at`` is computed in Python so the
+        code's IST timestamp segment matches the row's stored timestamp
+        exactly.
         """
+        now = _utcnow()
+        clean_login = (login or "").strip()
+        base_code = build_code("US", clean_login, now)
+        code = generate_unique_code(
+            self.db.connection(),
+            table="users", code_column="user_code",
+            base_code=base_code,
+        )
         user_model = UserModel(
             login=login,
             email=email,
@@ -165,6 +185,9 @@ class UserRepository:
             division=division,
             division_other=division_other,
             phone_number=(phone_number.strip() if phone_number else None),
+            user_code=code,
+            created_at=now,
+            updated_at=now,
         )
         self.db.add(user_model)
         self.db.flush()
@@ -196,6 +219,64 @@ class UserRepository:
         vendor = self._load_vendor(model.vendor_id)
         projects = self._load_projects_for_user(model.id)
         return self._to_domain(model, vendor=vendor, projects=projects)
+
+    def get_by_code(
+        self, user_code: str, *, include_deleted: bool = False,
+    ) -> Optional[User]:
+        """Lookup by human-readable ``user_code`` (e.g. ``US-ADMI-260502143015``)."""
+        q = self.db.query(UserModel).filter(UserModel.user_code == user_code)
+        if not include_deleted:
+            q = q.filter(UserModel.deleted_at.is_(None))
+        model = q.first()
+        if not model:
+            return None
+        vendor = self._load_vendor(model.vendor_id)
+        projects = self._load_projects_for_user(model.id)
+        return self._to_domain(model, vendor=vendor, projects=projects)
+
+    def get_by_id_or_code(
+        self, identifier, *, include_deleted: bool = False,
+    ) -> Optional[User]:
+        """Polymorphic lookup: dispatches to ``get_by_code`` if the
+        identifier looks like a user code, otherwise to ``get_by_id``.
+
+        Used by every endpoint whose path param accepts either form.
+        Path params arrive as strings even for the integer-id case;
+        we coerce to int after rejecting the code shape. Non-numeric
+        non-code inputs return None (caller raises 404).
+        """
+        # ``looks_like_user_code`` rejects ints / non-strings safely.
+        if looks_like_user_code(identifier):
+            return self.get_by_code(identifier, include_deleted=include_deleted)
+        # Otherwise treat as the integer id. Accept both int and string
+        # forms (FastAPI converts path params to str by default unless the
+        # signature is typed int; we tolerate either).
+        try:
+            uid = int(identifier)
+        except (TypeError, ValueError):
+            return None
+        return self.get_by_id(uid, include_deleted=include_deleted)
+
+    def resolve_id(self, identifier) -> Optional[int]:
+        """Return the canonical integer id for either an int / numeric
+        string or a ``US-...`` code. Returns ``None`` if a code is given
+        and no LIVE user matches.
+
+        Used by upstream callers that already work in terms of
+        ``user_id`` (int) but want to accept a code on input.
+        """
+        if looks_like_user_code(identifier):
+            row = (
+                self.db.query(UserModel.id)
+                .filter(UserModel.user_code == identifier)
+                .filter(UserModel.deleted_at.is_(None))
+                .first()
+            )
+            return row[0] if row else None
+        try:
+            return int(identifier)
+        except (TypeError, ValueError):
+            return None
 
     def get_by_login(
         self, login: str, *, include_deleted: bool = False,

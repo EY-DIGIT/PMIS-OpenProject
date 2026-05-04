@@ -23,6 +23,7 @@ from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.project_member import ProjectMemberModel
 from .....infrastructure.db.models.vendor import VendorModel
 from .....infrastructure.db.repositories.user_repository import UserRepository
+from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.service_result import ServiceResult
 from .....shared.utils import (
     is_valid_email,
@@ -117,23 +118,32 @@ def create_user(
         )
 
     # ---- Vendor --------------------------------------------------------
+    # Doc 25: ``vendor_id`` accepts either a UUID or a ``VN-...`` code.
+    # We resolve to the canonical UUID first (None on unresolvable),
+    # then verify the underlying row exists and is live.
     if not vendor_id:
         return ServiceResult.fail(
             error="vendorId is required.",
             error_type="validation_error",
         )
-    vendor = (
-        db.query(VendorModel)
-        .filter(VendorModel.id == vendor_id)
-        .filter(VendorModel.deleted_at.is_(None))
-        .first()
-    )
+    canonical_vendor_id = VendorRepository(db).resolve_id(vendor_id)
+    vendor = None
+    if canonical_vendor_id:
+        vendor = (
+            db.query(VendorModel)
+            .filter(VendorModel.id == canonical_vendor_id)
+            .filter(VendorModel.deleted_at.is_(None))
+            .first()
+        )
     if vendor is None:
         return ServiceResult.fail(
             error=f"Vendor '{vendor_id}' not found or has been deleted.",
             error_type="validation_error",
             details={"field": "vendorId", "value": vendor_id},
         )
+    # Pin to the canonical UUID so the inserted row holds the immutable
+    # FK regardless of whether the caller sent a UUID or a code.
+    vendor_id = canonical_vendor_id
 
     # ---- Project mapping ------------------------------------------------
     project_ids = list(dict.fromkeys(project_ids or []))  # de-dupe, preserve order

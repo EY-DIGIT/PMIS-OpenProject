@@ -129,22 +129,36 @@ def update_milestone(
     will_replace_vendors = vendor_ids is not None
     resolved_vendor_ids: List[str] = []
     if will_replace_vendors:
-        unique = list(dict.fromkeys(vendor_ids or []))
-        if unique:
-            active = set(vendor_repo.existing_active_ids(unique))
-            missing_active = [v for v in unique if v not in active]
+        # Doc 25: each entry can be a UUID or a ``VN-...`` code.
+        unique_input = list(dict.fromkeys(vendor_ids or []))
+        if unique_input:
+            resolved_pairs = [
+                (token, vendor_repo.resolve_id(token)) for token in unique_input
+            ]
+            unresolved = [t for (t, rid) in resolved_pairs if rid is None]
+            if unresolved:
+                raise ValidationError(
+                    f"Unknown vendor(s): {', '.join(unresolved)}"
+                )
+            canonical_ids = [rid for (_t, rid) in resolved_pairs]
+            active = set(vendor_repo.existing_active_ids(canonical_ids))
+            missing_active = [
+                t for (t, rid) in resolved_pairs if rid not in active
+            ]
             if missing_active:
                 raise ValidationError(
                     f"Unknown or inactive vendor(s): {', '.join(missing_active)}"
                 )
             project_vendor_ids = set(vendor_repo.project_vendor_ids(model.project_id))
-            not_on_project = [v for v in unique if v not in project_vendor_ids]
-            if not_on_project:
+            not_on_project_tokens = [
+                t for (t, rid) in resolved_pairs if rid not in project_vendor_ids
+            ]
+            if not_on_project_tokens:
                 raise ValidationError(
-                    f"Vendor(s) not attached to this project: {', '.join(not_on_project)}. "
+                    f"Vendor(s) not attached to this project: {', '.join(not_on_project_tokens)}. "
                     "Add them to the project first."
                 )
-        resolved_vendor_ids = unique
+            resolved_vendor_ids = canonical_ids
 
     if not updates and not will_replace_vendors and desired_deps is None:
         return repo._to_domain(model)

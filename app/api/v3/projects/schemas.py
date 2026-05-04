@@ -74,7 +74,12 @@ class ProjectCreateRequest(BaseModel):
     vendorIds: Optional[List[str]] = Field(
         None,
         alias="vendor_ids",
-        description="Optional list of vendor UUIDs to associate with this project.",
+        description=(
+            "Optional list of vendor identifiers to associate with this "
+            "project. Each entry can be a vendor UUID or its human-readable "
+            "``vendorCode`` (``VN-XXXX-YYMMDDHHMMSS`` — see doc 25); the "
+            "list may freely mix the two forms."
+        ),
     )
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
@@ -150,7 +155,10 @@ class ProjectUpdateRequest(BaseModel):
         alias="vendor_ids",
         description=(
             "Replace the full vendor list for this project. Omit to leave the "
-            "existing list unchanged; send `[]` to clear."
+            "existing list unchanged; send `[]` to clear. Each entry can be a "
+            "vendor UUID or its human-readable ``vendorCode`` "
+            "(``VN-XXXX-YYMMDDHHMMSS`` — see doc 25); the list may freely mix "
+            "the two forms."
         ),
     )
     start_date: Optional[datetime] = Field(None, alias="startDate")
@@ -243,7 +251,13 @@ class ProjectUpsertRequest(BaseModel):
     categoryOtherReason: Optional[str] = Field(
         None, alias="category_other_reason", max_length=1000,
     )
-    vendorIds: Optional[List[str]] = Field(None, alias="vendor_ids")
+    vendorIds: Optional[List[str]] = Field(
+        None, alias="vendor_ids",
+        description=(
+            "Vendor identifiers. Each entry can be a UUID or a "
+            "``VN-...`` code (doc 25); the list may freely mix forms."
+        ),
+    )
     start_date: Optional[datetime] = Field(None, alias="startDate")
     end_date: Optional[datetime] = Field(None, alias="endDate")
 

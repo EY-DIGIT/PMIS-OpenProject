@@ -36,7 +36,12 @@ class UserCreateRequest(BaseModel):
 
     vendorId: str = Field(
         ..., alias="vendor_id",
-        description="UUID of the vendor this user belongs to.",
+        description=(
+            "Vendor identifier. Accepts EITHER the vendor's UUID OR its "
+            "human-readable ``vendorCode`` (e.g. ``VN-ACME-260502143015`` "
+            "— see doc 25). The dispatcher auto-detects via the ``VN-`` "
+            "prefix; the persisted FK is always the canonical UUID."
+        ),
     )
     division: str = Field(
         ...,
@@ -90,7 +95,12 @@ class UserUpdateRequest(BaseModel):
     lastName: Optional[str] = Field(None, max_length=255)
     admin: Optional[bool] = None
     status: Optional[str] = None
-    vendorId: Optional[str] = Field(None, alias="vendor_id")
+    vendorId: Optional[str] = Field(
+        None, alias="vendor_id",
+        description=(
+            "Vendor identifier. Accepts UUID or ``VN-...`` code (doc 25)."
+        ),
+    )
     division: Optional[str] = None
     divisionOther: Optional[str] = Field(
         None, alias="division_other", max_length=255,

@@ -59,6 +59,10 @@ def format_user_response(
             }
         },
         "id": user_id,
+        # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
+        # Coexists with ``id`` (the integer) — the FE prefers ``userCode``
+        # for display / search, ``id`` for FK / cross-references.
+        "userCode": user_data.get("user_code"),
         "login": user_data.get("login"),
         "firstName": user_data.get("first_name"),
         "lastName": user_data.get("last_name"),

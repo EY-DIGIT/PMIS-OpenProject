@@ -36,6 +36,13 @@ class VendorModel(Base):
         index=True,
         default=lambda: str(uuid4()),
     )
+    # Doc 25: human-readable identifier separate from the UUID. Format
+    # ``VN-{4-char-name-slug}-{YYMMDDHHMMSS-IST}`` (see
+    # ``app/shared/code_generators.py``). Snapshot at create time;
+    # immutable on rename. Nullable in DB so the alembic migration can
+    # backfill existing rows in two phases (add column → backfill rows
+    # → DB-level UNIQUE index covers it).
+    vendor_code = Column(String(50), nullable=True, unique=True, index=True)
     name = Column(String(255), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
     active = Column(Boolean, default=True, nullable=False, index=True)

@@ -1,7 +1,7 @@
 """
 User routes - URL definitions with permission bindings.
 """
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from .controller import UserController
@@ -179,11 +179,16 @@ def list_users(
     "/{user_id}",
     dependencies=[require_permission(USERS_READ)],
     summary="Get user",
-    description="Get user by ID"
+    description=(
+        "Get user by ID. The path param accepts EITHER the integer "
+        "``id`` OR the human-readable ``userCode`` "
+        "(``US-XXXX-YYMMDDHHMMSS`` — see doc 25). The dispatcher "
+        "auto-detects via the ``US-`` prefix."
+    ),
 )
 def get_user(
     request: Request,
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -200,11 +205,14 @@ def get_user(
     "/{user_id}",
     dependencies=[require_permission(USERS_UPDATE)],
     summary="Update user",
-    description="Update user details"
+    description=(
+        "Update user details. Path param accepts integer ``id`` or "
+        "``US-...`` code (doc 25)."
+    ),
 )
 def update_user(
     request: Request,
-    user_id: int,
+    user_id: str,
     data: UserUpdateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
@@ -222,11 +230,14 @@ def update_user(
     "/{user_id}/password",
     dependencies=[require_permission(USERS_UPDATE)],
     summary="Update user password",
-    description="Update user password"
+    description=(
+        "Update user password. Path param accepts integer ``id`` or "
+        "``US-...`` code (doc 25)."
+    ),
 )
 def update_user_password(
     request: Request,
-    user_id: int,
+    user_id: str,
     data: UserPasswordUpdateRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
@@ -244,11 +255,14 @@ def update_user_password(
     "/{user_id}",
     dependencies=[require_permission(USERS_DELETE_ALL)],
     summary="Delete user",
-    description="Delete user by ID"
+    description=(
+        "Delete user by ID. Path param accepts integer ``id`` or "
+        "``US-...`` code (doc 25)."
+    ),
 )
 def delete_user(
     request: Request,
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -269,12 +283,13 @@ def delete_user(
         "the current snapshot rather than 409. All project mappings, "
         "vendor association, and division values are preserved on disk "
         "during soft-delete and re-surface automatically. Mirrors "
-        "POST /api/v3/vendors/{id}/restore."
+        "POST /api/v3/vendors/{id}/restore. Path param accepts integer "
+        "``id`` or ``US-...`` code (doc 25)."
     ),
 )
 def restore_user(
     request: Request,
-    user_id: int,
+    user_id: str,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -299,8 +314,20 @@ from ....infrastructure.db.repositories.rbac_repository import RbacRepository
 from ....infrastructure.db.repositories.user_repository import UserRepository
 
 
-def _get_user_or_404(db: Session, user_id: int):
-    return UserRepository(db).get_by_id(user_id)
+def _get_user_or_404(db: Session, user_id):
+    """Polymorphic fetch — accepts integer id, numeric string, or
+    ``US-...`` code. Returns ``None`` for any unresolvable input.
+    Doc 25.
+    """
+    return UserRepository(db).get_by_id_or_code(user_id)
+
+
+def _resolve_user_id(db: Session, user_id) -> Optional[int]:
+    """Resolve either an int / numeric string or ``US-...`` code to the
+    canonical integer ``id``. Returns ``None`` if a code is given that
+    doesn't resolve to a live user. Doc 25.
+    """
+    return UserRepository(db).resolve_id(user_id)
 
 
 def _serialize_role(r) -> Dict[str, Any]:
@@ -345,20 +372,22 @@ def get_my_permissions(
     summary="Effective permissions for a user (role-derived ∪ direct)",
 )
 def get_user_permissions(
-    request: Request, user_id: int, db: Session = Depends(get_db),
+    request: Request, user_id: str, db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
+    canonical_id = user.id
     repo = RbacRepository(db)
     return BaseController.ok(data={
         "_type": "EffectivePermissions",
-        "userId": user_id,
-        "permissions": sorted(repo.effective_permissions_for_user(user_id)),
-        "directPermissions": repo.list_direct_permissions_for_user(user_id),
-        "isAdmin": repo.user_has_admin_role(user_id),
+        "userId": canonical_id,
+        "permissions": sorted(repo.effective_permissions_for_user(canonical_id)),
+        "directPermissions": repo.list_direct_permissions_for_user(canonical_id),
+        "isAdmin": repo.user_has_admin_role(canonical_id),
     })
 
 
@@ -368,14 +397,16 @@ def get_user_permissions(
     summary="Grant a direct permission to a user",
 )
 def grant_user_permission(
-    request: Request, user_id: int, code: str,
+    request: Request, user_id: str, code: str,
     db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
+    canonical_id = user.id
     repo = RbacRepository(db)
     if repo.get_permission(code) is None:
         return BaseController.error(
@@ -385,11 +416,11 @@ def grant_user_permission(
             status=404,
         )
     actor_id = getattr(request.state, "user_id", None)
-    repo.grant_permission_to_user(user_id, code, actor_id=actor_id)
+    repo.grant_permission_to_user(canonical_id, code, actor_id=actor_id)
     db.commit()
     return BaseController.ok(data={
-        "userId": user_id,
-        "directPermissions": repo.list_direct_permissions_for_user(user_id),
+        "userId": canonical_id,
+        "directPermissions": repo.list_direct_permissions_for_user(canonical_id),
     })
 
 
@@ -399,15 +430,16 @@ def grant_user_permission(
     summary="Revoke a direct permission from a user",
 )
 def revoke_user_permission(
-    request: Request, user_id: int, code: str,
+    request: Request, user_id: str, code: str,
     db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
-    RbacRepository(db).revoke_permission_from_user(user_id, code)
+    RbacRepository(db).revoke_permission_from_user(user.id, code)
     db.commit()
     return BaseController.no_content()
 
@@ -418,17 +450,18 @@ def revoke_user_permission(
     summary="List a user's roles",
 )
 def list_user_roles(
-    request: Request, user_id: int, db: Session = Depends(get_db),
+    request: Request, user_id: str, db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
-    rows = RbacRepository(db).list_roles_for_user(user_id)
+    rows = RbacRepository(db).list_roles_for_user(user.id)
     return BaseController.ok(data={
         "_type": "Collection",
-        "userId": user_id,
+        "userId": user.id,
         "count": len(rows),
         "_embedded": {"elements": [_serialize_role(r) for r in rows]},
     })
@@ -440,14 +473,16 @@ def list_user_roles(
     summary="Assign a role to a user",
 )
 def assign_user_role(
-    request: Request, user_id: int, role_id: int,
+    request: Request, user_id: str, role_id: int,
     db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
+    canonical_id = user.id
     repo = RbacRepository(db)
     if repo.get_role(role_id) is None:
         return BaseController.error(
@@ -455,11 +490,11 @@ def assign_user_role(
             status=404,
         )
     actor_id = getattr(request.state, "user_id", None)
-    repo.assign_role_to_user(user_id, role_id, actor_id=actor_id)
+    repo.assign_role_to_user(canonical_id, role_id, actor_id=actor_id)
     db.commit()
     return BaseController.ok(data={
-        "userId": user_id,
-        "roles": [_serialize_role(r) for r in repo.list_roles_for_user(user_id)],
+        "userId": canonical_id,
+        "roles": [_serialize_role(r) for r in repo.list_roles_for_user(canonical_id)],
     })
 
 
@@ -469,14 +504,16 @@ def assign_user_role(
     summary="Unassign a role from a user (lockout-protected for 'admin')",
 )
 def unassign_user_role(
-    request: Request, user_id: int, role_id: int,
+    request: Request, user_id: str, role_id: int,
     db: Session = Depends(get_db),
 ):
-    if _get_user_or_404(db, user_id) is None:
+    user = _get_user_or_404(db, user_id)
+    if user is None:
         return BaseController.error(
             format_error_response("not_found", f"User {user_id} not found."),
             status=404,
         )
+    canonical_id = user.id
     repo = RbacRepository(db)
     role = repo.get_role(role_id)
     if role is None:
@@ -486,7 +523,7 @@ def unassign_user_role(
         )
     # Lockout: removing the last live admin is rejected.
     if role.name == ADMIN_ROLE_NAME:
-        currently_holding = repo.user_has_admin_role(user_id)
+        currently_holding = repo.user_has_admin_role(canonical_id)
         if currently_holding and repo.count_users_with_role(role_id) <= 1:
             return BaseController.error(
                 format_error_response(
@@ -497,6 +534,6 @@ def unassign_user_role(
                 ),
                 status=403,
             )
-    repo.unassign_role_from_user(user_id, role_id)
+    repo.unassign_role_from_user(canonical_id, role_id)
     db.commit()
     return BaseController.no_content()

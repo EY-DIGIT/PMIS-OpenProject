@@ -42,6 +42,12 @@ class User:
     deleted_at: Optional[datetime] = None
     deleted_by: Optional[int] = None
 
+    # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
+    # Snapshot of ``login`` + ``created_at`` taken at create time; immutable
+    # on rename. The integer ``id`` stays the canonical machine identifier
+    # and FK target — ``user_code`` is purely a display / lookup convenience.
+    user_code: Optional[str] = None
+
     # Mapped projects — populated by the repo on explicit calls (list +
     # get-by-id paths). Each entry is a slim project dict the response
     # builder embeds. Closed/completed/soft-deleted projects are
@@ -57,6 +63,7 @@ class User:
         """
         return {
             "id": self.id,
+            "user_code": self.user_code,
             "login": self.login,
             "email": self.email,
             "first_name": self.first_name,

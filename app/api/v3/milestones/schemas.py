@@ -48,7 +48,11 @@ class MilestoneCreateRequest(BaseModel):
         None,
         validation_alias=AliasChoices("vendors", "vendorIds", "vendor_ids"),
         serialization_alias="vendors",
-        description="List of vendor UUIDs to attach to this milestone.",
+        description=(
+            "Vendor identifiers to attach to this milestone. Each entry "
+            "can be a UUID or a ``VN-...`` code (doc 25); the list may "
+            "freely mix the two forms."
+        ),
     )
 
     @field_validator("end_date")

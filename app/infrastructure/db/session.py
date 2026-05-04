@@ -416,6 +416,8 @@ def init_db() -> None:
                         ("email",           "ALTER TABLE vendors ADD COLUMN email VARCHAR(255)"),
                         ("contact_person",  "ALTER TABLE vendors ADD COLUMN contact_person VARCHAR(255)"),
                         ("phone_number",    "ALTER TABLE vendors ADD COLUMN phone_number VARCHAR(50)"),
+                        # Doc 25: human-readable identifier (VN-XXXX-YYMMDDHHMMSS).
+                        ("vendor_code",     "ALTER TABLE vendors ADD COLUMN vendor_code VARCHAR(50)"),
                     ):
                         if col not in vcols:
                             try:
@@ -459,6 +461,8 @@ def init_db() -> None:
                         # Doc 23: phone_number (required on wire create, nullable
                         # in DB so the bootstrap admin + legacy rows stay valid).
                         ("phone_number", "ALTER TABLE users ADD COLUMN phone_number VARCHAR(50)"),
+                        # Doc 25: human-readable identifier (US-XXXX-YYMMDDHHMMSS).
+                        ("user_code", "ALTER TABLE users ADD COLUMN user_code VARCHAR(50)"),
                     ):
                         if col not in ucols:
                             try:

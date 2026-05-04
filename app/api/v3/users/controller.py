@@ -30,6 +30,19 @@ from ....core.response import (
 )
 from ....core.base_controller import BaseController
 from ....core.dependencies import get_current_user_id
+from ....infrastructure.db.repositories.user_repository import UserRepository
+
+
+def _resolve_user_id(db: Session, user_id):
+    """Resolve either an integer/numeric-string id or a ``US-...`` code
+    to the canonical integer id. Returns ``None`` if the input doesn't
+    map to a live user (caller surfaces 404).
+
+    Doc 25: every controller action that takes a path-param user id
+    funnels through here so the rest of the call chain (service layer)
+    keeps working with the integer ``id`` it already expects.
+    """
+    return UserRepository(db).resolve_id(user_id)
 
 
 class UserController:
@@ -84,7 +97,7 @@ class UserController:
     @staticmethod
     def get(
         request: Request,
-        user_id: int,
+        user_id,
         db: Session
     ) -> JSONResponse:
         """
@@ -92,7 +105,9 @@ class UserController:
 
         Args:
             request: FastAPI request
-            user_id: User ID
+            user_id: User ID — accepts integer ``id`` or ``US-...`` code
+                (doc 25). The dispatch happens here so the service layer
+                keeps its existing integer-only signature.
             db: Database session
 
         Returns:
@@ -101,9 +116,19 @@ class UserController:
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
 
+        canonical_id = _resolve_user_id(db, user_id)
+        if canonical_id is None:
+            return BaseController.error(
+                format_error_response(
+                    error_type="not_found",
+                    message=f"User with ID {user_id} not found",
+                ),
+                status=404,
+            )
+
         result = get_user_by_id(
             db=db,
-            user_id=user_id,
+            user_id=canonical_id,
             requesting_user_id=requesting_user_id,
             is_admin=is_admin
         )
@@ -252,7 +277,7 @@ class UserController:
     @staticmethod
     def update(
         request: Request,
-        user_id: int,
+        user_id,
         data: UserUpdateRequest,
         db: Session
     ) -> JSONResponse:
@@ -261,7 +286,8 @@ class UserController:
 
         Args:
             request: FastAPI request
-            user_id: User ID
+            user_id: User ID — accepts integer ``id`` or ``US-...`` code
+                (doc 25).
             data: Update data
             db: Database session
 
@@ -271,9 +297,19 @@ class UserController:
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
 
+        canonical_id = _resolve_user_id(db, user_id)
+        if canonical_id is None:
+            return BaseController.error(
+                format_error_response(
+                    error_type="not_found",
+                    message=f"User with ID {user_id} not found",
+                ),
+                status=404,
+            )
+
         result = update_user(
             db=db,
-            user_id=user_id,
+            user_id=canonical_id,
             email=data.email,
             first_name=data.firstName,
             last_name=data.lastName,
@@ -313,7 +349,7 @@ class UserController:
     @staticmethod
     def update_password(
         request: Request,
-        user_id: int,
+        user_id,
         data: UserPasswordUpdateRequest,
         db: Session
     ) -> JSONResponse:
@@ -322,7 +358,8 @@ class UserController:
 
         Args:
             request: FastAPI request
-            user_id: User ID
+            user_id: User ID — accepts integer ``id`` or ``US-...`` code
+                (doc 25).
             data: Password update data
             db: Database session
 
@@ -332,9 +369,19 @@ class UserController:
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
 
+        canonical_id = _resolve_user_id(db, user_id)
+        if canonical_id is None:
+            return BaseController.error(
+                format_error_response(
+                    error_type="not_found",
+                    message=f"User with ID {user_id} not found",
+                ),
+                status=404,
+            )
+
         result = update_password(
             db=db,
-            user_id=user_id,
+            user_id=canonical_id,
             new_password=data.password,
             requesting_user_id=requesting_user_id,
             is_admin=is_admin
@@ -366,7 +413,7 @@ class UserController:
     @staticmethod
     def delete(
         request: Request,
-        user_id: int,
+        user_id,
         db: Session
     ) -> JSONResponse:
         """
@@ -374,17 +421,31 @@ class UserController:
 
         Args:
             request: FastAPI request
-            user_id: User ID
+            user_id: User ID — accepts integer ``id`` or ``US-...`` code
+                (doc 25).
             db: Database session
 
         Returns:
             JSONResponse
         """
         actor_id = get_current_user_id(request)
-        result = delete_user(db=db, user_id=user_id, actor_id=actor_id)
+
+        canonical_id = _resolve_user_id(db, user_id)
+        if canonical_id is None:
+            return BaseController.error(
+                format_error_response(
+                    error_type="not_found",
+                    message=f"User with ID {user_id} not found",
+                ),
+                status=404,
+            )
+
+        result = delete_user(db=db, user_id=canonical_id, actor_id=actor_id)
 
         if result.is_success():
-            payload = format_success_response(f"User {user_id} deleted successfully")
+            payload = format_success_response(
+                f"User {canonical_id} deleted successfully"
+            )
             resp = BaseController.ok(payload)
             return resp
         else:
@@ -407,7 +468,7 @@ class UserController:
     @staticmethod
     def restore(
         request: Request,
-        user_id: int,
+        user_id,
         db: Session
     ) -> JSONResponse:
         """
@@ -421,9 +482,25 @@ class UserController:
         requesting_user_id = get_current_user_id(request)
         is_admin = getattr(request.state, "is_admin", False)
 
+        # Resolve ``user_id`` (integer id OR ``US-...`` code, doc 25) with
+        # ``include_deleted`` so we can restore tombstoned rows. The
+        # repository's ``resolve_id`` filters out deleted rows for code
+        # input — bypass it for the restore path.
+        repo = UserRepository(db)
+        u = repo.get_by_id_or_code(user_id, include_deleted=True)
+        if u is None:
+            return BaseController.error(
+                format_error_response(
+                    error_type="not_found",
+                    message=f"User with ID {user_id} not found",
+                ),
+                status=404,
+            )
+        canonical_id = u.id
+
         result = restore_user(
             db=db,
-            user_id=user_id,
+            user_id=canonical_id,
             requesting_user_id=requesting_user_id,
             is_admin=is_admin,
         )

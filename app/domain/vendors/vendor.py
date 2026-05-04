@@ -20,10 +20,17 @@ class Vendor:
     email: Optional[str] = None
     contact_person: Optional[str] = None
     phone_number: Optional[str] = None
+    # Doc 25: human-readable identifier. Format
+    # ``VN-{4-char-name-slug}-{YYMMDDHHMMSS-IST}``. Snapshot at create
+    # time; never recomputed on rename. Optional on the dataclass for
+    # back-compat with unit-test fixtures that may construct a Vendor
+    # without a code; the migration backfills every persisted row.
+    vendor_code: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "vendor_code": self.vendor_code,
             "name": self.name,
             "description": self.description,
             "active": self.active,

@@ -24,6 +24,13 @@ class UserModel(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
+    # Coexists with the integer ``id``: ``id`` stays the canonical machine
+    # FK target; ``user_code`` is what UI / search / cross-entity references
+    # show to humans. Generated at create time from ``login`` + ``created_at``
+    # (see app/shared/code_generators.py). Nullable in the DB so legacy /
+    # bootstrap rows stay valid; UNIQUE so picker validation can rely on it.
+    user_code = Column(String(50), nullable=True, unique=True, index=True)
     login = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)

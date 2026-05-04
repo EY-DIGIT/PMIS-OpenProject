@@ -19,6 +19,7 @@ from .....domain.resource_types.resource_type import (
 from .....domain.users.user import User
 from .....infrastructure.db.models.vendor import VendorModel
 from .....infrastructure.db.repositories.user_repository import UserRepository
+from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.service_result import ServiceResult
 from .....shared.utils import (
     is_valid_email,
@@ -131,18 +132,25 @@ def update_user(
         )
 
     if vendor_id is not None:
-        vendor = (
-            db.query(VendorModel)
-            .filter(VendorModel.id == vendor_id)
-            .filter(VendorModel.deleted_at.is_(None))
-            .first()
-        )
+        # Doc 25: ``vendor_id`` accepts UUID or ``VN-...`` code.
+        canonical_vendor_id = VendorRepository(db).resolve_id(vendor_id)
+        vendor = None
+        if canonical_vendor_id:
+            vendor = (
+                db.query(VendorModel)
+                .filter(VendorModel.id == canonical_vendor_id)
+                .filter(VendorModel.deleted_at.is_(None))
+                .first()
+            )
         if vendor is None:
             return ServiceResult.fail(
                 error=f"Vendor '{vendor_id}' not found or deleted.",
                 error_type="validation_error",
                 details={"field": "vendorId", "value": vendor_id},
             )
+        # Persist the canonical UUID so the row's FK is stable regardless
+        # of input form.
+        vendor_id = canonical_vendor_id
 
     # Division: needs joint validation with division_other (and the
     # already-stored value, since the patch may change one without the
