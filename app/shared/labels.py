@@ -1,4 +1,4 @@
-"""Display label generation + parsing for M/A/T/S (doc 22).
+"""Display label generation + parsing for M/A/T/S (doc 22, nesting in doc 24).
 
 Labels surface in API responses so the FE doesn't need to compute them
 client-side from raw ``position`` numbers, and they're accepted on the
@@ -6,22 +6,28 @@ client-side from raw ``position`` numbers, and they're accepted on the
 
 Format
 ------
-``M{m}``           — milestone rank m
-``A{m}.{a}``       — activity rank a under milestone rank m
-``T{m}.{a}.{t}``   — task rank t
-``S{m}.{a}.{t}.{s}`` — subtask rank s
+``M{m}``               — milestone rank m
+``A{m}.{a}``           — activity rank a under milestone rank m
+``T{m}.{a}.{t}``       — task rank t
+``S{m}.{a}.{t}.{s1}[.{s2}.{s3}…]``
+                       — subtask: ``s1`` is the rank of the top-level
+                         subtask under task t; ``s2`` is the rank of the
+                         child under that subtask; and so on. Subtask
+                         labels are **variable-depth** — minimum 4
+                         segments (one ``s``), unlimited beyond that.
 
 Where each rank is the **1-based index** of the entity by
 ``ORDER BY position ASC, id ASC`` among its **live** (non-soft-deleted)
-siblings. The partial-unique index on ``(parent_id, position) WHERE
-deleted_at IS NULL`` (Alembic ``c4d9a1b3e201``) guarantees siblings
+siblings. Partial-unique indexes on ``(parent_id, position) WHERE
+deleted_at IS NULL`` (Alembic ``c4d9a1b3e201`` for M/A/T and
+``e9f1a2b3c4d5`` for the doc-24 split on subtasks) guarantee siblings
 never share a position, so resolution is unambiguous.
 
 Single-entity callers (GET /activities/{id}) use ``compute_*_label`` —
 small focused queries.
 
 List / tree callers (GET /milestones/{id}/activities, GET /tree) build
-``LabelIndex`` once per project (4 queries total) and dict-lookup each
+``LabelIndex`` once per project (constant queries) and dict-lookup each
 entity's label.
 """
 from collections import defaultdict
@@ -55,14 +61,26 @@ _PREFIX_BY_KIND = {
 }
 _KIND_BY_PREFIX = {v: k for k, v in _PREFIX_BY_KIND.items()}
 
-_DEPTH_BY_KIND = {
+# Minimum rank-segment count per kind. Subtasks are variable-depth (see
+# ``parse_label`` — ranks must be >= this number; only the subtask kind
+# allows extra segments for nesting).
+_MIN_DEPTH_BY_KIND = {
     KIND_MILESTONE: 1,
     KIND_ACTIVITY: 2,
     KIND_TASK: 3,
     KIND_SUBTASK: 4,
 }
 
-# ``M5``, ``A1.2``, ``T1.2.3``, ``S1.2.3.4`` — strict whole-string match.
+# Backwards-compat alias used elsewhere in the module for non-variable
+# kinds. Subtasks must NOT use this — they have no fixed depth.
+_DEPTH_BY_KIND = _MIN_DEPTH_BY_KIND
+
+# Subtask labels accept any depth >= 4 (one s segment minimum, no upper
+# bound — matches doc 24's unlimited nesting).
+_VARIABLE_DEPTH_KINDS = frozenset({KIND_SUBTASK})
+
+# ``M5``, ``A1.2``, ``T1.2.3``, ``S1.2.3.4`` (and ``S1.2.3.4.5...``) —
+# strict whole-string match.
 _LABEL_RE = re.compile(r"^([MATS])(\d+(?:\.\d+)*)$")
 
 
@@ -76,16 +94,20 @@ class ParsedLabel:
     ranks: Tuple[int, ...]
 
     def expected_depth(self) -> int:
-        return _DEPTH_BY_KIND[self.kind]
+        # Reflects the actual length of ``ranks`` (constant for fixed
+        # kinds, equal to the parsed depth for variable-depth kinds).
+        return len(self.ranks)
 
 
 def parse_label(s: object) -> Optional[ParsedLabel]:
-    """Parse ``"M1"`` / ``"A1.2"`` / ``"T1.2.3"`` / ``"S1.2.3.4"``.
+    """Parse ``"M1"`` / ``"A1.2"`` / ``"T1.2.3"`` / ``"S1.2.3.4"``
+    (and any number of ``.{sN}`` segments beyond the first for subtasks).
 
     Returns ``None`` when the input doesn't match the format (so the
     caller can treat it as a UUID and proceed with the existing UUID
     path). Returns ``None`` for any rank ``< 1``, the wrong number of
-    digits for the prefix, or non-string input.
+    digits for fixed-depth prefixes (M/A/T), or non-string input.
+    Subtasks accept any depth ``>= 4``.
     """
     if not isinstance(s, str):
         return None
@@ -95,8 +117,13 @@ def parse_label(s: object) -> Optional[ParsedLabel]:
     prefix, digits = m.group(1), m.group(2)
     kind = _KIND_BY_PREFIX[prefix]
     ranks = tuple(int(x) for x in digits.split("."))
-    if len(ranks) != _DEPTH_BY_KIND[kind]:
-        return None
+    min_depth = _MIN_DEPTH_BY_KIND[kind]
+    if kind in _VARIABLE_DEPTH_KINDS:
+        if len(ranks) < min_depth:
+            return None
+    else:
+        if len(ranks) != min_depth:
+            return None
     if any(r < 1 for r in ranks):
         return None
     return ParsedLabel(kind=kind, ranks=ranks)
@@ -104,9 +131,15 @@ def parse_label(s: object) -> Optional[ParsedLabel]:
 
 def format_label(kind: str, ranks: Tuple[int, ...]) -> str:
     """Build a label string from a (kind, ranks) tuple."""
-    if len(ranks) != _DEPTH_BY_KIND[kind]:
+    min_depth = _MIN_DEPTH_BY_KIND[kind]
+    if kind in _VARIABLE_DEPTH_KINDS:
+        if len(ranks) < min_depth:
+            raise ValueError(
+                f"Insufficient ranks for {kind}: need at least {min_depth}, got {len(ranks)}"
+            )
+    elif len(ranks) != min_depth:
         raise ValueError(
-            f"Wrong rank depth for {kind}: expected {_DEPTH_BY_KIND[kind]}, got {len(ranks)}"
+            f"Wrong rank depth for {kind}: expected {min_depth}, got {len(ranks)}"
         )
     return _PREFIX_BY_KIND[kind] + ".".join(str(r) for r in ranks)
 
@@ -146,9 +179,28 @@ def _live_tasks_under_activity(db: Session, activity_id: str) -> List[TaskModel]
 
 
 def _live_subtasks_under_task(db: Session, task_id: str) -> List[SubtaskModel]:
+    """Live TOP-LEVEL subtasks of a task (parent_subtask_id IS NULL).
+
+    Doc 24: nested subtasks share ``task_id`` with their root, so we
+    must filter to direct children of the task here — anchors the
+    ``s1`` segment of ``S{m}.{a}.{t}.{s1}.{...}``.
+    """
     return (
         db.query(SubtaskModel)
         .filter(SubtaskModel.task_id == task_id)
+        .filter(SubtaskModel.parent_subtask_id.is_(None))
+        .filter(SubtaskModel.deleted_at.is_(None))
+        .order_by(asc(SubtaskModel.position), asc(SubtaskModel.id))
+        .all()
+    )
+
+
+def _live_children_of_subtask(db: Session, parent_subtask_id: str) -> List[SubtaskModel]:
+    """Live subtasks whose direct parent is ``parent_subtask_id``.
+    Anchors a single nesting segment of the subtask label."""
+    return (
+        db.query(SubtaskModel)
+        .filter(SubtaskModel.parent_subtask_id == parent_subtask_id)
         .filter(SubtaskModel.deleted_at.is_(None))
         .order_by(asc(SubtaskModel.position), asc(SubtaskModel.id))
         .all()
@@ -215,10 +267,16 @@ def resolve_task_label_to_id(
 def resolve_subtask_label_to_id(
     db: Session, project_id: str, label: str,
 ) -> Optional[str]:
+    """Variable-depth subtask resolver: ``S{m}.{a}.{t}.{s1}[.{s2}.{s3}…]``.
+
+    Walks M → A → T as before, then s1 within the task's top-level
+    subtasks, then each subsequent segment within the previous subtask's
+    children. Returns ``None`` for any out-of-range rank.
+    """
     parsed = parse_label(label)
     if not parsed or parsed.kind != KIND_SUBTASK:
         return None
-    m_rank, a_rank, t_rank, s_rank = parsed.ranks
+    m_rank, a_rank, t_rank, *s_ranks = parsed.ranks
     milestones = _live_milestones_in_project(db, project_id)
     if m_rank > len(milestones):
         return None
@@ -229,9 +287,15 @@ def resolve_subtask_label_to_id(
     if t_rank > len(tasks):
         return None
     subtasks = _live_subtasks_under_task(db, tasks[t_rank - 1].id)
-    if s_rank > len(subtasks):
+    if not s_ranks or s_ranks[0] > len(subtasks):
         return None
-    return subtasks[s_rank - 1].id
+    cursor = subtasks[s_ranks[0] - 1]
+    for nested_rank in s_ranks[1:]:
+        children = _live_children_of_subtask(db, cursor.id)
+        if nested_rank > len(children):
+            return None
+        cursor = children[nested_rank - 1]
+    return cursor.id
 
 
 # Generic dispatcher — accepts UUID or any kind of label, returns the
@@ -355,23 +419,59 @@ def compute_task_label(db: Session, task: TaskModel) -> Optional[str]:
 
 
 def compute_subtask_label(db: Session, subtask: SubtaskModel) -> Optional[str]:
+    """Variable-depth subtask label.
+
+    Walks up ``parent_subtask_id`` from this subtask to the top-level
+    ancestor, then composes ``S{m}.{a}.{t}.{s1}[.{s2}…]`` by ranking
+    each step against its live siblings.
+    """
     if subtask.deleted_at is not None:
         return None
+    # Build the ancestor chain from root subtask down to this one.
+    chain: List[SubtaskModel] = [subtask]
+    cursor = subtask
+    seen = {cursor.id}
+    while cursor.parent_subtask_id is not None:
+        parent = (
+            db.query(SubtaskModel)
+            .filter(SubtaskModel.id == cursor.parent_subtask_id)
+            .first()
+        )
+        if parent is None or parent.id in seen:
+            return None
+        seen.add(parent.id)
+        chain.append(parent)
+        cursor = parent
+    chain.reverse()  # root subtask first
+
+    # Compose nested-rank suffix by walking the chain.
+    nested_ranks: List[int] = []
+    siblings = _live_subtasks_under_task(db, subtask.task_id)
+    for idx, s in enumerate(siblings, start=1):
+        if s.id == chain[0].id:
+            nested_ranks.append(idx)
+            break
+    if not nested_ranks:
+        return None
+    for depth_idx in range(1, len(chain)):
+        children = _live_children_of_subtask(db, chain[depth_idx - 1].id)
+        for idx, c in enumerate(children, start=1):
+            if c.id == chain[depth_idx].id:
+                nested_ranks.append(idx)
+                break
+        else:
+            return None
+
+    # Get the parent task's "T{m}.{a}.{t}" prefix.
     parent_task = (
-        db.query(TaskModel)
-        .filter(TaskModel.id == subtask.task_id)
-        .first()
+        db.query(TaskModel).filter(TaskModel.id == subtask.task_id).first()
     )
     if parent_task is None:
         return None
-    parent_label = compute_task_label(db, parent_task)
-    if parent_label is None:
+    task_label = compute_task_label(db, parent_task)
+    if task_label is None:
         return None
-    siblings = _live_subtasks_under_task(db, subtask.task_id)
-    for idx, s in enumerate(siblings, start=1):
-        if s.id == subtask.id:
-            return f"S{parent_label[1:]}.{idx}"
-    return None
+    return f"S{task_label[1:]}." + ".".join(str(r) for r in nested_ranks)
 
 
 # ---------------------------------------------------------------------------
@@ -602,23 +702,56 @@ def build_label_index_for_project(db: Session, project_id: str) -> LabelIndex:
             idx.task_id_to_label[tid] = f"T{m_rank}.{a_rank}.{t_idx}"
             t_id_to_rank[tid] = (m_rank, a_rank, t_idx)
 
-    # ---- Subtasks ----
+    # ---- Subtasks (variable-depth, doc 24) -----------------------------
+    # One project-scoped query loads all subtask rows. We then walk the
+    # tree per-task: top-level (parent_subtask_id IS NULL) anchors the
+    # ``s1`` segment; each subsequent depth ranks among that subtask's
+    # children. The whole pass is in-Python, no extra DB roundtrips.
     subtasks = (
-        db.query(SubtaskModel.id, SubtaskModel.position, SubtaskModel.task_id)
+        db.query(
+            SubtaskModel.id,
+            SubtaskModel.position,
+            SubtaskModel.task_id,
+            SubtaskModel.parent_subtask_id,
+        )
         .filter(SubtaskModel.project_id == project_id)
         .filter(SubtaskModel.deleted_at.is_(None))
         .all()
     )
-    subs_by_task: Dict[str, List[Tuple[str, int]]] = defaultdict(list)
-    for sid, pos, tid in subtasks:
-        subs_by_task[tid].append((sid, pos))
-    for tid, pairs in subs_by_task.items():
+    # Two adjacency maps: top-level under each task, and children under
+    # each subtask. ``(position, id)`` tuples drive sibling ordering.
+    top_by_task: Dict[str, List[Tuple[str, int]]] = defaultdict(list)
+    children_by_parent: Dict[str, List[Tuple[str, int]]] = defaultdict(list)
+    for sid, pos, tid, pid in subtasks:
+        if pid is None:
+            top_by_task[tid].append((sid, pos))
+        else:
+            children_by_parent[pid].append((sid, pos))
+    for bucket in top_by_task.values():
+        bucket.sort(key=lambda x: (x[1], x[0]))
+    for bucket in children_by_parent.values():
+        bucket.sort(key=lambda x: (x[1], x[0]))
+
+    # DFS from each top-level subtask, accumulating the rank suffix as
+    # we descend. Iterative (stack of (subtask_id, suffix_str)) so the
+    # depth-cap env var doesn't have to fight Python's recursion limit.
+    for tid, top_pairs in top_by_task.items():
         m_a_t = t_id_to_rank.get(tid)
         if m_a_t is None:
             continue
         m_rank, a_rank, t_rank = m_a_t
-        pairs.sort(key=lambda x: (x[1], x[0]))
-        for s_idx, (sid, _pos) in enumerate(pairs, start=1):
-            idx.subtask_id_to_label[sid] = f"S{m_rank}.{a_rank}.{t_rank}.{s_idx}"
+        prefix = f"S{m_rank}.{a_rank}.{t_rank}"
+        for top_idx, (top_sid, _pos) in enumerate(top_pairs, start=1):
+            stack: List[Tuple[str, str]] = [(top_sid, f"{prefix}.{top_idx}")]
+            while stack:
+                node_id, label = stack.pop()
+                idx.subtask_id_to_label[node_id] = label
+                children = children_by_parent.get(node_id, [])
+                # Push in reverse so order isn't critical for correctness;
+                # ranking is done by the sorted pairs above.
+                for child_idx, (child_sid, _cpos) in enumerate(
+                    children, start=1,
+                ):
+                    stack.append((child_sid, f"{label}.{child_idx}"))
 
     return idx

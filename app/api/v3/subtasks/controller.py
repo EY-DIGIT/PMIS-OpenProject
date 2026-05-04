@@ -62,6 +62,7 @@ def format_subtask_response(
         "displayCode": display_code,
         "projectId": s["project_id"],
         "taskId": s["task_id"],
+        "parentSubtaskId": s.get("parent_subtask_id"),
         "name": s["name"],
         "description": s["description"],
         "type": s["type"],
@@ -98,6 +99,39 @@ class SubtaskController:
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
             position=data.position,
             resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
+        )
+        idx = build_label_index_for_project(db, s.project_id)
+        return BaseController.created(data=format_subtask_response(
+            s.to_dict(), r.to_dict() if r else None, label_index=idx,
+        ))
+
+    @staticmethod
+    def create_nested(
+        request: Request,
+        parent_subtask_id: str,
+        data: SubtaskCreateRequest,
+        db: Session,
+    ) -> JSONResponse:
+        """Doc 24: create a subtask nested under another subtask.
+
+        Same body as the task-scoped create. The service infers the root
+        ``task_id`` from the parent subtask and writes
+        ``parent_subtask_id`` so the new row sits as the parent's child.
+        """
+        cuid = getattr(request.state, "user_id", None)
+        rd = data.resource.model_dump() if data.resource else None
+        s, r = create_subtask(
+            db,
+            parent_subtask_id=parent_subtask_id,
+            name=data.name, description=data.description,
+            start_date=data.start_date, end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=data.resource_mode,
+            resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
         )

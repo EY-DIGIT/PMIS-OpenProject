@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # and remains valid for this many seconds.
     REFRESH_TOKEN_GRACE_SECONDS: int = 120
 
+    # Doc 24 part 2: optional cap on subtask nesting depth. ``None`` (the
+    # default) means unlimited — set via env to a small int (e.g. 50) if a
+    # specific deployment wants to bound the recursion / label length.
+    # Depth = number of subtask ancestors above the new row (top-level
+    # subtask = depth 1). The check rejects ``create_subtask`` calls that
+    # would exceed the cap.
+    SUBTASK_MAX_NESTING_DEPTH: Optional[int] = None
+
     # Database
     DATABASE_URL: str = Field(
         default="sqlite:///./pmis.db",

@@ -133,9 +133,15 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
 
     tr_by_task: Dict[int, TaskResourceModel] = {r.task_id: r for r in task_resources}
 
-    subs_by_task: Dict[int, List[SubtaskModel]] = defaultdict(list)
+    # Doc 24: subtasks can nest. Group top-level under their root task,
+    # and group every other subtask under its immediate parent subtask.
+    top_subs_by_task: Dict[str, List[SubtaskModel]] = defaultdict(list)
+    children_by_parent_sub: Dict[str, List[SubtaskModel]] = defaultdict(list)
     for s in subtasks:
-        subs_by_task[s.task_id].append(s)
+        if getattr(s, "parent_subtask_id", None) is None:
+            top_subs_by_task[s.task_id].append(s)
+        else:
+            children_by_parent_sub[s.parent_subtask_id].append(s)
 
     sr_by_sub: Dict[int, SubtaskResourceModel] = {r.subtask_id: r for r in sub_resources}
 
@@ -152,6 +158,7 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "id": s.id,
             "displayCode": label_idx.label_of(KIND_SUBTASK, s.id),
             "taskId": s.task_id, "projectId": s.project_id,
+            "parentSubtaskId": getattr(s, "parent_subtask_id", None),
             "name": s.name, "description": s.description, "type": s.type,
             "startDate": _iso(s.start_date), "endDate": _iso(s.end_date),
             "actualStartDate": _iso(s.actual_start_date),
@@ -163,6 +170,12 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "dependsOnDisplay": label_idx.labels_of(KIND_SUBTASK, deps),
             "deletedAt": _iso(s.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
+            # Doc 24: nested children rendered recursively. Empty list for
+            # leaves keeps the FE iteration simple (no `if subtasks`).
+            "subtasks": [
+                subtask_node(child)
+                for child in children_by_parent_sub.get(s.id, [])
+            ],
         }
 
     def task_node(t: TaskModel) -> Dict[str, Any]:
@@ -187,7 +200,9 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "dependsOnDisplay": label_idx.labels_of(KIND_TASK, deps),
             "deletedAt": _iso(t.deleted_at),
             "resource": _resource_payload(resource) if resource else None,
-            "subtasks": [subtask_node(s) for s in subs_by_task.get(t.id, [])],
+            "subtasks": [
+                subtask_node(s) for s in top_subs_by_task.get(t.id, [])
+            ],
         }
 
     def activity_node(a: ActivityModel) -> Dict[str, Any]:

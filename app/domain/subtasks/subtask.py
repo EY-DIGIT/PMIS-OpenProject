@@ -17,7 +17,11 @@ RESOURCE_MODES = (RESOURCE_MODE_COUNT, RESOURCE_MODE_DETAILS)
 
 @dataclass
 class Subtask:
-    """Subtask domain entity. Parent is a Task.
+    """Subtask domain entity. Parent is a Task or another Subtask.
+
+    Doc 24: ``parent_subtask_id`` carries the immediate parent for
+    nested subtasks (NULL = top-level child of ``task_id``). The
+    ``task_id`` field always holds the **root task** id of the subtree.
     See Activity docstring for resource_mode / resource_count rules.
     """
     id: str
@@ -38,6 +42,7 @@ class Subtask:
     deleted_at: Optional[datetime] = None
     resource_mode: Optional[str] = None
     resource_count: Optional[int] = None
+    parent_subtask_id: Optional[str] = None
     # Target subtask ids this subtask depends on. Populated from
     # subtask_dependencies association table.
     depends_on: List[str] = field(default_factory=list)
@@ -47,6 +52,7 @@ class Subtask:
             "id": self.id,
             "project_id": self.project_id,
             "task_id": self.task_id,
+            "parent_subtask_id": self.parent_subtask_id,
             "name": self.name,
             "description": self.description,
             "type": self.type,

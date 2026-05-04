@@ -1,8 +1,9 @@
 """Subtask repository (with resource sub-entity ops)."""
+from collections import deque
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from ..models.subtask import SubtaskModel
@@ -20,6 +21,7 @@ class SubtaskRepository:
             id=s.id,
             project_id=s.project_id,
             task_id=s.task_id,
+            parent_subtask_id=getattr(s, "parent_subtask_id", None),
             name=s.name,
             description=s.description,
             type=s.type,
@@ -87,13 +89,82 @@ class SubtaskRepository:
         return [self._to_domain(r) for r in rows], total
 
     def next_position(self, task_id: str) -> int:
+        """Next position for a TOP-LEVEL subtask (parent_subtask_id IS NULL).
+
+        Doc 24: nested subtasks share ``task_id`` with their top-level
+        ancestor, so we must explicitly exclude them here — otherwise the
+        next-position would jump across the whole subtree.
+        """
         cur = (
             self.db.query(func.max(SubtaskModel.position))
             .filter(SubtaskModel.task_id == task_id)
+            .filter(SubtaskModel.parent_subtask_id.is_(None))
             .filter(SubtaskModel.deleted_at.is_(None))
             .scalar()
         )
         return (cur or 0) + 1
+
+    def next_position_under_subtask(self, parent_subtask_id: str) -> int:
+        """Next position for a subtask nested under another subtask."""
+        cur = (
+            self.db.query(func.max(SubtaskModel.position))
+            .filter(SubtaskModel.parent_subtask_id == parent_subtask_id)
+            .filter(SubtaskModel.deleted_at.is_(None))
+            .scalar()
+        )
+        return (cur or 0) + 1
+
+    def ancestors(self, subtask_id: str) -> List[SubtaskModel]:
+        """Return the subtask's ancestor chain, root-first.
+
+        For a top-level subtask returns ``[]``. For a nested subtask
+        returns ``[grandparent, parent]`` (excluding the subtask itself).
+        Walks ``parent_subtask_id`` until NULL. Does not filter by
+        ``deleted_at`` — soft-deleted ancestors still count for depth so
+        a restore preserves the path.
+        """
+        chain: List[SubtaskModel] = []
+        cursor = self.get_model(subtask_id, include_deleted=True)
+        if cursor is None:
+            return chain
+        # Walk parents up to root.
+        seen = {cursor.id}
+        while cursor.parent_subtask_id is not None:
+            parent = self.get_model(
+                cursor.parent_subtask_id, include_deleted=True,
+            )
+            if parent is None or parent.id in seen:
+                break
+            seen.add(parent.id)
+            chain.append(parent)
+            cursor = parent
+        chain.reverse()  # root-first
+        return chain
+
+    def descendant_ids(self, root_subtask_id: str) -> List[str]:
+        """Iterative BFS over ``parent_subtask_id`` from this subtask.
+
+        Returns every subtask id in the subtree rooted at the given id,
+        including the root, in BFS order. Iterates over LIVE rows only
+        (already-deleted descendants are not re-touched on cascade).
+        """
+        out: List[str] = []
+        frontier: deque = deque([root_subtask_id])
+        seen = {root_subtask_id}
+        while frontier:
+            current = frontier.popleft()
+            out.append(current)
+            children = (
+                self.db.query(SubtaskModel.id)
+                .filter(SubtaskModel.parent_subtask_id == current)
+                .filter(SubtaskModel.deleted_at.is_(None))
+                .all()
+            )
+            for (cid,) in children:
+                if cid not in seen:
+                    seen.add(cid)
+                    frontier.append(cid)
+        return out
 
     def get_live_resource(self, subtask_id: str) -> Optional[SubtaskResource]:
         row = (
@@ -114,10 +185,12 @@ class SubtaskRepository:
         position: int, created_by: Optional[int],
         resource_mode: Optional[str] = None,
         resource_count: Optional[int] = None,
+        parent_subtask_id: Optional[str] = None,
     ) -> Subtask:
         s = SubtaskModel(
             project_id=project_id,
             task_id=task_id,
+            parent_subtask_id=parent_subtask_id,
             name=name,
             description=description,
             type=type,
@@ -199,19 +272,32 @@ class SubtaskRepository:
             .values(deleted_at=now, updated_at=now)
         )
 
-    # ---------- delete (subtask is a leaf) ----------
+    # ---------- delete (subtask + its descendant subtree, doc 24) ----------
 
-    def soft_delete(self, subtask_id: str, deleted_by: Optional[int]) -> None:
+    def soft_delete(self, subtask_id: str, deleted_by: Optional[int]) -> List[str]:
+        """Soft-delete a subtask + every nested descendant subtask.
+
+        Doc 24: with nesting, deleting a subtask must cascade to all
+        descendants (and their resource rows). Returns the full list of
+        soft-deleted subtask ids in BFS order — callers use this to
+        cascade dependency-edge wipes (one call per id is fine; the
+        ``DependencyRepository.cascade_remove_subtask_targets`` helper
+        is idempotent).
+        """
         now = datetime.now(timezone.utc)
+        ids = self.descendant_ids(subtask_id)
+        if not ids:
+            return []
         self.db.execute(update(SubtaskResourceModel).where(
-            SubtaskResourceModel.subtask_id == subtask_id,
+            SubtaskResourceModel.subtask_id.in_(ids),
             SubtaskResourceModel.deleted_at.is_(None),
         ).values(deleted_at=now, updated_at=now))
         self.db.execute(update(SubtaskModel).where(
-            SubtaskModel.id == subtask_id,
+            SubtaskModel.id.in_(ids),
             SubtaskModel.deleted_at.is_(None),
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
         self.db.commit()
+        return ids
 
     def restore(self, subtask_id: str, restored_by: Optional[int]) -> Subtask:
         s = self.get_model(subtask_id, include_deleted=True)

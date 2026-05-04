@@ -1,4 +1,18 @@
-"""Subtask SQLAlchemy model (parent: task)."""
+"""Subtask SQLAlchemy model.
+
+Parent shape (doc 24):
+- ``task_id`` always points at the **root task** the subtree lives under.
+- ``parent_subtask_id`` is NULL for top-level subtasks (direct children
+  of the task) and points at another subtask's id for nested ones.
+
+XOR semantics: ``parent_subtask_id IS NULL`` ⇔ "child of task";
+``parent_subtask_id IS NOT NULL`` ⇔ "child of subtask".
+
+Position uniqueness is enforced per parent via two partial-unique
+indexes — one for top-level siblings under a task, one for children of
+a given subtask. Together they keep S{m}.{a}.{t}.{s1}[.{s2}…] labels
+unambiguous at every depth.
+"""
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -13,7 +27,11 @@ def _utcnow():
 
 
 class SubtaskModel(Base):
-    """Subtasks under a task. Has type + optional actual dates."""
+    """Subtasks under a task. Has type + optional actual dates.
+
+    Doc 24: ``parent_subtask_id`` enables nesting. ``task_id`` still
+    points at the root task for cheap "all subtasks under task X" reads.
+    """
     __tablename__ = "subtasks"
 
     id = Column(
@@ -22,6 +40,19 @@ class SubtaskModel(Base):
     )
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     task_id = Column(String(36), ForeignKey("tasks.id"), nullable=False, index=True)
+    # Doc 24: nullable FK to another subtask. NULL = top-level under
+    # task_id; non-NULL = nested child whose direct parent is another
+    # subtask. ``use_alter`` breaks the self-FK cycle on table create.
+    parent_subtask_id = Column(
+        String(36),
+        ForeignKey(
+            "subtasks.id",
+            name="fk_subtasks_parent_subtask_id",
+            use_alter=True,
+        ),
+        nullable=True,
+        index=True,
+    )
 
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
@@ -59,16 +90,37 @@ class SubtaskModel(Base):
         Index("idx_subtasks_task_live", "task_id", "deleted_at"),
         Index("idx_subtasks_task_position", "task_id", "position"),
         Index("idx_subtasks_project_live", "project_id", "deleted_at"),
-        # One LIVE subtask per (task_id, position) — drives label rank
-        # for S{m}.{a}.{t}.{s}.
+        # One LIVE TOP-LEVEL subtask per (task_id, position) — anchors
+        # the S{m}.{a}.{t}.{s1} segment.
         Index(
-            "uq_subtasks_task_position_live",
+            "uq_subtasks_task_position_top_live",
             "task_id", "position",
             unique=True,
-            sqlite_where=text("deleted_at IS NULL"),
-            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text(
+                "deleted_at IS NULL AND parent_subtask_id IS NULL"
+            ),
+            postgresql_where=text(
+                "deleted_at IS NULL AND parent_subtask_id IS NULL"
+            ),
+        ),
+        # One LIVE child per (parent_subtask_id, position) — anchors the
+        # nested segments S{...}.{sN}.
+        Index(
+            "uq_subtasks_subtask_position_live",
+            "parent_subtask_id", "position",
+            unique=True,
+            sqlite_where=text(
+                "deleted_at IS NULL AND parent_subtask_id IS NOT NULL"
+            ),
+            postgresql_where=text(
+                "deleted_at IS NULL AND parent_subtask_id IS NOT NULL"
+            ),
         ),
     )
 
     def __repr__(self) -> str:
-        return f"<SubtaskModel(id='{self.id}', task_id='{self.task_id}', name='{self.name}')>"
+        return (
+            f"<SubtaskModel(id='{self.id}', task_id='{self.task_id}', "
+            f"parent_subtask_id='{self.parent_subtask_id}', "
+            f"name='{self.name}')>"
+        )

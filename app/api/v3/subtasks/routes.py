@@ -43,6 +43,21 @@ def list_(
     )
 
 
+@subtasks_router.post(
+    "/{parent_subtask_id}/subtasks/create",
+    dependencies=[require_permission(SUBTASKS_CREATE)],
+    summary="Create a subtask nested under another subtask (doc 24)",
+    status_code=201,
+)
+def create_nested(
+    request: Request,
+    parent_subtask_id: str,
+    data: SubtaskCreateRequest,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return SubtaskController.create_nested(request, parent_subtask_id, data, db)
+
+
 @subtasks_router.get(
     "/{subtask_id}",
     dependencies=[require_permission(SUBTASKS_READ)],

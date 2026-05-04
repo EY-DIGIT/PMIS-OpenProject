@@ -1,4 +1,12 @@
-"""Soft-delete a subtask (leaf; wipe resource + dependency edges)."""
+"""Soft-delete a subtask + its nested descendant subtree (doc 24).
+
+For a top-level subtask this is a single-row soft-delete plus dependency
+edge cleanup, same as before nesting was a thing. For a subtask with
+descendants we collect every descendant id first, soft-delete them all
+in one pass, and wipe every dependency edge (incoming + outgoing) for
+each descendant — preserving the same "no dangling edges" guarantee the
+flat subtree had.
+"""
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -17,8 +25,10 @@ def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[in
         raise NotFoundError("The subtask could not be found.")
     assert_task_subtask_writable(db, model.project_id)
 
-    # Soft-delete in-edges pointing at this subtask and out-edges leaving it.
-    DependencyRepository(db).cascade_remove_subtask_targets(
-        subtask_id, actor_id=current_user_id,
-    )
+    dep_repo = DependencyRepository(db)
+    # Collect descendants BEFORE we soft-delete (the read filters on
+    # deleted_at IS NULL). Then wipe edges for every id in the subtree.
+    descendant_ids = repo.descendant_ids(subtask_id)
+    for sid in descendant_ids:
+        dep_repo.cascade_remove_subtask_targets(sid, actor_id=current_user_id)
     repo.soft_delete(subtask_id, deleted_by=current_user_id)
