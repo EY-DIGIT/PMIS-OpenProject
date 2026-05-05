@@ -8,7 +8,12 @@ from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_milestone_activity_writable
 from .....domain.milestones.milestone import (
     MILESTONE_STATUS_CHOICES,
+    MILESTONE_STATUS_COMPLETED,
     Milestone,
+)
+from .....infrastructure.db.models.milestone import MilestoneModel
+from .....infrastructure.db.models.milestone_dependency import (
+    MilestoneDependencyModel,
 )
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.repositories.dependency_repository import (
@@ -17,7 +22,17 @@ from .....infrastructure.db.repositories.dependency_repository import (
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
-from .....shared.labels import KIND_MILESTONE, resolve_labels_to_ids
+from .....shared.dep_date_rules import (
+    collect_milestone_forward_violations,
+    collect_milestone_reverse_violations,
+    raise_milestone_forward_if_violations,
+    raise_milestone_reverse_if_violations,
+)
+from .....shared.labels import (
+    KIND_MILESTONE,
+    build_label_index_for_project,
+    resolve_labels_to_ids,
+)
 from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_UPDATE,
@@ -28,6 +43,42 @@ from ...projects.services.baseline_version_sync import (
 
 def _iso(v):
     return v.isoformat() if hasattr(v, "isoformat") else v
+
+
+def _gate_milestone_status_against_deps(
+    db: Session, milestone_id: str, target_status: str,
+) -> None:
+    """Doc 31 (rule 2c): block flipping a milestone's status to
+    ``completed`` while any of its dependency targets is not yet
+    ``completed``. Mirrors the activity-side gate in
+    ``activities/services/update.py``.
+
+    Only fires when ``target_status == 'completed'`` — moving back to
+    ``not_completed`` is always allowed (matches activity semantics).
+    """
+    if target_status != MILESTONE_STATUS_COMPLETED:
+        return
+    dep_repo = DependencyRepository(db)
+    target_ids = dep_repo.list_milestone_dependencies(milestone_id)
+    if not target_ids:
+        return
+    rows = (
+        db.query(MilestoneModel.id, MilestoneModel.name, MilestoneModel.status)
+        .filter(MilestoneModel.id.in_(target_ids))
+        .all()
+    )
+    blockers = [
+        (row[0], row[1], row[2])
+        for row in rows
+        if (row[2] or "") != MILESTONE_STATUS_COMPLETED
+    ]
+    if blockers:
+        names = ", ".join(f"'{b[1]}'" for b in blockers[:3])
+        more = "" if len(blockers) <= 3 else f" (+{len(blockers) - 3} more)"
+        raise ValidationError(
+            f"Cannot mark this milestone as completed — the following "
+            f"dependency target(s) are not yet completed: {names}{more}.",
+        )
 
 
 def update_milestone(
@@ -76,6 +127,12 @@ def update_milestone(
             f"Milestone status must be one of: {', '.join(MILESTONE_STATUS_CHOICES)}."
         )
 
+    # Doc 31 (rule 2c): status-completion gate. Run before any dep-date
+    # work below — if the caller is trying to mark this completed but a
+    # dep target isn't, fail fast with the dep names.
+    if status is not None:
+        _gate_milestone_status_against_deps(db, milestone_id, status)
+
     # Validate depends_on (replace-list semantics) BEFORE writing.
     # Accepts UUIDs or labels (e.g. "M2"); see app/shared/labels.py.
     desired_deps: Optional[List[str]] = None
@@ -110,6 +167,94 @@ def update_milestone(
                     "create a cycle."
                 )
         desired_deps = candidates
+
+    # Doc 31: milestone-specific dep-date rules (replaces the doc 27
+    # generic source.start >= target.end rule for milestones only).
+    #   2a: source.start_date >= target.start_date  (equality OK)
+    #   2b: source.end_date   >  target.end_date    (strict)
+    effective_start = start_date if start_date is not None else model.start_date
+    effective_end = end_date if end_date is not None else model.end_date
+    label_index = None
+
+    # FORWARD: re-validate this milestone's effective dates against its
+    # outgoing dep set. Runs when the dep set is being replaced OR when
+    # the source's dates moved.
+    forward_targets_to_check: List[str]
+    if desired_deps is not None:
+        forward_targets_to_check = desired_deps
+    elif start_date is not None or end_date is not None:
+        forward_targets_to_check = DependencyRepository(db) \
+            .list_milestone_dependencies(milestone_id)
+    else:
+        forward_targets_to_check = []
+    if forward_targets_to_check:
+        target_rows = (
+            db.query(
+                MilestoneModel.id, MilestoneModel.name,
+                MilestoneModel.start_date, MilestoneModel.end_date,
+            )
+            .filter(MilestoneModel.id.in_(forward_targets_to_check))
+            .all()
+        )
+        if label_index is None:
+            label_index = build_label_index_for_project(db, model.project_id)
+        forward = [
+            (label_index.label_of(KIND_MILESTONE, tid) or tname, tstart, tend)
+            for (tid, tname, tstart, tend) in target_rows
+        ]
+        starts, ends = collect_milestone_forward_violations(
+            source_start=effective_start,
+            source_end=effective_end,
+            targets=forward,
+        )
+        raise_milestone_forward_if_violations(
+            starts, ends,
+            source_label=(
+                f"Milestone '{label_index.label_of(KIND_MILESTONE, milestone_id) or model.name}'"
+            ),
+            source_start=effective_start,
+            source_end=effective_end,
+        )
+
+    # REVERSE: when this milestone's start_date or end_date moves, walk
+    # every live source pointing AT it and re-validate against the new
+    # values. Either-direction edit triggers the walk because both rules
+    # use both columns of the target.
+    if start_date is not None or end_date is not None:
+        sources = (
+            db.query(
+                MilestoneModel.id, MilestoneModel.name,
+                MilestoneModel.start_date, MilestoneModel.end_date,
+            )
+            .join(
+                MilestoneDependencyModel,
+                MilestoneDependencyModel.source_milestone_id == MilestoneModel.id,
+            )
+            .filter(MilestoneDependencyModel.target_milestone_id == milestone_id)
+            .filter(MilestoneDependencyModel.deleted_at.is_(None))
+            .filter(MilestoneModel.deleted_at.is_(None))
+            .all()
+        )
+        if sources:
+            if label_index is None:
+                label_index = build_label_index_for_project(db, model.project_id)
+            rev = [
+                (label_index.label_of(KIND_MILESTONE, sid) or sname, sstart, send)
+                for (sid, sname, sstart, send) in sources
+            ]
+            r_starts, r_ends = collect_milestone_reverse_violations(
+                target_start=effective_start,
+                target_end=effective_end,
+                sources=rev,
+            )
+            raise_milestone_reverse_if_violations(
+                r_starts, r_ends,
+                target_label=(
+                    f"Milestone '{label_index.label_of(KIND_MILESTONE, milestone_id) or model.name}'"
+                ),
+                target_start=effective_start,
+                target_end=effective_end,
+            )
 
     updates = {}
     if name is not None:

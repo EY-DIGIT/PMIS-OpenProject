@@ -94,10 +94,11 @@ class TestStandardSplitEndpoint:
 
     def test_accepts_depends_on(self, client, admin_user, admin_headers):
         _, mid = _setup_project_and_milestone(client, admin_headers)
-        # First activity (target for the dep).
+        # First activity (target for the dep). Doc 27: target ends day+5,
+        # source starts day+10 so source.start >= target.end.
         r1 = client.post(
             f"/api/v3/milestones/{mid}/activities/standard/create",
-            json={"name": "A-target", "startDate": _iso(4), "endDate": _iso(20)},
+            json={"name": "A-target", "startDate": _iso(4), "endDate": _iso(5)},
             headers=admin_headers,
         )
         a_target = r1.json()["data"]["id"]
@@ -105,7 +106,7 @@ class TestStandardSplitEndpoint:
         r2 = client.post(
             f"/api/v3/milestones/{mid}/activities/standard/create",
             json={
-                "name": "A-source", "startDate": _iso(4), "endDate": _iso(20),
+                "name": "A-source", "startDate": _iso(10), "endDate": _iso(20),
                 "dependsOn": [a_target],
             },
             headers=admin_headers,
@@ -543,8 +544,16 @@ class TestSharedValidationsStillApply:
     def test_standard_on_version_rejected(self, client, admin_user, admin_headers):
         """The baseline-only guard still fires on the split endpoints."""
         pid, mid = _setup_project_and_milestone(client, admin_headers)
+        # Doc 27 publish gate: M1 needs at least one activity.
+        a = client.post(
+            f"/api/v3/milestones/{mid}/activities/standard/create",
+            json={"name": "Seed", "startDate": _iso(4), "endDate": _iso(10)},
+            headers=admin_headers,
+        )
+        assert a.status_code == 201, a.text
         # Publish + version.
-        client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
+        pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
+        assert pub.status_code == 200, pub.text
         vr = client.post(
             f"/api/v3/projects/{pid}/versions/create", headers=admin_headers,
         )

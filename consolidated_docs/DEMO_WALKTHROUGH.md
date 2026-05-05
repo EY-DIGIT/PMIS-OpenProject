@@ -74,7 +74,7 @@ Click the green **Authorize** button at the top of Swagger, paste `Bearer <token
 
 **`GET /vendors`** — Execute.
 
-**Expect 200** and an `_embedded.elements` list of 5 vendors. Copy the `id` of "Infosys" (UUID) — you'll use it as `vendorId` below.
+**Expect 200** and an `_embedded.elements` list of 5 vendors. Each row carries both `id` (UUID) and `vendorCode` (`VN-XXXX-YYMMDDHHMMSS` — doc 25). Copy *either* identifier for "Infosys" — every cross-entity vendor input below accepts the UUID or the code interchangeably.
 ac5a2d47-df49-4503-b27e-7f734e1c5ee9
 
 ### 1b. List resource types
@@ -327,6 +327,10 @@ If you try it on a project with zero milestones, you'd get **422** with the mess
 **`POST /projects/{project_uuid}/publish`**.
 
 **Expect 200** and `data.status: "published"`. Running it again returns **409** (already published).
+
+**Doc 30 publish gate.** The publish call rejects projects with structural gaps:
+- Zero milestones → **422** with `_embedded.details.errorIdentifier = "no_milestones"`.
+- Any milestone with zero live activities → **422** with `_embedded.details.errorIdentifier = "milestone_without_activity"` and `details.milestoneNames` listing every empty milestone (no cap). Add at least one activity to each before retrying. The same gate also fires on version publish.
 
 ---
 
@@ -588,9 +592,15 @@ The happy path has demonstrated:
 - **Activity / task / subtask `dependsOn`** with existence check, self-edge rejection, cycle detection — **same project, no parent-hierarchy rule** (doc 24 part 3 dropped the parent-activity / parent-task hierarchy rules)
 - **Display labels** (doc 22) — `M1` / `A1.2` / `T1.2.3` / `S1.2.3.4[.5.6…]` accepted on `dependsOn` input; every response includes `displayCode` + `dependsOnDisplay`
 - **Nested subtasks** (doc 24 part 2) — `POST /api/v3/subtasks/{parent_subtask_id}/subtasks/create`; unlimited depth (cap via `SUBTASK_MAX_NESTING_DEPTH` env); cascade-soft-delete recursively kills the descendant subtree
+- **Human-readable codes** (doc 25) — every user/vendor response carries `userCode` (`US-XXXX-YYMMDDHHMMSS`) and `vendorCode` (`VN-XXXX-YYMMDDHHMMSS`); lookup paths and cross-entity vendor inputs accept either form
+- **`users.id` is a UUID** (doc 26) — was integer pre-doc-26; pre-doc-26 JWTs are invalid; `GET /api/v3/users/1` no longer resolves (use UUID or `US-` code)
 - **Status-completion gate** on activities (can't mark completed with incomplete deps)
+- **Dep-date enforcement** (doc 30) — for **activities/tasks/subtasks**: `source.start_date >= target.end_date` (equality allowed); applied on create + update; reverse direction also guarded so editing a target's `end_date` past an existing successor's `start_date` is rejected with all offenders listed
+- **Milestone dep-date rules** (doc 31) — milestones use a different rule than the other three kinds: `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict, equality REJECTED); both rules can fire together with all offenders enumerated; reverse direction also guarded
+- **Milestone status-completion gate** (doc 31) — a milestone cannot be marked `completed` while any dep target is `not_completed`; up to 3 blocker names enumerated; reverting from `completed` is unguarded
 - Save Project (`new → draft`) wired to the milestone-exists gate
 - Publish state machine (`{new, draft} → published`, admin only, idempotent with 409 on re-publish)
+- **Publish structural-completeness gate** (doc 30) — publish rejects projects with zero milestones (`no_milestones`) and any milestone with zero live activities (`milestone_without_activity`); applies uniformly to baselines and versions; `_embedded.details` carries every empty milestone's id + name
 - Published baselines remain editable on PATCH
 - Version creation (201; only-one-active invariant; 409 on duplicate)
 - Baseline/version level guards (403 on task writes on baseline; 403 on M/A writes on version)
@@ -602,4 +612,4 @@ The happy path has demonstrated:
 - Soft-delete of baseline cascades to every live version + their subtrees in one txn
 - Deleting an M/A/T/S row soft-deletes every dependency edge that touches it (source or target)
 
-If any step doesn't match the expected signal, the first place to look is the response error payload — the service layer returns structured `errorIdentifier` values (`invalid_field`, `project_locked`, `invalid_transition`, `not_found`, `validation_error`) that pinpoint the rule that rejected the request.
+If any step doesn't match the expected signal, the first place to look is the response error payload — the service layer returns structured `errorIdentifier` values (`invalid_field`, `project_locked`, `invalid_transition`, `invalid_publish`, `not_found`, `validation_error`) that pinpoint the rule that rejected the request. For `invalid_publish` (doc 30), inspect `_embedded.details.errorIdentifier` to distinguish `no_milestones` from `milestone_without_activity`.

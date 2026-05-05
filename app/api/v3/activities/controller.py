@@ -11,7 +11,6 @@ from ....shared.labels import (
     build_label_index_for_project,
 )
 from .schemas import (
-    ActivityCreateRequest,
     ActivityUpdateRequest,
     ActivityListQuery,
     ResourceCountActivityCreateRequest,
@@ -102,34 +101,11 @@ def format_activity_response(
 
 
 class ActivityController:
-    @staticmethod
-    def create(request: Request, milestone_id: str, data: ActivityCreateRequest, db: Session) -> JSONResponse:
-        current_user_id = getattr(request.state, "user_id", None)
-        resource_dict = data.resource.model_dump() if data.resource else None
-        activity, resource = create_activity(
-            db,
-            milestone_id=milestone_id,
-            name=data.name,
-            description=data.description,
-            type=data.type,
-            start_date=data.start_date,
-            end_date=data.end_date,
-            actual_start_date=data.actual_start_date,
-            actual_end_date=data.actual_end_date,
-            position=data.position,
-            resource_mode=data.resource_mode,
-            resource_count=data.resource_count,
-            resource=resource_dict,
-            current_user_id=current_user_id,
-            status=data.status,
-            depends_on=data.depends_on,
-        )
-        idx = build_label_index_for_project(db, activity.project_id)
-        return BaseController.created(data=format_activity_response(
-            activity.to_dict(),
-            resource.to_dict() if resource else None,
-            label_index=idx,
-        ))
+    # Doc 14 split the single activity-create endpoint into four
+    # type-specific handlers below (standard / resource_count /
+    # resource_details / transactional). The original unified
+    # ``create`` method was removed in the dead-code audit — it had
+    # no route bound to it and was never called.
 
     # ------------------------------------------------------------------
     # Split-by-type create handlers.

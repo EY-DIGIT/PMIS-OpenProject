@@ -3,7 +3,7 @@
 **Project**: PMIS (Project Management Information System) — FastAPI backend
 **Version**: 3.0.0
 **Status**: Production-ready
-**Last refresh**: 2026-05-04 (after doc 24)
+**Last refresh**: 2026-05-04 (after doc 26)
 
 ---
 
@@ -156,6 +156,8 @@ Total tables on `Base.metadata`: **34**.
 
 Schema highlights to be aware of:
 
+- **`users.id` is `VARCHAR(36)` UUID** as of doc 26 (was `INTEGER` autoincrement). Every FK column referencing `users.id` (~30 across the schema) was retyped to `String(36)` in the same migration. JWT `user_id` claim now carries a UUID string — pre-doc-26 tokens become invalid.
+- **`vendors.vendor_code` + `users.user_code`** (doc 25) — human-readable display IDs `VN-XXXX-YYMMDDHHMMSS` / `US-XXXX-YYMMDDHHMMSS`. Lookup endpoints accept either the canonical UUID OR the code; cross-entity vendor inputs accept either form.
 - **`users`** has no `admin` boolean column — superuser status comes from membership in the seeded `admin` role (doc 21B).
 - **`milestones.depends`** JSON column was dropped (doc 22). Milestone deps now live in the `milestone_dependencies` edge table (doc 21A).
 - **`subtasks.parent_subtask_id`** (nullable self-FK) supports nested subtasks (doc 24). Top-level subtasks have it NULL; the column always carries the immediate parent.
@@ -217,7 +219,7 @@ Schema highlights to be aware of:
 | PATCH | `/api/v3/projects/{id}` | `projects:update_all` | Update project |
 | DELETE | `/api/v3/projects/{id}` | `projects:delete_all` | Soft-delete (cascades to active versions) |
 | POST | `/api/v3/projects/{id}/save` | `projects:update_all` | Move `new` → `draft` |
-| POST | `/api/v3/projects/{id}/publish` | `projects:publish` | Move `draft` → `published` |
+| POST | `/api/v3/projects/{id}/publish` | `projects:publish` | Move `draft` → `published`; **doc 27**: rejects (422 `invalid_publish`) projects with zero milestones or any milestone with zero live activities |
 | POST | `/api/v3/projects/{id}/close` | `projects:close` | Move to `closed` |
 | POST | `/api/v3/projects/{id}/versions/create` | `projects:update_all` | Create a new version (active-version constraint) |
 | GET | `/api/v3/projects/{id}/tree` | `projects:read` | Full nested tree (M/A/T/S, recursive subtask nesting) |
@@ -278,6 +280,10 @@ The legacy paths (`/api/v3/divisions`, `/api/v3/resource_types`, `/api/v3/vendor
 
 **Doc 24 part 3: no parent-task hierarchy rule on dependencies.** Subtask deps follow the same rule as activity deps: same project, no self, no cycle. Cap nesting depth via env var `SUBTASK_MAX_NESTING_DEPTH` (default `None` = unlimited).
 
+**Doc 30 dep-date enforcement.** For activity/task/subtask dep edges, `source.start_date >= target.end_date` must hold (equality allowed — same-day handoff). Validated on create + update in two directions: forward (when `dependsOn` is assigned/replaced or `start_date` moves) and reverse (when a target's `end_date` is pushed past an existing successor's `start_date`). Error messages list every offender with its label. Helper: [`app/shared/dep_date_rules.py`](../app/shared/dep_date_rules.py).
+
+**Doc 31 milestone-specific rules.** Milestones use a different dep-date rule than the other three kinds: `source.start_date >= target.start_date` (equality allowed — phases may run in parallel) AND `source.end_date > target.end_date` (strict — equality REJECTED, the dependent must outlast its predecessor). Both directions guarded. Plus a status-completion gate: a milestone cannot be marked `completed` while any dep target is `not_completed` (mirrors the activity-side gate). Side-effect of the strict-end rule: a date-valid milestone cycle is structurally impossible, so the cycle-detection check is unreachable for milestones (the date rule fires first).
+
 ### Comments + attachments
 
 Polymorphic on M/A/T/S target — see the route files for the full surface.
@@ -292,8 +298,9 @@ Polymorphic on M/A/T/S target — see the route files for the full surface.
 {
   "data": {
     "_type": "User",
-    "_links": { "self": { "href": "/api/v3/users/1", "title": "admin" } },
-    "id": 1,
+    "_links": { "self": { "href": "/api/v3/users/8bd99f06-5f2a-424c-aaff-10ab163c3e42", "title": "admin" } },
+    "id": "8bd99f06-5f2a-424c-aaff-10ab163c3e42",
+    "userCode": "US-ADMI-260502143015",
     "login": "admin",
     "firstName": "Admin",
     "lastName": "User",
@@ -301,16 +308,23 @@ Polymorphic on M/A/T/S target — see the route files for the full surface.
     "phoneNumber": "9876543210",
     "admin": true,
     "status": "active",
-    "vendor": { "id": "…", "name": "Vendor A" },
+    "vendor": { "id": "…", "vendorCode": "VN-ACME-260502143015", "name": "Vendor A" },
     "division": "tmd1",
     "divisionOther": null,
-    "projects": [ { "id": "…", "projectCode": "PR-…", "name": "…", "status": "draft" } ],
+    "projects": [ { "id": "…", "projectCode": "UIDAI-PR…", "name": "…", "status": "draft" } ],
     "createdAt": "2026-05-01T10:00:00",
     "updatedAt": "2026-05-04T08:30:00"
   },
   "status": 200
 }
 ```
+
+> **Doc 31**: milestone-specific dep-date rules — `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict). Status-completion gate added to milestones: cannot mark `completed` while a dep target is incomplete.
+> **Doc 30**: dep-date enforcement for activity/task/subtask deps (`source.start >= target.end`, equality allowed) on create + update, forward and reverse. Publish rejects projects with zero milestones or any milestone holding zero live activities — both gates apply to baselines and versions; specific identifier in `_embedded.details.errorIdentifier` (`no_milestones` / `milestone_without_activity`).
+> **Doc 27** (kamal21): IST/UTC date-equality fixes via `UtcDateTime` column type so cross-format milestone/project date comparisons land on the same calendar day. Stale pre-doc-26 JWTs return 401 not 500.
+> **Doc 28/29** (kamal21): nested subtask listing fix + IST calendar-date input normalization across submission formats.
+> **Doc 26**: `users.id` is now a UUID string (was an integer). The legacy `GET /api/v3/users/1` no longer resolves — call by UUID or by the doc-25 `userCode`.
+> **Doc 25**: every user / vendor response carries the human-readable `userCode` / `vendorCode` alongside the UUID. Lookup paths and cross-entity vendor inputs accept either form.
 
 ### Collection
 
@@ -459,3 +473,5 @@ Numbered docs in [planned_changes/](../planned_changes/) describe every BE shape
 | 22 | Display labels (M/A/T/S) + drop `milestones.depends` JSON + per-parent position uniqueness |
 | 23 | Users `phone_number` + vendor `phoneNumber` required |
 | 24 | Past `start_date`, nested subtasks, drop dependency hierarchy rules |
+| 25 | Human-readable `vendorCode` / `userCode` (`VN-…` / `US-…`); polymorphic lookup; cross-entity vendor inputs accept UUID or code |
+| 26 | `users.id` flipped from `INTEGER` to `VARCHAR(36)` UUID; ~30 FK columns retyped in the same migration; pre-doc-26 JWTs invalidated |

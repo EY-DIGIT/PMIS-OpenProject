@@ -99,10 +99,12 @@ def _build_version_with_one_task(client, headers):
 
 
 def _create_subtask_under_task(client, headers, task_id, *, name="S",
-                               depends_on=None):
+                               depends_on=None,
+                               start_offset=5, end_offset=60):
     body = {
         "name": name,
-        "startDate": _future_iso(5), "endDate": _future_iso(60),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if depends_on is not None:
         body["dependsOn"] = depends_on
@@ -113,10 +115,12 @@ def _create_subtask_under_task(client, headers, task_id, *, name="S",
 
 
 def _create_subtask_under_subtask(client, headers, parent_subtask_id, *,
-                                  name="S", depends_on=None):
+                                  name="S", depends_on=None,
+                                  start_offset=6, end_offset=55):
     body = {
         "name": name,
-        "startDate": _future_iso(6), "endDate": _future_iso(55),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if depends_on is not None:
         body["dependsOn"] = depends_on
@@ -201,12 +205,22 @@ class TestNestedSubtaskLabels:
     ):
         # depends_on accepts both UUIDs and labels — the nested label
         # ``S1.1.1.1.1`` should resolve to its UUID at write time.
+        # Doc 27: pin all subtasks to the same day so cross-deps satisfy
+        # source.start >= target.end via equality (the rule under test
+        # here is label resolution, not date enforcement).
         _, tid = _build_version_with_one_task(client, admin_headers)
-        s1 = _create_subtask_under_task(client, admin_headers, tid).json()["data"]
-        s11 = _create_subtask_under_subtask(client, admin_headers, s1["id"]).json()["data"]
+        s1 = _create_subtask_under_task(
+            client, admin_headers, tid,
+            start_offset=10, end_offset=10,
+        ).json()["data"]
+        s11 = _create_subtask_under_subtask(
+            client, admin_headers, s1["id"],
+            start_offset=10, end_offset=10,
+        ).json()["data"]
         # Create a sibling at top-level that depends on the nested via label.
         sibling = _create_subtask_under_task(
             client, admin_headers, tid, name="Sib", depends_on=["S1.1.1.1.1"],
+            start_offset=10, end_offset=10,
         )
         assert sibling.status_code == 201, sibling.text
         assert sibling.json()["data"]["dependsOn"] == [s11["id"]]
@@ -220,12 +234,20 @@ class TestNestedSubtaskDeps:
     def test_top_level_can_depend_on_nested(
         self, client, admin_user, admin_headers,
     ):
+        # Doc 27: stagger so sibling.start >= s11.end.
         _, tid = _build_version_with_one_task(client, admin_headers)
-        s1 = _create_subtask_under_task(client, admin_headers, tid).json()["data"]
-        s11 = _create_subtask_under_subtask(client, admin_headers, s1["id"]).json()["data"]
+        s1 = _create_subtask_under_task(
+            client, admin_headers, tid,
+            start_offset=5, end_offset=8,
+        ).json()["data"]
+        s11 = _create_subtask_under_subtask(
+            client, admin_headers, s1["id"],
+            start_offset=5, end_offset=8,
+        ).json()["data"]
         sibling = _create_subtask_under_task(
             client, admin_headers, tid, name="Sib",
             depends_on=[s11["id"]],
+            start_offset=10, end_offset=15,
         )
         assert sibling.status_code == 201, sibling.text
         assert sibling.json()["data"]["dependsOn"] == [s11["id"]]
@@ -233,14 +255,25 @@ class TestNestedSubtaskDeps:
     def test_nested_can_depend_on_nested_in_different_branch(
         self, client, admin_user, admin_headers,
     ):
+        # Doc 27: branch A's leaf ends early, branch B's leaf starts later.
         _, tid = _build_version_with_one_task(client, admin_headers)
-        # Branch A: S1 → S1.1
-        s1 = _create_subtask_under_task(client, admin_headers, tid).json()["data"]
-        s11 = _create_subtask_under_subtask(client, admin_headers, s1["id"]).json()["data"]
-        # Branch B: S2 → S2.1
-        s2 = _create_subtask_under_task(client, admin_headers, tid).json()["data"]
+        # Branch A: S1 → S1.1 (ends day+8)
+        s1 = _create_subtask_under_task(
+            client, admin_headers, tid,
+            start_offset=5, end_offset=8,
+        ).json()["data"]
+        s11 = _create_subtask_under_subtask(
+            client, admin_headers, s1["id"],
+            start_offset=5, end_offset=8,
+        ).json()["data"]
+        # Branch B: S2 → S2.1 (S2.1 starts day+10, depends on S1.1)
+        s2 = _create_subtask_under_task(
+            client, admin_headers, tid,
+            start_offset=10, end_offset=15,
+        ).json()["data"]
         s21 = _create_subtask_under_subtask(
             client, admin_headers, s2["id"], depends_on=[s11["id"]],
+            start_offset=10, end_offset=15,
         )
         assert s21.status_code == 201, s21.text
         assert s21.json()["data"]["dependsOn"] == [s11["id"]]

@@ -21,6 +21,7 @@ from .....domain.activities.activity import (
     RESOURCE_MODE_DETAILS,
 )
 from .....domain.activities.activity_resource import ActivityResource
+from .....infrastructure.db.models.activity import ActivityModel
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.activity_repository import ActivityRepository
@@ -31,7 +32,15 @@ from .....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....shared.labels import KIND_ACTIVITY, normalize_dependency_inputs
+from .....shared.dep_date_rules import (
+    collect_forward_violations,
+    raise_forward_if_violations,
+)
+from .....shared.labels import (
+    KIND_ACTIVITY,
+    build_label_index_for_project,
+    normalize_dependency_inputs,
+)
 
 
 def create_activity(
@@ -133,6 +142,28 @@ def create_activity(
         # No cycle / self check needed — the new activity has no id yet, so
         # it can't appear in any existing edge. (Self-edge is impossible on
         # create.) The cycle check kicks in on update.
+
+        # Doc 27: source.start_date >= target.end_date for every dep target.
+        if desired_deps:
+            target_rows = (
+                db.query(
+                    ActivityModel.id, ActivityModel.name, ActivityModel.end_date,
+                )
+                .filter(ActivityModel.id.in_(desired_deps))
+                .all()
+            )
+            label_index = build_label_index_for_project(db, milestone.project_id)
+            forward = [
+                (label_index.label_of(KIND_ACTIVITY, tid) or tname, tend)
+                for (tid, tname, tend) in target_rows
+            ]
+            raise_forward_if_violations(
+                collect_forward_violations(
+                    source_start=start_date, targets=forward,
+                ),
+                source_label=f"Activity '{name.strip()}'",
+                source_start=start_date,
+            )
 
     repo = ActivityRepository(db)
     pos = position if position is not None else repo.next_position(milestone_id)

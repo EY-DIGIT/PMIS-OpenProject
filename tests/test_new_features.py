@@ -544,6 +544,33 @@ class TestVendorProjectionShape:
         carries `isVersion=True` and `versionOf=<baseline_id>` so the
         FE can group them visually."""
         v1, p = self._setup(client, admin_headers, db_session)
+        # Doc 27 publish gate: project needs ≥1 milestone with ≥1 activity.
+        from app.infrastructure.db.models.activity import ActivityModel
+        from app.infrastructure.db.models.milestone import MilestoneModel
+        from app.infrastructure.db.models.project import ProjectModel
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        proj = db_session.query(ProjectModel).filter_by(id=p["id"]).one()
+        if proj.start_date is None:
+            db_session.query(ProjectModel).filter_by(id=p["id"]).update({
+                "start_date": now + timedelta(days=1),
+                "end_date": now + timedelta(days=90),
+            })
+        m = MilestoneModel(
+            project_id=p["id"], name="M1",
+            start_date=now + timedelta(days=2),
+            end_date=now + timedelta(days=60),
+            position=0,
+        )
+        db_session.add(m)
+        db_session.flush()
+        db_session.add(ActivityModel(
+            project_id=p["id"], milestone_id=m.id, name="A1", type="standard",
+            start_date=now + timedelta(days=3),
+            end_date=now + timedelta(days=50),
+            position=0,
+        ))
+        db_session.commit()
         # Publish + create a version of the baseline.
         client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
         v_resp = client.post(
@@ -809,20 +836,29 @@ class TestMilestoneFields:
     ):
         # Doc 21: milestone depends_on now references real, same-project
         # milestones (was a passthrough JSON column previously).
+        # Doc 27: M3.start_date must be >= max(M1.end_date, M2.end_date),
+        # so we stagger the targets to end early and M3 to start later.
         pid, _ = self._project_with_vendors(client, admin_headers, db_session)
         m1 = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
-            json=self._milestone_body(name="M1"),
+            json=self._milestone_body(
+                name="M1", startDate=_future_iso(3), endDate=_future_iso(5),
+            ),
             headers=admin_headers,
         ).json()["data"]["id"]
         m2 = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
-            json=self._milestone_body(name="M2"),
+            json=self._milestone_body(
+                name="M2", startDate=_future_iso(3), endDate=_future_iso(5),
+            ),
             headers=admin_headers,
         ).json()["data"]["id"]
         resp = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
-            json=self._milestone_body(name="M3", dependsOn=[m1, m2]),
+            json=self._milestone_body(
+                name="M3", startDate=_future_iso(10), endDate=_future_iso(20),
+                dependsOn=[m1, m2],
+            ),
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text

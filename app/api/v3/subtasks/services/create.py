@@ -24,7 +24,15 @@ from .....infrastructure.db.repositories.dependency_repository import (
 )
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
-from .....shared.labels import KIND_SUBTASK, resolve_labels_to_ids
+from .....shared.dep_date_rules import (
+    collect_forward_violations,
+    raise_forward_if_violations,
+)
+from .....shared.labels import (
+    KIND_SUBTASK,
+    build_label_index_for_project,
+    resolve_labels_to_ids,
+)
 from .....domain.subtasks.subtask import (
     Subtask,
     SUBTASK_TYPE_RESOURCE,
@@ -235,6 +243,26 @@ def create_subtask(
             target_subtask_ids=candidates,
         )
         desired_deps = candidates
+
+        # Doc 27: source.start_date >= target.end_date for every dep target.
+        if desired_deps:
+            target_rows = (
+                db.query(SubtaskModel.id, SubtaskModel.name, SubtaskModel.end_date)
+                .filter(SubtaskModel.id.in_(desired_deps))
+                .all()
+            )
+            label_index = build_label_index_for_project(db, task.project_id)
+            forward = [
+                (label_index.label_of(KIND_SUBTASK, tid) or tname, tend)
+                for (tid, tname, tend) in target_rows
+            ]
+            raise_forward_if_violations(
+                collect_forward_violations(
+                    source_start=start_date, targets=forward,
+                ),
+                source_label=f"Subtask '{name.strip()}'",
+                source_start=start_date,
+            )
 
     repo = SubtaskRepository(db)
     if position is None:

@@ -33,6 +33,7 @@ Include in all protected requests: `Authorization: Bearer <access_token>`
 - Access Token TTL: 15 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
 - Refresh Token TTL: 7 days (configurable via `REFRESH_TOKEN_EXPIRE_DAYS`)
 - **JWT Payload (doc 21B): `sub` (login), `user_id`, `email`, `jti`, `iat`, `exp`** — `role` and `is_admin` are no longer carried; the auth middleware looks up the user's effective permission set from the DB on every request. Tokens issued before doc 21B that still carry `role`/`is_admin` keep working — those claims are simply ignored.
+- **Doc 26: `user_id` is now a UUID string** (was an integer). Tokens minted before doc 26 carry an integer that no longer matches any `users.id` row — those users have to log in once to mint a fresh UUID-bearing token.
 - Refresh token tracked via JTI stored in `users.refresh_token_jti` plus a 120-second grace slot (`previous_refresh_token_jti` + `previous_refresh_token_jti_valid_until`, doc 19) that lets a just-rotated-out token still satisfy a concurrent refresh / multi-tab login / stale retry.
 
 ### Token Introspection (RFC 7662, read-only)

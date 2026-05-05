@@ -22,7 +22,12 @@ def _iso(days):
 
 def _create_baseline_with_n_activities(client, admin_headers, n: int):
     """Project with n standard activities under one milestone, all on the
-    baseline. Returns (project_id, milestone_id, [activity_ids])."""
+    baseline. Returns (project_id, milestone_id, [activity_ids]).
+
+    Doc 27 note: every activity is pinned to the SAME single day so that
+    ``source.start_date >= target.end_date`` holds via the equality
+    branch for any (source, target) pair. That keeps the cycle-check
+    DFS as the only thing under test in this file."""
     p = client.post(
         "/api/v3/projects/create",
         json={
@@ -39,11 +44,16 @@ def _create_baseline_with_n_activities(client, admin_headers, n: int):
         json={"name": "M", "startDate": _iso(3), "endDate": _iso(80)},
         headers=admin_headers,
     ).json()["data"]["id"]
+    # Capture the "day+10" timestamp ONCE so every activity has identical
+    # start/end timestamps. The doc 27 dep-date rule allows equality, but
+    # a per-call ``_iso(10)`` would drift by microseconds across calls
+    # and break the chain (A0.start would end up < A1.end).
+    pinned = _iso(10)
     ids = []
     for i in range(n):
         r = client.post(
             f"/api/v3/milestones/{mid}/activities/standard/create",
-            json={"name": f"A{i}", "startDate": _iso(4), "endDate": _iso(20)},
+            json={"name": f"A{i}", "startDate": pinned, "endDate": pinned},
             headers=admin_headers,
         )
         assert r.status_code == 201, r.text

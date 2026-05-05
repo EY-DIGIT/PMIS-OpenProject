@@ -8,6 +8,40 @@ body (except for PUT-upsert, where the id comes from the URL).
 import pytest
 
 
+def _attach_milestone_with_activity(db_session, project):
+    """Doc 27 publish gate: a project needs at least one milestone and
+    every milestone needs at least one activity to be publishable. This
+    helper sets the project's date window plus one milestone with one
+    activity in a single shot."""
+    from datetime import datetime, timezone, timedelta
+    from app.infrastructure.db.models.activity import ActivityModel
+    from app.infrastructure.db.models.milestone import MilestoneModel
+    from app.infrastructure.db.models.project import ProjectModel
+    now = datetime.now(timezone.utc)
+    db_session.query(ProjectModel).filter_by(id=project.id).update(
+        {"start_date": now + timedelta(days=1), "end_date": now + timedelta(days=90)}
+    )
+    m = MilestoneModel(
+        project_id=project.id,
+        name="M1",
+        start_date=now + timedelta(days=2),
+        end_date=now + timedelta(days=60),
+        position=0,
+    )
+    db_session.add(m)
+    db_session.flush()
+    db_session.add(ActivityModel(
+        project_id=project.id,
+        milestone_id=m.id,
+        name="A1",
+        type="standard",
+        start_date=now + timedelta(days=3),
+        end_date=now + timedelta(days=50),
+        position=0,
+    ))
+    db_session.commit()
+
+
 class TestCreateProject:
     """POST /api/v3/projects/create"""
 
@@ -104,7 +138,8 @@ class TestSaveProject:
 class TestPublishProject:
     """POST /api/v3/projects/{uuid}/publish"""
 
-    def test_publish_new_project(self, client, admin_user, admin_headers, sample_project):
+    def test_publish_new_project(self, client, admin_user, admin_headers, db_session, sample_project):
+        _attach_milestone_with_activity(db_session, sample_project)
         resp = client.post(
             f"/api/v3/projects/{sample_project.id}/publish",
             headers=admin_headers,
@@ -112,16 +147,18 @@ class TestPublishProject:
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "published"
 
-    def test_publish_is_idempotent_rejected(self, client, admin_user, admin_headers, sample_project):
+    def test_publish_is_idempotent_rejected(self, client, admin_user, admin_headers, db_session, sample_project):
+        _attach_milestone_with_activity(db_session, sample_project)
         first = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         assert first.status_code == 200
         second = client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         assert second.status_code == 409
 
-    def test_publish_keeps_baseline_patchable(self, client, admin_user, admin_headers, sample_project):
+    def test_publish_keeps_baseline_patchable(self, client, admin_user, admin_headers, db_session, sample_project):
         """Baselines remain editable after publish (per the editable-field
         whitelist in transitions.py). Propagation of those edits to active
         versions is exercised separately in test_baseline_version_propagation.py."""
+        _attach_milestone_with_activity(db_session, sample_project)
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         resp = client.patch(
             f"/api/v3/projects/{sample_project.id}",
@@ -149,8 +186,9 @@ class TestCreateVersion:
     """POST /api/v3/projects/{uuid}/versions/create"""
 
     def test_create_version_from_published_baseline(
-        self, client, admin_user, admin_headers, sample_project
+        self, client, admin_user, admin_headers, db_session, sample_project
     ):
+        _attach_milestone_with_activity(db_session, sample_project)
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         resp = client.post(
             f"/api/v3/projects/{sample_project.id}/versions/create",
@@ -174,8 +212,9 @@ class TestCreateVersion:
         assert resp.status_code == 409
 
     def test_one_active_version_per_baseline(
-        self, client, admin_user, admin_headers, sample_project
+        self, client, admin_user, admin_headers, db_session, sample_project
     ):
+        _attach_milestone_with_activity(db_session, sample_project)
         client.post(f"/api/v3/projects/{sample_project.id}/publish", headers=admin_headers)
         first = client.post(
             f"/api/v3/projects/{sample_project.id}/versions/create",
@@ -231,8 +270,10 @@ class TestDeleteCascadesToVersions:
     when the target is a baseline. Deleting a version alone must NOT touch
     the baseline or sibling versions."""
 
-    def _publish(self, client, headers, pid):
-        r = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
+    def _publish(self, client, headers, db_session, project):
+        # Doc 27: a project must have ≥1 milestone with ≥1 activity to publish.
+        _attach_milestone_with_activity(db_session, project)
+        r = client.post(f"/api/v3/projects/{project.id}/publish", headers=headers)
         assert r.status_code == 200, r.text
 
     def _new_version(self, client, headers, baseline_id):
@@ -252,10 +293,10 @@ class TestDeleteCascadesToVersions:
         assert g.status_code == 404
 
     def test_delete_baseline_cascades_to_versions(
-        self, client, admin_user, admin_headers, sample_project
+        self, client, admin_user, admin_headers, db_session, sample_project
     ):
         # Version 1 — live, active
-        self._publish(client, admin_headers, sample_project.id)
+        self._publish(client, admin_headers, db_session, sample_project)
         v1_id = self._new_version(client, admin_headers, sample_project.id)
         # Suspend v1 so we can create v2
         s = client.post(f"/api/v3/projects/{v1_id}/suspend", headers=admin_headers)
@@ -278,9 +319,9 @@ class TestDeleteCascadesToVersions:
             assert g.status_code == 404, f"{label} should be 404 after baseline delete"
 
     def test_delete_version_does_not_touch_baseline_or_siblings(
-        self, client, admin_user, admin_headers, sample_project
+        self, client, admin_user, admin_headers, db_session, sample_project
     ):
-        self._publish(client, admin_headers, sample_project.id)
+        self._publish(client, admin_headers, db_session, sample_project)
         v1_id = self._new_version(client, admin_headers, sample_project.id)
         # Suspend v1 so we can spawn v2
         client.post(f"/api/v3/projects/{v1_id}/suspend", headers=admin_headers)

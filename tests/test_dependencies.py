@@ -40,7 +40,7 @@ def _create_project(client, admin_headers, *, name="Dep Demo"):
             "name": name,
             "owner": "tmd1",
             "startDate": _future_iso(1),
-            "endDate": _future_iso(120),
+            "endDate": _future_iso(400),
         },
         headers=admin_headers,
     )
@@ -48,13 +48,19 @@ def _create_project(client, admin_headers, *, name="Dep Demo"):
     return resp.json()["data"]["id"]
 
 
-def _create_milestone(client, admin_headers, project_id, *, name="M"):
+def _create_milestone(
+    client, admin_headers, project_id, *,
+    name="M", start_offset=2, end_offset=300,
+):
+    """Default window is intentionally wide so successor activities,
+    tasks, and subtasks (which use later offsets per doc 27 dep-date
+    enforcement) still fit under it."""
     resp = client.post(
         f"/api/v3/projects/{project_id}/milestones/create",
         json={
             "name": name,
-            "startDate": _future_iso(2),
-            "endDate": _future_iso(100),
+            "startDate": _future_iso(start_offset),
+            "endDate": _future_iso(end_offset),
         },
         headers=admin_headers,
     )
@@ -62,11 +68,19 @@ def _create_milestone(client, admin_headers, project_id, *, name="M"):
     return resp.json()["data"]["id"]
 
 
-def _create_activity(client, admin_headers, milestone_id, *, name="A", depends_on=None):
+def _create_activity(
+    client, admin_headers, milestone_id, *,
+    name="A", depends_on=None, start_offset=30, end_offset=40,
+):
+    """Default offsets (30/40) sit AFTER the staggered baseline activities
+    created by ``_build_baseline_with_two_activities`` (A1 ends day+5,
+    A2 ends day+20), so a "third" activity created via this helper can
+    safely depend on either baseline activity under the doc 27 rule
+    (source.start_date >= target.end_date)."""
     body = {
         "name": name,
-        "startDate": _future_iso(3),
-        "endDate": _future_iso(80),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if depends_on is not None:
         body["dependsOn"] = depends_on
@@ -79,9 +93,10 @@ def _create_activity(client, admin_headers, milestone_id, *, name="A", depends_o
 
 
 def _publish(client, admin_headers, project_id):
-    # The project needs at least one milestone to have been added so that the
-    # create_version path doesn't trip an empty-tree edge case. The publish
-    # endpoint itself moves status from new/draft -> published.
+    # The project needs at least one milestone with at least one activity
+    # for the doc 27 publish gate. Build helpers in this file always
+    # create activities under each milestone, so the gate is naturally
+    # satisfied by the time we reach this helper.
     resp = client.post(
         f"/api/v3/projects/{project_id}/publish", headers=admin_headers
     )
@@ -106,19 +121,30 @@ def _list_activities_in(client, admin_headers, milestone_id):
 
 
 def _build_baseline_with_two_activities(client, admin_headers):
-    """Returns (project_id, milestone1_id, milestone2_id, activity1_id, activity2_id)."""
+    """Returns (project_id, milestone1_id, milestone2_id, activity1_id, activity2_id).
+
+    Doc 27 staggering: A1 ends day+5 (early); A2 starts day+10 and ends
+    day+20. So an A2 → A1 dep is valid (A2.start=10 >= A1.end=5) and a
+    third activity created with default offsets (start=30) can depend on
+    either."""
     pid = _create_project(client, admin_headers)
     m1 = _create_milestone(client, admin_headers, pid, name="M1")
     m2 = _create_milestone(client, admin_headers, pid, name="M2")
-    a1 = _create_activity(client, admin_headers, m1, name="A1")
+    a1 = _create_activity(
+        client, admin_headers, m1, name="A1",
+        start_offset=3, end_offset=5,
+    )
     assert a1.status_code == 201, a1.text
-    a2 = _create_activity(client, admin_headers, m2, name="A2")
+    a2 = _create_activity(
+        client, admin_headers, m2, name="A2",
+        start_offset=10, end_offset=20,
+    )
     assert a2.status_code == 201, a2.text
     return pid, m1, m2, a1.json()["data"]["id"], a2.json()["data"]["id"]
 
 
 def _create_task(client, admin_headers, activity_id, *, name="T", depends_on=None,
-                 start_offset=4, end_offset=70):
+                 start_offset=50, end_offset=60):
     # ``type`` is no longer accepted on the task create body (doc 15) — the
     # task inherits it from the parent activity. The activities created by
     # _create_activity above are 'standard', so the task is too.
@@ -136,7 +162,7 @@ def _create_task(client, admin_headers, activity_id, *, name="T", depends_on=Non
 
 
 def _create_subtask(client, admin_headers, task_id, *, name="S", depends_on=None,
-                    start_offset=5, end_offset=60):
+                    start_offset=70, end_offset=80):
     # ``type`` removed from body (doc 15) — subtask inherits from parent task.
     body = {
         "name": name,
@@ -200,7 +226,21 @@ class TestActivityDeps:
     def test_update_activity_creates_cycle_rejected(
         self, client, admin_user, admin_headers,
     ):
-        _, _, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
+        # For the cycle direction A1 -> A2 to satisfy the doc 27 dep-date
+        # rule (A1.start >= A2.end), we need both activities pinned to the
+        # SAME date — equality is allowed. Then both directions are
+        # date-valid and the cycle rule is what we're actually testing.
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(client, admin_headers, pid, name="M1")
+        m2 = _create_milestone(client, admin_headers, pid, name="M2")
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=10, end_offset=10,
+        ).json()["data"]["id"]
+        a2 = _create_activity(
+            client, admin_headers, m2, name="A2",
+            start_offset=10, end_offset=10,
+        ).json()["data"]["id"]
         # A1 -> A2
         r = client.patch(
             f"/api/v3/activities/{a1}",
@@ -475,7 +515,7 @@ class TestTaskDeps:
         assert t1.status_code == 201, t1.text
         t1_id = t1.json()["data"]["id"]
         # Task under v_a2 depending on T1 — allowed because v_a2 depends on v_a1.
-        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1_id])
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1_id], start_offset=65, end_offset=75)
         assert t2.status_code == 201, t2.text
         assert t2.json()["data"]["dependsOn"] == [t1_id]
 
@@ -498,7 +538,7 @@ class TestTaskDeps:
         t1 = _create_task(client, admin_headers, v_a1, name="T1")
         t1_id = t1.json()["data"]["id"]
         # No activity-level edge between A1 and A2; this used to 422.
-        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1_id])
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1_id], start_offset=65, end_offset=75)
         assert t2.status_code == 201, t2.text
         assert t2.json()["data"]["dependsOn"] == [t1_id]
 
@@ -518,7 +558,7 @@ class TestTaskDeps:
         )
         t1 = _create_task(client, admin_headers, v_a1, name="T1")
         t1_id = t1.json()["data"]["id"]
-        t2 = _create_task(client, admin_headers, v_a1, name="T2", depends_on=[t1_id])
+        t2 = _create_task(client, admin_headers, v_a1, name="T2", depends_on=[t1_id], start_offset=65, end_offset=75)
         assert t2.status_code == 201, t2.text
 
 
@@ -549,12 +589,12 @@ class TestSubtaskDeps:
                     v_a2 = act["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
         t2 = _create_task(
-            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+            client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75
         ).json()["data"]["id"]
 
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
         # Subtask under T2 depending on S1: allowed because T2 depends on T1.
-        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1])
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95)
         assert s2.status_code == 201, s2.text
         assert s2.json()["data"]["dependsOn"] == [s1]
 
@@ -579,7 +619,7 @@ class TestSubtaskDeps:
         # T2 with NO dep on T1 — used to make the subtask dep below 422.
         t2 = _create_task(client, admin_headers, v_a2, name="T2").json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
-        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1])
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95)
         assert s2.status_code == 201, s2.text
         assert s2.json()["data"]["dependsOn"] == [s1]
 
@@ -636,7 +676,7 @@ class TestTaskDepsSoftDelete:
                     v_a2 = a["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
         t2 = _create_task(
-            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+            client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75
         ).json()["data"]["id"]
         return vid, t1, t2
 
@@ -737,9 +777,9 @@ class TestSubtaskDepsSoftDelete:
                 if a["name"] == "A2":
                     v_a2 = a["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
-        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1]).json()["data"]["id"]
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75).json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
-        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1]).json()["data"]["id"]
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95).json()["data"]["id"]
         return s1, s2
 
     def test_subtask_replace_soft_deletes_removed_edge(
@@ -852,9 +892,9 @@ class TestMilestoneDeleteCascadesDeps:
                     v_a2 = a["id"]
         # Build tasks + subtasks under the version, with deps.
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
-        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1]).json()["data"]["id"]
+        t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75).json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
-        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1]).json()["data"]["id"]
+        s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95).json()["data"]["id"]
 
         # Find the BASELINE milestone that maps to v_m1_under_a1.
         baseline_m1 = None
@@ -1105,10 +1145,15 @@ class TestCrossMilestoneActivityTaskSubtaskDeps:
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid, name="M1")
         m2 = _create_milestone(client, admin_headers, pid, name="M2")
-        a_in_m1 = _create_activity(client, admin_headers, m1, name="A").json()["data"]["id"]
-        # New activity in M2 depends on A1 (cross-milestone, same project).
+        a_in_m1 = _create_activity(
+            client, admin_headers, m1, name="A",
+            start_offset=3, end_offset=5,
+        ).json()["data"]["id"]
+        # New activity in M2 depends on A (cross-milestone, same project).
+        # Doc 27: B.start must be >= A.end (5).
         resp = _create_activity(
             client, admin_headers, m2, name="B", depends_on=[a_in_m1],
+            start_offset=10, end_offset=20,
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["data"]["dependsOn"] == [a_in_m1]
@@ -1121,9 +1166,13 @@ class TestCrossMilestoneActivityTaskSubtaskDeps:
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid, name="M1")
         m2 = _create_milestone(client, admin_headers, pid, name="M2")
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]["id"]
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]["id"]
         a2 = _create_activity(
             client, admin_headers, m2, name="A2", depends_on=[a1],
+            start_offset=10, end_offset=20,
         ).json()["data"]["id"]
         # publish + create version for T/S writes
         _publish(client, admin_headers, pid)
@@ -1138,7 +1187,7 @@ class TestCrossMilestoneActivityTaskSubtaskDeps:
         v_a2 = next(a for a in v_acts if a["name"] == "A2")["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
         resp = _create_task(
-            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+            client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["data"]["dependsOn"] == [t1]
@@ -1149,9 +1198,13 @@ class TestCrossMilestoneActivityTaskSubtaskDeps:
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid, name="M1")
         m2 = _create_milestone(client, admin_headers, pid, name="M2")
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]["id"]
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]["id"]
         a2 = _create_activity(
             client, admin_headers, m2, name="A2", depends_on=[a1],
+            start_offset=10, end_offset=20,
         ).json()["data"]["id"]
         _publish(client, admin_headers, pid)
         vid = _create_version(client, admin_headers, pid)
@@ -1164,11 +1217,11 @@ class TestCrossMilestoneActivityTaskSubtaskDeps:
         v_a2 = next(a for a in v_acts if a["name"] == "A2")["id"]
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
         t2 = _create_task(
-            client, admin_headers, v_a2, name="T2", depends_on=[t1],
+            client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75
         ).json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
         resp = _create_subtask(
-            client, admin_headers, t2, name="S2", depends_on=[s1],
+            client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["data"]["dependsOn"] == [s1]
@@ -1183,10 +1236,22 @@ class TestMilestoneDeps:
     cascade-on-delete, propagated to active versions."""
 
     def _make_three_milestones(self, client, admin_headers):
+        # Doc 27 staggering: M1 ends day+10, M2 starts day+15 / ends day+25,
+        # M3 starts day+30. So M2->M1, M3->M2, M3->M1 all satisfy
+        # source.start >= target.end.
         pid = _create_project(client, admin_headers)
-        m1 = _create_milestone(client, admin_headers, pid, name="M1")
-        m2 = _create_milestone(client, admin_headers, pid, name="M2")
-        m3 = _create_milestone(client, admin_headers, pid, name="M3")
+        m1 = _create_milestone(
+            client, admin_headers, pid, name="M1",
+            start_offset=2, end_offset=10,
+        )
+        m2 = _create_milestone(
+            client, admin_headers, pid, name="M2",
+            start_offset=15, end_offset=25,
+        )
+        m3 = _create_milestone(
+            client, admin_headers, pid, name="M3",
+            start_offset=30, end_offset=40,
+        )
         return pid, m1, m2, m3
 
     def _patch_milestone(self, client, admin_headers, mid, **body):
@@ -1218,7 +1283,8 @@ class TestMilestoneDeps:
             f"/api/v3/projects/{pid}/milestones/create",
             json={
                 "name": "M4",
-                "startDate": _future_iso(2),
+                # M4 must start after both m1.end (day+10) and m2.end (day+25).
+                "startDate": _future_iso(50),
                 "endDate": _future_iso(100),
                 "dependsOn": [m1, m2],
             },
@@ -1268,20 +1334,33 @@ class TestMilestoneDeps:
         assert "itself" in resp.json()["error"]["message"]
 
     def test_cycle_rejected_on_update(self, client, admin_user, admin_headers):
-        _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
-        # Build M2 -> M1, M3 -> M2.
-        assert self._patch_milestone(
-            client, admin_headers, m2, dependsOn=[m1],
-        ).status_code == 200
-        assert self._patch_milestone(
-            client, admin_headers, m3, dependsOn=[m2],
-        ).status_code == 200
-        # Now M1 -> M3 would close the cycle (M1 -> M3 -> M2 -> M1).
+        # Doc 31 makes a date-valid milestone cycle structurally
+        # impossible: each edge requires source.end > target.end (strict),
+        # so a closed loop forces some milestone to outlast itself. The
+        # cycle-detection code remains in place (and is exercised by
+        # activity / task / subtask tests), but for milestones the date
+        # rule will fire first and the cycle rule is unreachable.
+        #
+        # We assert the date-rule rejection here so a future regression
+        # that quietly relaxes the end rule back to >= would be caught.
+        pid = _create_project(client, admin_headers)
+        m1 = _create_milestone(
+            client, admin_headers, pid, name="M1",
+            start_offset=10, end_offset=10,
+        )
+        m2 = _create_milestone(
+            client, admin_headers, pid, name="M2",
+            start_offset=10, end_offset=10,
+        )
+        # M2 -> M1 with equal end dates: the strict-end rule rejects it.
         resp = self._patch_milestone(
-            client, admin_headers, m1, dependsOn=[m3],
+            client, admin_headers, m2, dependsOn=[m1],
         )
         assert resp.status_code == 422
-        assert "cycle" in resp.json()["error"]["message"].lower()
+        # The error names the strict-end requirement, not "cycle".
+        assert "strictly after" in resp.json()["error"]["message"], (
+            resp.json()["error"]["message"]
+        )
 
     def test_update_replace_list_semantics(self, client, admin_user, admin_headers):
         _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
@@ -1341,7 +1420,16 @@ class TestMilestoneDeps:
         self, client, admin_user, admin_headers,
     ):
         # Edges set on the baseline propagate to the active version twin.
-        pid, m1, m2, _ = self._make_three_milestones(client, admin_headers)
+        pid, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
+        # Doc 27 publish gate: every milestone must have ≥1 activity.
+        for mid, soff, eoff in (
+            (m1, 3, 5), (m2, 16, 18), (m3, 31, 33),
+        ):
+            r = _create_activity(
+                client, admin_headers, mid, name=f"A-{mid[:4]}",
+                start_offset=soff, end_offset=eoff,
+            )
+            assert r.status_code == 201, r.text
         # Before publishing, set M2 -> M1 on baseline so the version clones it.
         self._patch_milestone(client, admin_headers, m2, dependsOn=[m1])
         _publish(client, admin_headers, pid)

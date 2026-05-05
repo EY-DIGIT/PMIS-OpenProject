@@ -142,6 +142,13 @@ Legal edges (subset rules apply):
 
 Requests that include fields outside the whitelist return 422 `invalid_field` with the `rejected` list in `_embedded.details`.
 
+**Doc 27 publish gate.** Before flipping status to `published`, the publish service runs two structural-completeness checks (in [`app/api/v3/projects/services/publish.py`](app/api/v3/projects/services/publish.py)):
+
+1. **Zero-milestones** — if the project has no live milestones, returns 422 `invalid_publish` with `_embedded.details.errorIdentifier = "no_milestones"`.
+2. **Empty milestone(s)** — if any live milestone has zero live activities, returns 422 `invalid_publish` with `_embedded.details.errorIdentifier = "milestone_without_activity"` plus `details.milestoneIds` and `details.milestoneNames` (full lists, not capped) so the FE can highlight every offender.
+
+Both gates apply uniformly to baselines and versions (the helper queries by `project_id`, which is the version's own id when publishing a version). The save-to-draft path enforces the ≥1-milestone rule independently; the publish gate is the belt-and-braces version that also catches post-draft deletions.
+
 ### 2.4 Baseline → active-version propagation — [`app/api/v3/projects/services/baseline_version_sync.py`](app/api/v3/projects/services/baseline_version_sync.py)
 
 After a baseline M/A write commits, the service calls `propagate_*`. Rules:
@@ -194,6 +201,11 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | Target exists and is live | 422 `"Unknown or out-of-project ... dependency target(s): …"` |
 | Target belongs to the same project | same 422 — verified via `existing_target_*_ids` scoped to the project |
 | No cycle | 422 `"Adding dependency on 'X' would create a cycle."` — DFS against **live edges only** in `would_create_cycle_*` |
+| **Dep-date forward — activities/tasks/subtasks (doc 30)** | 422 `"<kind> '<label>' cannot start on YYYY-MM-DD — the following dependency target(s) end after that date: 'A1.1' (ends YYYY-MM-DD), …"` — applied on create + update for every (source, target) pair. **Equality allowed** (same-day handoff). Helper at [`app/shared/dep_date_rules.py`](app/shared/dep_date_rules.py); wired into the six create/update services across activities, tasks, and subtasks. |
+| **Dep-date reverse — activities/tasks/subtasks (doc 30)** | 422 `"<kind> '<label>' cannot end on YYYY-MM-DD — the following dependent(s) would then start before this target ends: 'A1.2' (starts YYYY-MM-DD), …"` — fires when an entity's `end_date` is moved forward and an existing successor's `start_date` would now be violated. Lists every offender by label. |
+| **Milestone dep-date — start floor (doc 31)** | 422 `"Milestone '<label>' cannot start on YYYY-MM-DD — it must start on or after every milestone it depends on: 'M1' (starts YYYY-MM-DD), …"` — `source.start >= target.start` (equality allowed). Replaces the doc 30 generic rule for milestones only; activities/tasks/subtasks keep doc 30. |
+| **Milestone dep-date — strict end (doc 31)** | 422 `"Milestone '<label>' cannot end on YYYY-MM-DD — it must end strictly after every milestone it depends on: 'M1' (ends YYYY-MM-DD), …"` — `source.end > target.end` (strict, equality REJECTED). Combined with the start floor, both rules can fire together and the response lists every offender for both. Reverse direction also guarded: editing a target milestone's start or end re-validates every existing source. Side-effect: a date-valid milestone cycle is now structurally impossible, so the cycle check is unreachable for milestones (the strict-end rule fires first). |
+| **Milestone status-completion gate (doc 31, rule 2c)** | 422 `"Cannot mark this milestone as completed — the following dependency target(s) are not yet completed: 'M1', 'M2' (+N more)."` — fires only on forward transition (`status='completed'`). Reverting from `completed` to `not_completed` is unguarded. Mirrors the activity-side gate. |
 
 **Inputs accept UUIDs OR display labels** (`M1`, `A1.2`, `T1.2.3`, `S1.2.3.4`, and `S1.2.3.4.5…` for nested subtasks). The service resolves labels at write time via `resolve_labels_to_ids` (doc 22 + doc 24).
 
@@ -217,13 +229,13 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `POST /users/logout` | JWT | `require_authenticated` | — | Revokes the current access JTI + clears all 4 refresh slots. |
 | `GET /users/me` | JWT | `require_authenticated` | — | Current user (now includes `phoneNumber`, `vendor`, `division`, `projects`). |
 | `GET /users/me/permissions` | JWT | `require_authenticated` | — | **Doc 21B:** caller's effective permission set + `isAdmin` flag — FE uses for UI gating. |
-| `POST /users/create` | JWT | `users:create` | `UserCreateRequest` | login 3-50 alphanum/underscore/hyphen; email valid; password ≥ 8; **`vendorId` + `division` + `projectIds` + `phoneNumber` required**. login + email unique. `admin=true` assigns the seeded `admin` role. |
+| `POST /users/create` | JWT | `users:create` | `UserCreateRequest` | login 3-50 alphanum/underscore/hyphen; email valid; password ≥ 8; **`vendorId` + `division` + `projectIds` + `phoneNumber` required**. login + email unique. `vendorId` accepts a vendor UUID **or** `VN-XXXX-YYMMDDHHMMSS` `vendorCode` (doc 25). `admin=true` assigns the seeded `admin` role. Created row is returned with `id` (UUID — doc 26) and `userCode` (doc 25). |
 | `GET /users` | JWT | `users:read_all` | — | `offset≥1`, `pageSize∈[1,100]`, optional `status`. Newest-first. |
-| `GET /users/{user_id}` | JWT | `users:read` | — | Members can read themselves + active users; admins read all. |
-| `PATCH /users/{user_id}` | JWT | `users:update` | `UserUpdateRequest` | Members can't change `admin` or `status`; admins can. Last-admin protection on demote/deactivate. |
-| `PATCH /users/{user_id}/password` | JWT | `users:update` | `UserPasswordUpdateRequest` | Password ≥ 8. Self-service or admin-for-any. |
-| `DELETE /users/{user_id}` | JWT | `users:delete_all` | — | Soft-delete (sets `deleted_at`, `status='inactive'`). Project_members rows preserved. Last-admin lockout. |
-| `POST /users/{user_id}/restore` | JWT | `users:delete_all` | — | Clears `deleted_at`, `status='active'`. Idempotent on already-active. |
+| `GET /users/{user_id}` | JWT | `users:read` | — | Path param accepts the UUID `users.id` (doc 26) **or** the `US-XXXX-YYMMDDHHMMSS` `userCode` (doc 25 — auto-detected by the `US-` prefix). Members can read themselves + active users; admins read all. |
+| `PATCH /users/{user_id}` | JWT | `users:update` | `UserUpdateRequest` | UUID **or** `US-` code. Members can't change `admin` or `status`; admins can. Last-admin protection on demote/deactivate. |
+| `PATCH /users/{user_id}/password` | JWT | `users:update` | `UserPasswordUpdateRequest` | UUID **or** `US-` code. Password ≥ 8. Self-service or admin-for-any. |
+| `DELETE /users/{user_id}` | JWT | `users:delete_all` | — | UUID **or** `US-` code. Soft-delete (sets `deleted_at`, `status='inactive'`). Project_members rows preserved. Last-admin lockout. |
+| `POST /users/{user_id}/restore` | JWT | `users:delete_all` | — | UUID **or** `US-` code. Clears `deleted_at`, `status='active'`. Idempotent on already-active. |
 
 **RBAC user-side endpoints (doc 21B):**
 
@@ -247,7 +259,7 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `PATCH /projects/{uuid}` | JWT | `PROJECTS_UPDATE` | `ProjectUpdateRequest` | `assert_project_editable` + `editable_fields_for(project)` whitelist per state. Dates must be in future (schema). `vendorIds: []` clears list; omit to leave alone. |
 | `DELETE /projects/{uuid}` | JWT | `PROJECTS_DELETE_ALL` | — | Soft-delete + cascade to M/A/T/S. If baseline: also soft-delete every live version. |
 | `POST /projects/{uuid}/save` | JWT | `PROJECTS_UPDATE` | — | `new → draft` iff ≥ 1 live milestone. 422 on zero milestones. Idempotent past `draft`. |
-| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. Locks out PATCH of non-whitelisted fields but published baselines remain editable on the whitelisted set. |
+| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. **Doc 27**: rejects publish (422 `invalid_publish`) if the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity` — names every empty milestone). Locks out PATCH of non-whitelisted fields but published baselines remain editable on the whitelisted set. |
 | `POST /projects/{uuid}/close` | JWT | `PROJECTS_CLOSE` (admin) | `ProjectCloseRequest` (optional) | Transition `{new,draft,published} → closed`. `reason` ≤ 5000 chars. |
 | `POST /projects/{uuid}/suspend` | JWT | `PROJECTS_UPDATE` | — | **Version only** (state-machine guard). |
 | `POST /projects/{uuid}/versions/create` | JWT | `PROJECTS_CREATE` | — | Source must be `is_version=False AND status='published'`. Only **one active version per baseline**; returns 409 if one already exists. Enforced by partial unique index `ux_projects_active_version_per_baseline` + service check. Cloned tree stamps `cloned_from_id` on every M/A. |
@@ -260,7 +272,7 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 - `category` ∈ `{MSAP, MSIP, BSP, others}` if supplied
 - `categoryOther` required (non-empty ≤ 255 chars) **iff** `category='others'`; rejected otherwise
 - `categoryOtherReason` required (non-empty ≤ 1000 chars) **iff** `category='others'`; rejected otherwise (added in doc 15 — captures *why* "others" was chosen)
-- `vendorIds` list of UUID strings
+- `vendorIds` list of vendor UUIDs **or** `VN-XXXX-YYMMDDHHMMSS` codes (doc 25 — mixed lists allowed; the persisted FKs are always canonical UUIDs)
 
 **Service-layer additions on create:**
 - Every vendor id must exist and be `active=True`.
@@ -324,7 +336,7 @@ Same deprecation pattern. Built-ins (RFP, ASG, CCN) are protected from delete.
 - `start_date ≥ project.start_date`
 - `end_date ≥ start_date`
 - Parent project must have `start_date` set
-- `vendorIds` must be a **subset** of the project's vendor list (each vendor must also exist + be active).
+- `vendorIds` must be a **subset** of the project's vendor list (each vendor must also exist + be active). Each entry can be a vendor UUID **or** `VN-XXXX-YYMMDDHHMMSS` code (doc 25).
 - `dependsOn` targets must be live milestones in the same project; no self-edge; cycle detection via `would_create_cycle_milestone`.
 
 **Cascade:** create / update / delete each propagate to active-version twins with their own audit entries. Milestone dep-edge changes also propagate via `propagate_milestone_dependency_change` (doc 21A).

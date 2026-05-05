@@ -21,8 +21,8 @@ CREATE TABLE activities (
 	cloned_from_id VARCHAR(36), 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
-	updated_by INTEGER, 
+	created_by VARCHAR(36), 
+	updated_by VARCHAR(36), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_activities_type CHECK (type IN ('standard', 'resource', 'transactional')), 
@@ -54,7 +54,7 @@ CREATE TABLE activity_dependencies (
 	project_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(source_activity_id) REFERENCES activities (id), 
 	FOREIGN KEY(target_activity_id) REFERENCES activities (id), 
@@ -115,10 +115,10 @@ CREATE TABLE attachments (
 	storage_key VARCHAR(500) NOT NULL, 
 	mime_type VARCHAR(100) NOT NULL, 
 	size_bytes BIGINT NOT NULL, 
-	uploaded_by_user_id INTEGER NOT NULL, 
+	uploaded_by_user_id VARCHAR(36) NOT NULL, 
 	uploaded_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(comment_id) REFERENCES comments (id), 
 	UNIQUE (storage_key), 
@@ -138,11 +138,11 @@ CREATE TABLE comments (
 	target_kind VARCHAR(20) NOT NULL, 
 	target_id VARCHAR(36) NOT NULL, 
 	body TEXT NOT NULL, 
-	author_user_id INTEGER NOT NULL, 
+	author_user_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(author_user_id) REFERENCES users (id), 
 	FOREIGN KEY(deleted_by) REFERENCES users (id)
@@ -199,7 +199,7 @@ CREATE INDEX ix_meeting_agenda_items_work_package_id ON meeting_agenda_items (wo
 CREATE TABLE meeting_participants (
 	id SERIAL NOT NULL, 
 	meeting_id INTEGER NOT NULL, 
-	user_id INTEGER NOT NULL, 
+	user_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_meeting_user UNIQUE (meeting_id, user_id), 
@@ -221,7 +221,7 @@ CREATE TABLE meetings (
 	scheduled_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	duration_minutes INTEGER, 
 	location VARCHAR(255), 
-	created_by_id INTEGER NOT NULL, 
+	created_by_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	PRIMARY KEY (id), 
@@ -246,7 +246,7 @@ CREATE TABLE milestone_dependencies (
 	project_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(source_milestone_id) REFERENCES milestones (id), 
 	FOREIGN KEY(target_milestone_id) REFERENCES milestones (id), 
@@ -290,8 +290,8 @@ CREATE TABLE milestones (
 	cloned_from_id VARCHAR(36), 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
-	updated_by INTEGER, 
+	created_by VARCHAR(36), 
+	updated_by VARCHAR(36), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(project_id) REFERENCES projects (id), 
@@ -324,7 +324,7 @@ CREATE TABLE permissions (
 CREATE TABLE project_audit_logs (
 	id SERIAL NOT NULL, 
 	project_id VARCHAR(36) NOT NULL, 
-	actor_id INTEGER, 
+	actor_id VARCHAR(36), 
 	action VARCHAR(64) NOT NULL, 
 	before JSON, 
 	after JSON, 
@@ -345,7 +345,7 @@ CREATE INDEX ix_project_audit_logs_project_id ON project_audit_logs (project_id)
 CREATE TABLE project_members (
 	id SERIAL NOT NULL, 
 	project_id VARCHAR(36) NOT NULL, 
-	user_id INTEGER NOT NULL, 
+	user_id VARCHAR(36) NOT NULL, 
 	roles JSON NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
@@ -418,10 +418,10 @@ CREATE TABLE projects (
 	actual_start_date TIMESTAMP WITHOUT TIME ZONE, 
 	actual_end_date TIMESTAMP WITHOUT TIME ZONE, 
 	is_version BOOLEAN NOT NULL, 
-	created_by INTEGER, 
-	updated_by INTEGER, 
+	created_by VARCHAR(36), 
+	updated_by VARCHAR(36), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	PRIMARY KEY (id), 
@@ -479,7 +479,7 @@ CREATE INDEX ix_resource_types_id ON resource_types (id);
 -- ===== revoked_tokens =====
 CREATE TABLE revoked_tokens (
 	jti VARCHAR(64) NOT NULL, 
-	user_id INTEGER, 
+	user_id VARCHAR(36), 
 	revoked_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	PRIMARY KEY (jti), 
@@ -526,7 +526,7 @@ CREATE TABLE subtask_dependencies (
 	project_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(source_subtask_id) REFERENCES subtasks (id), 
 	FOREIGN KEY(target_subtask_id) REFERENCES subtasks (id), 
@@ -590,8 +590,8 @@ CREATE TABLE subtasks (
 	resource_count INTEGER, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
-	updated_by INTEGER, 
+	created_by VARCHAR(36), 
+	updated_by VARCHAR(36), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_subtasks_type CHECK (type IN ('standard', 'resource', 'transactional')), 
@@ -622,7 +622,7 @@ CREATE TABLE task_dependencies (
 	project_id VARCHAR(36) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(source_task_id) REFERENCES tasks (id), 
 	FOREIGN KEY(target_task_id) REFERENCES tasks (id), 
@@ -685,8 +685,8 @@ CREATE TABLE tasks (
 	resource_count INTEGER, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
-	updated_by INTEGER, 
+	created_by VARCHAR(36), 
+	updated_by VARCHAR(36), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_tasks_type CHECK (type IN ('standard', 'resource', 'transactional')), 
@@ -709,10 +709,10 @@ CREATE UNIQUE INDEX uq_tasks_activity_position_live ON tasks (activity_id, posit
 
 -- ===== user_permissions =====
 CREATE TABLE user_permissions (
-	user_id INTEGER NOT NULL, 
+	user_id VARCHAR(36) NOT NULL, 
 	permission_code VARCHAR(128) NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
+	created_by VARCHAR(36), 
 	PRIMARY KEY (user_id, permission_code), 
 	FOREIGN KEY(user_id) REFERENCES users (id), 
 	FOREIGN KEY(permission_code) REFERENCES permissions (code), 
@@ -723,10 +723,10 @@ CREATE INDEX idx_user_permissions_user ON user_permissions (user_id);
 
 -- ===== user_roles =====
 CREATE TABLE user_roles (
-	user_id INTEGER NOT NULL, 
+	user_id VARCHAR(36) NOT NULL, 
 	role_id INTEGER NOT NULL, 
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
-	created_by INTEGER, 
+	created_by VARCHAR(36), 
 	PRIMARY KEY (user_id, role_id), 
 	FOREIGN KEY(user_id) REFERENCES users (id), 
 	FOREIGN KEY(role_id) REFERENCES roles (id), 
@@ -737,7 +737,8 @@ CREATE INDEX idx_user_roles_user ON user_roles (user_id);
 
 -- ===== users =====
 CREATE TABLE users (
-	id SERIAL NOT NULL, 
+	id VARCHAR(36) NOT NULL, 
+	user_code VARCHAR(50), 
 	login VARCHAR(255) NOT NULL, 
 	email VARCHAR(255) NOT NULL, 
 	hashed_password VARCHAR(255) NOT NULL, 
@@ -755,7 +756,7 @@ CREATE TABLE users (
 	division_other VARCHAR(255), 
 	phone_number VARCHAR(50), 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(deleted_by) REFERENCES users (id)
 );
@@ -770,11 +771,13 @@ CREATE INDEX ix_users_deleted_at ON users (deleted_at);
 CREATE UNIQUE INDEX ix_users_email ON users (email);
 CREATE INDEX ix_users_id ON users (id);
 CREATE UNIQUE INDEX ix_users_login ON users (login);
+CREATE UNIQUE INDEX ix_users_user_code ON users (user_code);
 CREATE INDEX ix_users_vendor_id ON users (vendor_id);
 
 -- ===== vendors =====
 CREATE TABLE vendors (
 	id VARCHAR(36) NOT NULL, 
+	vendor_code VARCHAR(50), 
 	name VARCHAR(255) NOT NULL, 
 	description TEXT, 
 	active BOOLEAN NOT NULL, 
@@ -784,7 +787,7 @@ CREATE TABLE vendors (
 	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
 	deleted_at TIMESTAMP WITHOUT TIME ZONE, 
-	deleted_by INTEGER, 
+	deleted_by VARCHAR(36), 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(deleted_by) REFERENCES users (id)
 );
@@ -798,6 +801,7 @@ CREATE INDEX ix_vendors_deleted_at ON vendors (deleted_at);
 CREATE INDEX ix_vendors_email ON vendors (email);
 CREATE INDEX ix_vendors_id ON vendors (id);
 CREATE UNIQUE INDEX ix_vendors_name ON vendors (name);
+CREATE UNIQUE INDEX ix_vendors_vendor_code ON vendors (vendor_code);
 
 -- ===== work_package_types =====
 CREATE TABLE work_package_types (
@@ -826,7 +830,7 @@ CREATE TABLE work_packages (
 	project_id VARCHAR(36) NOT NULL, 
 	parent_id INTEGER, 
 	type_id INTEGER, 
-	assignee_id INTEGER, 
+	assignee_id VARCHAR(36), 
 	status VARCHAR(100) NOT NULL, 
 	priority VARCHAR(100) NOT NULL, 
 	done_ratio INTEGER NOT NULL, 

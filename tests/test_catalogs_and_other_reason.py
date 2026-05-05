@@ -752,6 +752,33 @@ class TestPatchEditableFields:
         p = self._create_baseline(
             client, admin_user, admin_headers, db_session,
         )
+        # Doc 27 publish gate: project needs ≥1 milestone with ≥1 activity.
+        from datetime import datetime, timezone, timedelta
+        from app.infrastructure.db.models.activity import ActivityModel
+        from app.infrastructure.db.models.milestone import MilestoneModel
+        from app.infrastructure.db.models.project import ProjectModel
+        now = datetime.now(timezone.utc)
+        proj = db_session.query(ProjectModel).filter_by(id=p["id"]).one()
+        if proj.start_date is None:
+            db_session.query(ProjectModel).filter_by(id=p["id"]).update({
+                "start_date": now + timedelta(days=1),
+                "end_date": now + timedelta(days=90),
+            })
+        m = MilestoneModel(
+            project_id=p["id"], name="M1",
+            start_date=now + timedelta(days=2),
+            end_date=now + timedelta(days=60),
+            position=0,
+        )
+        db_session.add(m)
+        db_session.flush()
+        db_session.add(ActivityModel(
+            project_id=p["id"], milestone_id=m.id, name="A1", type="standard",
+            start_date=now + timedelta(days=3),
+            end_date=now + timedelta(days=50),
+            position=0,
+        ))
+        db_session.commit()
         client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
         v = client.post(
             f"/api/v3/projects/{p['id']}/versions/create", headers=admin_headers,

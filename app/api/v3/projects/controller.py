@@ -43,6 +43,7 @@ from .services import (
 _HTTP_BY_ERROR_TYPE = {
     "validation_error": 422,
     "invalid_field": 422,
+    "invalid_publish": 422,  # doc 27: empty / no-milestone publish gate
     "invalid_transition": 409,
     "invalid_source": 409,
     "active_version_exists": 409,

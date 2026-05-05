@@ -11,6 +11,7 @@ from .....domain.milestones.milestone import (
     MILESTONE_STATUS_DEFAULT,
     Milestone,
 )
+from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.models.project import ProjectModel
 from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
@@ -18,7 +19,15 @@ from .....infrastructure.db.repositories.dependency_repository import (
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
 from .....shared.date_rules import validate_entity_dates
-from .....shared.labels import KIND_MILESTONE, normalize_dependency_inputs
+from .....shared.dep_date_rules import (
+    collect_milestone_forward_violations,
+    raise_milestone_forward_if_violations,
+)
+from .....shared.labels import (
+    KIND_MILESTONE,
+    build_label_index_for_project,
+    normalize_dependency_inputs,
+)
 from ...projects.services.audit import record_audit
 from ...projects.services.baseline_version_sync import (
     ACTION_MILESTONE_CREATE,
@@ -95,6 +104,33 @@ def create_milestone(
             raw_inputs=depends_on,
             existence_check=dep_repo.existing_target_milestone_ids,
         )
+
+        # Doc 31: milestone-specific dep-date rules —
+        #   source.start_date >= target.start_date  (equality OK)
+        #   source.end_date   >  target.end_date    (strict)
+        # Both must hold. See app/shared/dep_date_rules.py.
+        if desired_deps:
+            target_rows = (
+                db.query(
+                    MilestoneModel.id, MilestoneModel.name,
+                    MilestoneModel.start_date, MilestoneModel.end_date,
+                )
+                .filter(MilestoneModel.id.in_(desired_deps))
+                .all()
+            )
+            label_index = build_label_index_for_project(db, project_id)
+            forward = [
+                (label_index.label_of(KIND_MILESTONE, tid) or tname, tstart, tend)
+                for (tid, tname, tstart, tend) in target_rows
+            ]
+            starts, ends = collect_milestone_forward_violations(
+                source_start=start_date, source_end=end_date, targets=forward,
+            )
+            raise_milestone_forward_if_violations(
+                starts, ends,
+                source_label=f"Milestone '{name.strip()}'",
+                source_start=start_date, source_end=end_date,
+            )
 
     vendor_repo = VendorRepository(db)
     resolved_vendor_ids: List[str] = []

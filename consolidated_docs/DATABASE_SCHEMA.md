@@ -1,12 +1,12 @@
 # PMIS Database Schema
 
-**Last refresh**: 2026-05-04 (post-doc 24)
+**Last refresh**: 2026-05-04 (post-doc 26)
 **Source of truth**: SQLAlchemy models under [app/infrastructure/db/models/](../app/infrastructure/db/models/) → regenerated DDL at [scripts/ddl/](../scripts/ddl/) (`schema_postgres.sql`, `schema_sqlite.sql`).
 **Tables on `Base.metadata`**: 34.
 
 This doc inventories every table, its columns, indexes, FKs, and relationships. The DDL files are the authoritative type / index detail; this doc explains *intent* — what each table holds, how it links to its neighbours, and which docs introduced or reshaped it.
 
-> **Migration management.** PostgreSQL runs `alembic upgrade head` on every boot. SQLite uses `Base.metadata.create_all` plus a column-drift healer. The latest Alembic head is `e9f1a2b3c4d5` (doc 24 part 2 — nested subtasks).
+> **Migration management.** PostgreSQL runs `alembic upgrade head` on every boot. SQLite uses `Base.metadata.create_all` plus a column-drift healer. The latest Alembic head is `b3c4d5e6f7a8` (doc 26 — `users.id` flipped to UUID).
 
 ---
 
@@ -53,21 +53,23 @@ This doc inventories every table, its columns, indexes, FKs, and relationships. 
 
 ## Universal conventions
 
-- **Primary keys**: `INTEGER` autoincrement on legacy/lookup tables (`users`, `roles`, `meetings`, `divisions`, etc.); **`VARCHAR(36)` UUID** on all M/A/T/S, projects, vendors, resource_types, dep edges.
+- **Primary keys**: `INTEGER` autoincrement on remaining catalog/admin tables (`roles`, `divisions`, `meetings`, `meeting_participants`, `meeting_agenda_items`, `project_status_transitions`, `project_audit_logs`, `project_members`, `work_packages`, `work_package_types`); **`VARCHAR(36)` UUID** on every product-facing entity — projects, M/A/T/S, vendors, resource_types, dep edges, comments, attachments, **and `users` as of doc 26**.
 - **Soft-delete**: `deleted_at TIMESTAMP NULL` on every entity that supports it; reads filter `deleted_at IS NULL` unless `include_deleted=True` is explicitly passed. Where applicable, `deleted_by INTEGER FK→users(id)` records the actor.
 - **Audit timestamps**: `created_at`, `updated_at` (auto-set on insert / update), `created_by`, `updated_by` where the column exists.
 - **Position uniqueness**: per-parent live-position partial-unique indexes on M/A/T/S guarantee labels (`M{m}`, `A{m}.{a}`, `T{m}.{a}.{t}`, `S{m}.{a}.{t}.{s1}[.{s2}…]`) are unambiguous (doc 22, doc 24).
 - **Edge tables** (`*_dependencies`): surrogate UUID PK + partial unique on `(source, target) WHERE deleted_at IS NULL` so historical (soft-deleted) rows can coexist with a fresh live row for the same pair.
+- **All FK columns referencing `users.id` are `VARCHAR(36)` post-doc-26.** This affects every `created_by` / `updated_by` / `deleted_by` / `actor_id` / `assignee_id` / `created_by_id` / `author_user_id` / `uploaded_by_user_id` / `user_id` column across the schema. The per-table sections below note column nullability without re-stating the type each time.
 
 ---
 
 ## 1. `users`
 
-Doc 21B dropped the `admin BOOLEAN` column — superuser status comes from membership in the seeded `admin` role via `user_roles`. Doc 19 added the refresh-token grace slot. Doc 23 added `phone_number`.
+**Doc 26 flipped `users.id` from `INTEGER` autoincrement to `VARCHAR(36)` UUID.** Every FK column referencing `users.id` (~30 across the schema) was retyped to `String(36)` in the same migration. Doc 25 added the human-readable `user_code` display identifier. Doc 21B dropped the `admin BOOLEAN` column — superuser status comes from membership in the seeded `admin` role via `user_roles`. Doc 19 added the refresh-token grace slot. Doc 23 added `phone_number`.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | `INTEGER PK` | Autoincrement |
+| `id` | `VARCHAR(36) PK` | **Doc 26** — UUID (was `INTEGER` autoincrement) |
+| `user_code` | `VARCHAR(50) UNIQUE NULL` | **Doc 25** — human-readable display ID `US-XXXX-YYMMDDHHMMSS` |
 | `login` | `VARCHAR(255) UNIQUE NOT NULL` | 3-50 chars, alphanumeric/underscore/hyphen at the API boundary |
 | `email` | `VARCHAR(255) UNIQUE NOT NULL` | |
 | `hashed_password` | `VARCHAR(255) NOT NULL` | Argon2id |
@@ -82,7 +84,7 @@ Doc 21B dropped the `admin BOOLEAN` column — superuser status comes from membe
 | `division_other` | `VARCHAR(255) NULL` | Required when `division='others'` |
 | `phone_number` | `VARCHAR(50) NULL` | **Doc 23** — required at the wire on create |
 | `created_at`, `updated_at` | `TIMESTAMP NOT NULL` | |
-| `deleted_at`, `deleted_by` | nullable | Soft-delete |
+| `deleted_at`, `deleted_by` | nullable; `deleted_by` is `VARCHAR(36)` post-doc-26 | Soft-delete (self-FK to users.id) |
 
 **Relationships**
 - `vendor_id` → `vendors.id`
@@ -185,6 +187,7 @@ JWT JTI blacklist. Logout adds the access-token JTI here; the auth middleware ch
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `VARCHAR(36) PK` | UUID |
+| `vendor_code` | `VARCHAR(50) UNIQUE NULL` | **Doc 25** — human-readable display ID `VN-XXXX-YYMMDDHHMMSS` |
 | `name` | `VARCHAR(255) UNIQUE NOT NULL` | |
 | `description` | `TEXT NULL` | |
 | `active` | `BOOLEAN NOT NULL` | Soft-deactivate via `set_active(False)` |
@@ -192,7 +195,7 @@ JWT JTI blacklist. Logout adds the access-token JTI here; the auth middleware ch
 | `contact_person` | `VARCHAR(255) NULL` | |
 | `phone_number` | `VARCHAR(50) NULL` | **Doc 23 made this required at the wire on create** |
 | `created_at`, `updated_at` | timestamps | |
-| `deleted_at`, `deleted_by` | nullable | Soft-delete |
+| `deleted_at`, `deleted_by` | nullable; `deleted_by` is `VARCHAR(36) FK → users(id)` post-doc-26 | Soft-delete |
 
 **Relationships**: `project_vendors` (M-N projects), `milestone_vendors` (M-N milestones), `users.vendor_id`.
 
@@ -668,11 +671,11 @@ Generic OpenProject-style work-package entity. **Not part of the doc-19+ M/A/T/S
 ## Relationship summary diagram (textual)
 
 ```
-users ────────────────────────────────────────────────────────────────────────
+users (id is VARCHAR(36) UUID — doc 26; user_code VN-... display ID — doc 25) ─
   └─ user_roles ── roles ── role_permissions ── permissions
   └─ user_permissions ─────────────────────────── permissions
   └─ revoked_tokens
-  └─ vendor_id → vendors
+  └─ vendor_id → vendors (id UUID + vendor_code VN-... — doc 25)
   └─ project_members → projects
   └─ comments / attachments (author / uploader)
 
@@ -717,3 +720,5 @@ work_package_types, work_packages ── reserved
 | 22 | Drop `milestones.depends`; add per-parent live-position partial-unique indexes on M/A/T/S |
 | 23 | Add `users.phone_number`; require `vendors.phone_number` at the wire |
 | 24 | Add `subtasks.parent_subtask_id`; replace single position-uniqueness index with two partial-unique indexes (top-level vs nested); relax `start_date` future check on projects (no schema change, validator only); remove dependency hierarchy rules at task/subtask level (no schema change, service-layer only) |
+| 25 | Add `vendors.vendor_code` + `users.user_code` (human-readable display IDs `VN-XXXX-YYMMDDHHMMSS` / `US-XXXX-YYMMDDHHMMSS`). Lookup endpoints accept either UUID/int OR the new code; cross-entity vendor-id inputs (user create, project create, milestone create) accept either form. Backfill is deterministic from `(name|login, created_at)` |
+| 26 | **Flip `users.id` from `INTEGER` to `VARCHAR(36)` UUID.** Every FK column referencing `users.id` (~30 across the schema, including the self-FK `users.deleted_by` and composite-PK columns on `user_roles` / `user_permissions`) is retyped to `String(36)` in the same migration. JWT `user_id` claim now carries a UUID string — tokens minted before the migration become invalid (users re-log in once). Other integer-PK tables (meetings, work_packages, project_members, roles, divisions, …) intentionally left as `INTEGER` |

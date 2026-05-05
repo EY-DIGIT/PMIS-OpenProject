@@ -52,11 +52,12 @@ def _create_project(client, admin_headers, *, name="Label Demo"):
     return resp.json()["data"]["id"]
 
 
-def _create_milestone(client, admin_headers, project_id, *, name="M", deps=None):
+def _create_milestone(client, admin_headers, project_id, *, name="M", deps=None,
+                     start_offset=2, end_offset=100):
     body = {
         "name": name,
-        "startDate": _future_iso(2),
-        "endDate": _future_iso(100),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if deps is not None:
         body["dependsOn"] = deps
@@ -67,11 +68,12 @@ def _create_milestone(client, admin_headers, project_id, *, name="M", deps=None)
     return resp
 
 
-def _create_activity(client, admin_headers, milestone_id, *, name="A", deps=None):
+def _create_activity(client, admin_headers, milestone_id, *, name="A", deps=None,
+                    start_offset=3, end_offset=80):
     body = {
         "name": name,
-        "startDate": _future_iso(3),
-        "endDate": _future_iso(80),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if deps is not None:
         body["dependsOn"] = deps
@@ -81,11 +83,12 @@ def _create_activity(client, admin_headers, milestone_id, *, name="A", deps=None
     )
 
 
-def _create_task(client, admin_headers, activity_id, *, name="T", deps=None):
+def _create_task(client, admin_headers, activity_id, *, name="T", deps=None,
+                start_offset=4, end_offset=70):
     body = {
         "name": name,
-        "startDate": _future_iso(4),
-        "endDate": _future_iso(70),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if deps is not None:
         body["dependsOn"] = deps
@@ -95,11 +98,12 @@ def _create_task(client, admin_headers, activity_id, *, name="T", deps=None):
     )
 
 
-def _create_subtask(client, admin_headers, task_id, *, name="S", deps=None):
+def _create_subtask(client, admin_headers, task_id, *, name="S", deps=None,
+                   start_offset=5, end_offset=60):
     body = {
         "name": name,
-        "startDate": _future_iso(5),
-        "endDate": _future_iso(60),
+        "startDate": _future_iso(start_offset),
+        "endDate": _future_iso(end_offset),
     }
     if deps is not None:
         body["dependsOn"] = deps
@@ -294,15 +298,20 @@ class TestLabelInputAcceptance:
         FE was sending dependsOn=["A1.1"] and getting a ValidationError.
         After this commit, that input resolves to the activity's UUID
         and the dep is created.
+        Doc 27: A1 must end before A2 starts (or be on the same day).
         """
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid, name="M1").json()["data"]["id"]
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]
         assert a1["displayCode"] == "A1.1"
 
         # Create a second activity whose dependsOn list uses the LABEL.
         resp = _create_activity(
             client, admin_headers, m1, name="A2", deps=["A1.1"],
+            start_offset=10, end_offset=20,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
@@ -316,10 +325,14 @@ class TestLabelInputAcceptance:
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid, name="M1").json()["data"]["id"]
         m2 = _create_milestone(client, admin_headers, pid, name="M2").json()["data"]["id"]
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]
         # Activity in M2 depending on A1.1 (cross-milestone, same project).
         resp = _create_activity(
             client, admin_headers, m2, name="A2", deps=["A1.1"],
+            start_offset=10, end_offset=20,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
@@ -332,12 +345,19 @@ class TestLabelInputAcceptance:
     ):
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid).json()["data"]["id"]
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]
-        a2 = _create_activity(client, admin_headers, m1, name="A2").json()["data"]
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]
+        a2 = _create_activity(
+            client, admin_headers, m1, name="A2",
+            start_offset=3, end_offset=5,
+        ).json()["data"]
         # Mix label + UUID in the same dependsOn list.
         resp = _create_activity(
             client, admin_headers, m1, name="A3",
             deps=[a1["id"], "A1.2"],   # UUID for A1, label for A2
+            start_offset=10, end_offset=20,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
@@ -346,10 +366,14 @@ class TestLabelInputAcceptance:
 
     def test_milestone_create_accepts_label(self, client, admin_user, admin_headers):
         pid = _create_project(client, admin_headers)
-        m1 = _create_milestone(client, admin_headers, pid, name="M1").json()["data"]
+        m1 = _create_milestone(
+            client, admin_headers, pid, name="M1",
+            start_offset=2, end_offset=5,
+        ).json()["data"]
         # Second milestone depends on M1 via label.
         resp = _create_milestone(
             client, admin_headers, pid, name="M2", deps=["M1"],
+            start_offset=10, end_offset=20,
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
@@ -361,8 +385,14 @@ class TestLabelInputAcceptance:
         m = _create_milestone(client, admin_headers, pid).json()["data"]["id"]
         _create_activity(client, admin_headers, m)
         _vpid, _vm, va = _publish_and_version(client, admin_headers, pid)
-        t1 = _create_task(client, admin_headers, va, name="T1").json()["data"]
-        t2 = _create_task(client, admin_headers, va, name="T2", deps=["T1.1.1"])
+        t1 = _create_task(
+            client, admin_headers, va, name="T1",
+            start_offset=4, end_offset=6,
+        ).json()["data"]
+        t2 = _create_task(
+            client, admin_headers, va, name="T2", deps=["T1.1.1"],
+            start_offset=10, end_offset=15,
+        )
         assert t2.status_code == 201, t2.text
         assert t2.json()["data"]["dependsOn"] == [t1["id"]]
         assert t2.json()["data"]["dependsOnDisplay"] == ["T1.1.1"]
@@ -373,9 +403,13 @@ class TestLabelInputAcceptance:
         _create_activity(client, admin_headers, m)
         _vpid, _vm, va = _publish_and_version(client, admin_headers, pid)
         t = _create_task(client, admin_headers, va).json()["data"]["id"]
-        s1 = _create_subtask(client, admin_headers, t, name="S1").json()["data"]
+        s1 = _create_subtask(
+            client, admin_headers, t, name="S1",
+            start_offset=5, end_offset=8,
+        ).json()["data"]
         s2 = _create_subtask(
             client, admin_headers, t, name="S2", deps=["S1.1.1.1"],
+            start_offset=10, end_offset=15,
         )
         assert s2.status_code == 201, s2.text
         assert s2.json()["data"]["dependsOn"] == [s1["id"]]
@@ -427,14 +461,18 @@ class TestLabelErrors:
         purely stylistic; this test pins the canonical input shape.
         """
         pid = _create_project(client, admin_headers)
-        m1 = _create_milestone(client, admin_headers, pid, name="M1").json()["data"]
+        # Doc 27: M2.start must be >= M1.end.
+        m1 = _create_milestone(
+            client, admin_headers, pid, name="M1",
+            start_offset=2, end_offset=5,
+        ).json()["data"]
         # Canonical: dependsOn camelCase.
         resp = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
             json={
                 "name": "M2",
-                "startDate": _future_iso(2),
-                "endDate": _future_iso(100),
+                "startDate": _future_iso(10),
+                "endDate": _future_iso(20),
                 "dependsOn": [m1["id"]],
             },
             headers=admin_headers,
@@ -485,10 +523,17 @@ class TestDependsOnDisplayLive:
     def test_dependsOn_display_reflects_current_position(
         self, client, admin_user, admin_headers,
     ):
+        # Doc 27: A2.start must be >= A1.end.
         pid = _create_project(client, admin_headers)
         m1 = _create_milestone(client, admin_headers, pid).json()["data"]["id"]
-        a1 = _create_activity(client, admin_headers, m1, name="A1").json()["data"]
-        a2 = _create_activity(client, admin_headers, m1, name="A2", deps=[a1["id"]])
+        a1 = _create_activity(
+            client, admin_headers, m1, name="A1",
+            start_offset=3, end_offset=5,
+        ).json()["data"]
+        a2 = _create_activity(
+            client, admin_headers, m1, name="A2", deps=[a1["id"]],
+            start_offset=10, end_offset=20,
+        )
         assert a2.status_code == 201, a2.text
         assert a2.json()["data"]["dependsOnDisplay"] == ["A1.1"]
         # Re-fetch — same display.

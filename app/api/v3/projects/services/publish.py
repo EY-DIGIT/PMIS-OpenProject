@@ -3,18 +3,59 @@ Publish a project (new|draft -> published).
 
 Admin-only at the endpoint layer. Works on both baselines and versions —
 the transition rules in ``transitions`` reject anything illegal.
-"""
-from typing import Optional
 
+Doc 27: structural completeness gate. Before flipping status to
+``published`` we reject if (a) the project has zero live milestones, or
+(b) any live milestone has zero live activities. The check applies
+uniformly to baselines and versions (a version's milestones may have
+been emptied post-creation by deleting all activities under one).
+"""
+from typing import List, Optional, Tuple
+
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .....core.errors import ValidationError
 from .....domain.projects.project import Project
+from .....infrastructure.db.models.activity import ActivityModel
+from .....infrastructure.db.models.milestone import MilestoneModel
 from .....infrastructure.db.repositories.project_repository import ProjectRepository
 from .....shared.service_result import ServiceResult
 
 from .audit import ACTION_PUBLISH, project_snapshot, record_audit
 from .transitions import STATUS_PUBLISHED, assert_transition_allowed
+
+
+def _milestones_without_activities(
+    db: Session, project_id: str,
+) -> List[Tuple[str, str]]:
+    """Return [(milestone_id, milestone_name), ...] for live milestones in
+    this project that have zero live activities. Sorted by position then
+    name for stable ordering in the error message."""
+    rows = (
+        db.query(MilestoneModel.id, MilestoneModel.name, MilestoneModel.position)
+        .outerjoin(
+            ActivityModel,
+            (ActivityModel.milestone_id == MilestoneModel.id)
+            & (ActivityModel.deleted_at.is_(None)),
+        )
+        .filter(MilestoneModel.project_id == project_id)
+        .filter(MilestoneModel.deleted_at.is_(None))
+        .group_by(MilestoneModel.id, MilestoneModel.name, MilestoneModel.position)
+        .having(func.count(ActivityModel.id) == 0)
+        .all()
+    )
+    rows_sorted = sorted(rows, key=lambda r: (r[2] if r[2] is not None else 0, r[1] or ""))
+    return [(r[0], r[1]) for r in rows_sorted]
+
+
+def _live_milestone_count(db: Session, project_id: str) -> int:
+    return (
+        db.query(MilestoneModel.id)
+        .filter(MilestoneModel.project_id == project_id)
+        .filter(MilestoneModel.deleted_at.is_(None))
+        .count()
+    )
 
 
 def publish_project(
@@ -52,6 +93,35 @@ def publish_project(
             error=e.message,
             error_type=e.details.get("errorIdentifier", "invalid_transition"),
             details=e.details,
+        )
+
+    # Doc 27: structural-completeness gates. Both apply to baselines and
+    # versions — the queries are scoped to ``project_id``, which is the
+    # version's own id when publishing a version.
+    if _live_milestone_count(db, project_id) == 0:
+        return ServiceResult.fail(
+            error=(
+                "Cannot publish: the project has no milestones. Add at "
+                "least one milestone with one activity before publishing."
+            ),
+            error_type="invalid_publish",
+            details={"errorIdentifier": "no_milestones"},
+        )
+    empties = _milestones_without_activities(db, project_id)
+    if empties:
+        names = ", ".join(f"'{n}'" for _, n in empties)
+        return ServiceResult.fail(
+            error=(
+                f"Cannot publish: the following milestone(s) have no "
+                f"activities: {names}. Add at least one activity to each, "
+                f"or delete the empty milestone."
+            ),
+            error_type="invalid_publish",
+            details={
+                "errorIdentifier": "milestone_without_activity",
+                "milestoneIds": [mid for mid, _ in empties],
+                "milestoneNames": [n for _, n in empties],
+            },
         )
 
     before = project_snapshot(project)
