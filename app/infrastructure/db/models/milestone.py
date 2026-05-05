@@ -41,13 +41,8 @@ class MilestoneModel(Base):
     # ``milestone_dependencies`` edge table (per doc 21A) and are surfaced
     # through the API as ``dependsOn`` / ``dependsOnDisplay``.
 
-    # Lineage pointer: when a version project is created from a baseline,
-    # each cloned milestone records the id of its source baseline milestone
-    # here. Baseline milestones have cloned_from_id=NULL. Used by the
-    # baseline-to-versions propagation cascade.
-    cloned_from_id = Column(
-        String(36), ForeignKey("milestones.id"), nullable=True, index=True,
-    )
+    # Doc 33: ``cloned_from_id`` was removed along with the versioning
+    # feature. Milestones live directly under their project.
 
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

@@ -33,11 +33,10 @@ from .....shared.labels import (
     build_label_index_for_project,
     resolve_labels_to_ids,
 )
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
+from ...projects.services.audit import (
+    ACTION_MILESTONE_DEP_CHANGE,
     ACTION_MILESTONE_UPDATE,
-    propagate_milestone_update,
-    propagate_milestone_dependency_change,
+    record_audit,
 )
 
 
@@ -338,16 +337,18 @@ def update_milestone(
             after={k: _iso(v) for k, v in updates.items()},
         )
         db.commit()
-        propagate_milestone_update(
-            db,
-            baseline_milestone_id=milestone_id,
-            updates=updates,
-            actor_id=current_user_id,
-        )
 
     if desired_deps is not None:
-        propagate_milestone_dependency_change(
-            db, baseline_milestone_id=milestone_id, actor_id=current_user_id,
+        # Doc 33: dependency-edge changes get their own audit entry so
+        # the change history shows who altered the M-to-M graph and when.
+        record_audit(
+            db,
+            project_id=model.project_id,
+            actor_id=current_user_id,
+            action=ACTION_MILESTONE_DEP_CHANGE,
+            before={"milestone_id": milestone_id},
+            after={"milestone_id": milestone_id, "depends_on": list(desired_deps)},
         )
+        db.commit()
 
     return updated

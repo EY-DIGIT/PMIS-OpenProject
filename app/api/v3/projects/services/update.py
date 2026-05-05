@@ -97,7 +97,6 @@ def update_project(
                 "rejected": rejected,
                 "allowed": sorted(allowed),
                 "project_status": project.status,
-                "is_version": project.is_version,
             },
         )
 

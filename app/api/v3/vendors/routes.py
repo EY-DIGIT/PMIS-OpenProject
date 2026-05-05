@@ -71,25 +71,14 @@ def _vendor_to_response(v, projects: List[Dict[str, Any]] | None = None) -> Dict
     }
 
 
-def _project_entry(*, id, project_code, name, status, created_at,
-                   is_version, version_of) -> Dict[str, Any]:
+def _project_entry(*, id, project_code, name, status, created_at) -> Dict[str, Any]:
     """Single source of truth for the per-project shape returned by every
     vendor endpoint. Used by both ``_projects_by_vendor`` (the embedded
     array on /vendors and /vendors/{id}) and the dedicated
     /vendors/{id}/projects endpoint, so all three return identical entries.
 
-    The new fields vs the original three (id, projectCode, name):
-
-    - ``status``      — lets the FE render an "Active / Closed / Suspended"
-                        badge without a follow-up GET.
-    - ``isVersion``   — distinguishes a baseline from a version row.
-                        Critical because version projects inherit the
-                        baseline's name and would otherwise look like a
-                        duplicate row in the vendor's project list.
-    - ``versionOf``   — for version rows, the baseline UUID. The FE can
-                        group `[baseline, ...versions]` together, or hide
-                        versions altogether and only show baselines.
-    - ``createdAt``   — ISO 8601 timestamp the FE can use for sub-sort.
+    Doc 33: ``isVersion`` / ``versionOf`` were removed from this shape
+    along with the versioning feature.
     """
     return {
         "_type": "Project",
@@ -97,8 +86,6 @@ def _project_entry(*, id, project_code, name, status, created_at,
         "projectCode": project_code,
         "name": name,
         "status": status,
-        "isVersion": bool(is_version),
-        "versionOf": version_of,
         "createdAt": created_at.isoformat() if created_at else None,
     }
 
@@ -172,8 +159,6 @@ def _projects_by_vendor(
             ProjectModel.project_code,
             ProjectModel.name,
             ProjectModel.status,
-            ProjectModel.is_version,
-            ProjectModel.version_of,
             ProjectModel.created_at,
         )
         .join(ProjectModel, ProjectModel.id == ProjectVendorModel.project_id)
@@ -185,15 +170,13 @@ def _projects_by_vendor(
     )
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     for (vendor_id, project_id, project_code, project_name,
-         status, is_version, version_of, created_at) in rows:
+         status, created_at) in rows:
         grouped.setdefault(vendor_id, []).append(_project_entry(
             id=project_id,
             project_code=project_code,
             name=project_name,
             status=status,
             created_at=created_at,
-            is_version=is_version,
-            version_of=version_of,
         ))
     return grouped
 

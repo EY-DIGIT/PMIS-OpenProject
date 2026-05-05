@@ -114,35 +114,20 @@ def _create_subtask(client, admin_headers, task_id, *, name="S", deps=None,
 
 
 def _publish_and_version(client, admin_headers, baseline_id):
-    """Tasks + subtasks can only be created on a version, not a baseline.
-    Helper: publish the baseline, then create a version, returning
-    ``(version_project_id, version_milestone_id, version_activity_id)``.
-    """
-    # Publish.
-    pub = client.post(
-        f"/api/v3/projects/{baseline_id}/publish", headers=admin_headers,
-    )
-    assert pub.status_code == 200, pub.text
-    # Version.
-    ver = client.post(
-        f"/api/v3/projects/{baseline_id}/versions/create",
-        headers=admin_headers,
-    )
-    assert ver.status_code == 201, ver.text
-    vpid = ver.json()["data"]["id"]
-    # Pick the version's first milestone + first activity (they were cloned
-    # from the baseline).
+    """Doc 33: versioning was removed. Tasks/subtasks are writable on the
+    project directly. Returns ``(project_id, milestone_id, activity_id)``
+    using the existing project's first M/A pair."""
     ms = client.get(
-        f"/api/v3/projects/{vpid}/milestones", headers=admin_headers,
+        f"/api/v3/projects/{baseline_id}/milestones", headers=admin_headers,
     ).json()["data"]["_embedded"]["elements"]
-    assert ms, "version has no milestones"
+    assert ms, "project has no milestones"
     vm = ms[0]["id"]
     acts = client.get(
         f"/api/v3/milestones/{vm}/activities", headers=admin_headers,
     ).json()["data"]["_embedded"]["elements"]
-    assert acts, "version milestone has no activities"
+    assert acts, "milestone has no activities"
     va = acts[0]["id"]
-    return vpid, vm, va
+    return baseline_id, vm, va
 
 
 # ===========================================================================

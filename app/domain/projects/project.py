@@ -16,8 +16,10 @@ class Project:
       - id (UUID string) — the PK, exposed in URLs and response bodies.
       - project_code     — UIDAI-PRYYMMDDHHMMSS (IST). Human-readable.
 
-    Internal FK references (all UUID strings):
-      - parent_id, version_of, baseline_id — self-FKs into projects.id.
+    Doc 33: ``is_version`` / ``version_of`` / ``baseline_id`` /
+    ``version_no`` removed along with the entire versioning feature.
+    A project owns its own milestones / activities / tasks / subtasks
+    directly.
     """
 
     id: str
@@ -37,10 +39,6 @@ class Project:
     end_date: Optional[datetime] = None
     actual_start_date: Optional[datetime] = None
     actual_end_date: Optional[datetime] = None
-    is_version: bool = False
-    version_of: Optional[str] = None
-    baseline_id: Optional[str] = None
-    version_no: Optional[int] = None
     # Doc 26: user-id fields are UUID strings (was int pre-doc-26).
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
@@ -78,10 +76,6 @@ class Project:
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),
             "parent_id": self.parent_id,
-            "is_version": self.is_version,
-            "version_of": self.version_of,
-            "baseline_id": self.baseline_id,
-            "version_no": self.version_no,
             "created_by": self.created_by,
             "updated_by": self.updated_by,
             "deleted_at": iso_utc(self.deleted_at),

@@ -65,10 +65,6 @@ class ProjectRepository:
             end_date=model.end_date,
             actual_start_date=model.actual_start_date,
             actual_end_date=model.actual_end_date,
-            is_version=bool(model.is_version),
-            version_of=model.version_of,
-            baseline_id=model.baseline_id,
-            version_no=model.version_no,
             created_by=model.created_by,
             updated_by=model.updated_by,
             deleted_at=model.deleted_at,
@@ -103,10 +99,6 @@ class ProjectRepository:
         end_date: Optional[datetime] = None,
         actual_start_date: Optional[datetime] = None,
         actual_end_date: Optional[datetime] = None,
-        is_version: bool = False,
-        version_of: Optional[str] = None,
-        baseline_id: Optional[str] = None,
-        version_no: Optional[int] = None,
         created_by: Optional[str] = None,
         # Caller may inject a pre-computed id (e.g. from the URL path of a
         # PUT upsert call). If omitted, a fresh uuid4 is generated.
@@ -142,10 +134,6 @@ class ProjectRepository:
             end_date=end_date,
             actual_start_date=actual_start_date,
             actual_end_date=actual_end_date,
-            is_version=is_version,
-            version_of=version_of,
-            baseline_id=baseline_id,
-            version_no=version_no,
             created_by=created_by,
             updated_by=created_by,
         )
@@ -376,51 +364,6 @@ class ProjectRepository:
             is not None
         )
 
-    # ------------------------------------------------------------------
-    # version helpers
-    # ------------------------------------------------------------------
-
-    def active_version_exists(self, baseline_id: str) -> bool:
-        """Any version of ``baseline_id`` that is not suspended or deleted."""
-        return (
-            self.db.query(ProjectModel.id)
-            .filter(
-                and_(
-                    ProjectModel.version_of == baseline_id,
-                    ProjectModel.is_version == True,  # noqa: E712
-                    ProjectModel.status != "suspended",
-                    ProjectModel.deleted_at.is_(None),
-                )
-            )
-            .first()
-            is not None
-        )
-
-    def next_version_no(self, baseline_id: str) -> int:
-        """Next sequential version number for a baseline (1-indexed)."""
-        max_no = (
-            self.db.query(func.max(ProjectModel.version_no))
-            .filter(ProjectModel.version_of == baseline_id)
-            .scalar()
-        )
-        return (max_no or 0) + 1
-
-    def list_live_version_ids(self, baseline_id: str) -> List[str]:
-        """Return the ids of every non-deleted version row for this baseline.
-
-        Used by the delete flow to cascade a baseline-level soft-delete down
-        to its versions. Includes versions in any status (including
-        'suspended') so long as they aren't already soft-deleted.
-        """
-        rows = (
-            self.db.query(ProjectModel.id)
-            .filter(
-                and_(
-                    ProjectModel.version_of == baseline_id,
-                    ProjectModel.is_version == True,  # noqa: E712
-                    ProjectModel.deleted_at.is_(None),
-                )
-            )
-            .all()
-        )
-        return [r[0] for r in rows]
+    # Doc 33: ``active_version_exists`` / ``next_version_no`` /
+    # ``list_live_version_ids`` were removed along with the versioning
+    # feature.

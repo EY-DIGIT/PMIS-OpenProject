@@ -12,7 +12,14 @@ from ..session import Base
 
 
 class ProjectAuditLogModel(Base):
-    """Persisted record of a project-side state change or edit."""
+    """Persisted record of a project-side state change or edit.
+
+    Doc 33: ``actor_role`` column added so audit rows record the role
+    bucket the actor occupied at the time of the change (``admin`` /
+    ``member`` / ``vendor`` / ``viewer``). Important for transparency
+    after the versioning workflow was removed and vendors gained
+    write access to the same project surface admins/members had.
+    """
 
     __tablename__ = "project_audit_logs"
 
@@ -20,6 +27,7 @@ class ProjectAuditLogModel(Base):
     project_id = Column(String(36), ForeignKey("projects.id"), nullable=False, index=True)
     # Doc 26: users.id flipped to UUID String(36).
     actor_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    actor_role = Column(String(50), nullable=True, index=True)
     action = Column(String(64), nullable=False, index=True)
     before = Column(JSON, nullable=True)
     after = Column(JSON, nullable=True)
@@ -28,6 +36,7 @@ class ProjectAuditLogModel(Base):
     __table_args__ = (
         Index("idx_project_audit_logs_project_id", "project_id"),
         Index("idx_project_audit_logs_created_at", "created_at"),
+        Index("idx_project_audit_logs_action", "action"),
     )
 
     def __repr__(self) -> str:

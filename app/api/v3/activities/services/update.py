@@ -30,10 +30,10 @@ from .....core.errors import (
     ValidationError,
 )
 from .....core.project_lock import assert_milestone_activity_writable
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
+from ...projects.services.audit import (
+    ACTION_ACTIVITY_DEP_CHANGE,
     ACTION_ACTIVITY_UPDATE,
-    propagate_activity_update,
+    record_audit,
 )
 
 
@@ -460,15 +460,18 @@ def update_activity(
             after={k: _iso(v) for k, v in updates.items()},
         )
 
-    db.commit()
-
-    if updates:
-        propagate_activity_update(
+    if desired_deps is not None:
+        # Doc 33: dep-edge changes get their own audit row.
+        record_audit(
             db,
-            baseline_activity_id=activity_id,
-            updates=updates,
+            project_id=model.project_id,
             actor_id=current_user_id,
+            action=ACTION_ACTIVITY_DEP_CHANGE,
+            before={"activity_id": activity_id},
+            after={"activity_id": activity_id, "depends_on": list(desired_deps)},
         )
+
+    db.commit()
 
     updated = repo.get_by_id(activity_id)
     assert updated is not None

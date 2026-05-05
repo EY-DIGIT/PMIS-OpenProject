@@ -28,12 +28,7 @@ from .....shared.labels import (
     build_label_index_for_project,
     normalize_dependency_inputs,
 )
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
-    ACTION_MILESTONE_CREATE,
-    propagate_milestone_create,
-    propagate_milestone_dependency_change,
-)
+from ...projects.services.audit import ACTION_MILESTONE_CREATE, record_audit
 
 
 def create_milestone(
@@ -226,10 +221,4 @@ def create_milestone(
         },
     )
     db.commit()
-    propagate_milestone_create(db, baseline_milestone_id=m.id, actor_id=current_user_id)
-    if desired_deps:
-        propagate_milestone_dependency_change(
-            db, baseline_milestone_id=m.id, actor_id=current_user_id,
-        )
-
     return m

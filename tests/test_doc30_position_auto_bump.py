@@ -259,12 +259,9 @@ def version_task(client, admin_headers, project_with_one_milestone):
         },
         headers=admin_headers,
     ).json()["data"]
-    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
-    assert pub.status_code == 200, pub.text
-    vr = client.post(f"/api/v3/projects/{pid}/versions/create", headers=admin_headers)
-    assert vr.status_code == 201, vr.text
-    vid = vr.json()["data"]["id"]
-    tree = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers).json()["data"]
+    # Doc 33: versioning removed; tasks/subtasks now live directly under
+    # the project's M/A subtree.
+    tree = client.get(f"/api/v3/projects/{pid}/tree", headers=admin_headers).json()["data"]
     v_a1 = tree["milestones"][0]["activities"][0]["id"]
     t1 = client.post(
         f"/api/v3/activities/{v_a1}/tasks/create",

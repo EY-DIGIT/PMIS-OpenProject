@@ -129,7 +129,6 @@ def _transition_to_response(row) -> Dict[str, Any]:
         "fromStatus": row.from_status,
         "toStatus": row.to_status,
         "requiresAdmin": bool(row.requires_admin),
-        "versionOnly": bool(row.version_only),
         "active": bool(row.active),
         "description": row.description,
     }
@@ -347,7 +346,6 @@ def create_master_transition(
         from_status=data.from_status,
         to_status=data.to_status,
         requires_admin=data.requires_admin,
-        version_only=data.version_only,
         description=data.description,
     )
     db.commit()
@@ -369,7 +367,6 @@ def update_master_transition(
     updated = repo.update(
         row_id,
         requires_admin=data.requires_admin,
-        version_only=data.version_only,
         description=data.description,
     )
     if updated is None:

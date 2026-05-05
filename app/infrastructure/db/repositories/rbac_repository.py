@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from ....core.permissions import (
     ADMIN_ROLE_NAME,
+    VENDOR_ROLE_NAME,
+    VENDOR_ROLE_PERMISSIONS,
     ADMIN_ROLE_PERMISSIONS,
     BUILTIN_PERMISSIONS,
     MEMBER_ROLE_NAME,
@@ -375,6 +377,7 @@ class RbacRepository:
             (ADMIN_ROLE_NAME, "Built-in superadmin role. Holds every permission. Cannot be deleted."),
             (MEMBER_ROLE_NAME, "Default role for project contributors."),
             (VIEWER_ROLE_NAME, "Read-only role."),
+            (VENDOR_ROLE_NAME, "Vendor role (doc 33). Edits M/A/T/S on assigned projects, no lifecycle / RBAC / master-data access."),
         ):
             existing = self.get_role_by_name(role_name)
             if existing is None:
@@ -386,14 +389,17 @@ class RbacRepository:
         admin_role = self.get_role_by_name(ADMIN_ROLE_NAME)
         member_role = self.get_role_by_name(MEMBER_ROLE_NAME)
         viewer_role = self.get_role_by_name(VIEWER_ROLE_NAME)
+        vendor_role = self.get_role_by_name(VENDOR_ROLE_NAME)
 
         # Admin role holds everything currently registered.
         added = self.grant_permissions_to_role(admin_role.id, ADMIN_ROLE_PERMISSIONS)
-        # Member / viewer roles get their seed sets if currently empty (don't
-        # overwrite admin edits to these roles).
+        # Member / viewer / vendor roles get their seed sets if currently empty
+        # (don't overwrite admin edits to these roles).
         if not self.list_role_permissions(member_role.id):
             self.grant_permissions_to_role(member_role.id, MEMBER_ROLE_PERMISSIONS)
         if not self.list_role_permissions(viewer_role.id):
             self.grant_permissions_to_role(viewer_role.id, VIEWER_ROLE_PERMISSIONS)
+        if not self.list_role_permissions(vendor_role.id):
+            self.grant_permissions_to_role(vendor_role.id, VENDOR_ROLE_PERMISSIONS)
         self.db.flush()
         return permissions_inserted, added

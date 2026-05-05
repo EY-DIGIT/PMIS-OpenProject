@@ -212,7 +212,6 @@ def create_project(
             category_other_reason=category_other_reason,
             start_date=start_date,
             end_date=end_date,
-            is_version=False,
             created_by=actor_id,
         )
 

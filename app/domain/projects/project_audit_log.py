@@ -17,12 +17,15 @@ class ProjectAuditLog:
     before: Optional[Dict[str, Any]]
     after: Optional[Dict[str, Any]]
     created_at: datetime
+    # Doc 33: which role bucket the actor occupied at change time.
+    actor_role: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "project_id": self.project_id,
             "actor_id": self.actor_id,
+            "actor_role": self.actor_role,
             "action": self.action,
             "before": self.before,
             "after": self.after,

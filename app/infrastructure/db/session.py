@@ -306,11 +306,12 @@ def init_db() -> None:
                     # *other* migrations (for teammate's versioning/audit
                     # work). All NEW additions tied to the UUID migration are
                     # expressed in the SQLAlchemy models themselves.
+                    # Doc 33: ``is_version`` / ``version_no`` columns + the
+                    # ``ux_projects_active_version_per_baseline`` index were
+                    # removed along with the versioning feature.
                     project_column_ddl = [
                         ("actual_end_date",        "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
                         ("actual_start_date",      "ALTER TABLE projects ADD COLUMN actual_start_date DATETIME"),
-                        ("is_version",             "ALTER TABLE projects ADD COLUMN is_version BOOLEAN NOT NULL DEFAULT 0"),
-                        ("version_no",             "ALTER TABLE projects ADD COLUMN version_no INTEGER"),
                         ("created_by",             "ALTER TABLE projects ADD COLUMN created_by INTEGER REFERENCES users(id)"),
                         ("updated_by",             "ALTER TABLE projects ADD COLUMN updated_by INTEGER REFERENCES users(id)"),
                         ("deleted_at",             "ALTER TABLE projects ADD COLUMN deleted_at DATETIME"),
@@ -338,18 +339,6 @@ def init_db() -> None:
                         ))
                     except Exception as e:
                         logging.warning("Failed to create idx_projects_project_code: %s", e)
-
-                    # Partial unique index enforcing "one active version per baseline".
-                    # Active = is_version AND status != 'suspended' AND not soft-deleted.
-                    try:
-                        conn.execute(text(
-                            "CREATE UNIQUE INDEX IF NOT EXISTS "
-                            "ux_projects_active_version_per_baseline "
-                            "ON projects(version_of) "
-                            "WHERE is_version = 1 AND status != 'suspended' AND deleted_at IS NULL"
-                        ))
-                    except Exception as e:
-                        logging.warning("Failed to create ux_projects_active_version_per_baseline: %s", e)
                 except Exception:
                     pass
 
@@ -481,59 +470,39 @@ def init_db() -> None:
                 except Exception:
                     pass
 
-                # ---- NEW: milestones.status + milestones.cloned_from_id ----
-                # The legacy ``milestones.depends`` JSON column is no longer
-                # added — milestone-to-milestone deps live in the
-                # ``milestone_dependencies`` edge table (doc 21A) and the
-                # column was dropped in doc 22.
+                # ---- milestones.status ----
+                # Doc 33: milestones.cloned_from_id was removed with the
+                # versioning feature.
                 try:
                     res = conn.execute(text("PRAGMA table_info('milestones')"))
                     mcols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
                         ("status",         "ALTER TABLE milestones ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'not_completed'"),
-                        # Lineage pointer for baseline → version propagation.
-                        ("cloned_from_id", "ALTER TABLE milestones ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES milestones(id)"),
                     ):
                         if col not in mcols:
                             try:
                                 conn.execute(text(stmt))
                             except Exception as e:
                                 logging.warning("Failed to add milestones.%s: %s", col, e)
-                    try:
-                        conn.execute(text(
-                            "CREATE INDEX IF NOT EXISTS ix_milestones_cloned_from_id "
-                            "ON milestones(cloned_from_id)"
-                        ))
-                    except Exception as e:
-                        logging.warning("Failed to create ix_milestones_cloned_from_id: %s", e)
                 except Exception:
                     pass
 
-                # ---- NEW: activities.status (dependency moved to its own
-                # association table activity_dependencies; the legacy
-                # `dependency` column is intentionally NOT re-added — fresh
-                # DBs no longer have it, legacy DBs may keep their orphan
-                # column harmlessly).
+                # ---- activities.status ----
+                # Doc 33: activities.cloned_from_id was removed with the
+                # versioning feature. The legacy `dependency` column is
+                # intentionally NOT re-added — deps now live in
+                # activity_dependencies.
                 try:
                     res = conn.execute(text("PRAGMA table_info('activities')"))
                     acols = {r[1] for r in res.fetchall()}
                     for col, stmt in (
                         ("status",         "ALTER TABLE activities ADD COLUMN status VARCHAR(32)"),
-                        # Lineage pointer for baseline → version propagation.
-                        ("cloned_from_id", "ALTER TABLE activities ADD COLUMN cloned_from_id VARCHAR(36) REFERENCES activities(id)"),
                     ):
                         if col not in acols:
                             try:
                                 conn.execute(text(stmt))
                             except Exception as e:
                                 logging.warning("Failed to add activities.%s: %s", col, e)
-                    try:
-                        conn.execute(text(
-                            "CREATE INDEX IF NOT EXISTS ix_activities_cloned_from_id "
-                            "ON activities(cloned_from_id)"
-                        ))
-                    except Exception as e:
-                        logging.warning("Failed to create ix_activities_cloned_from_id: %s", e)
                 except Exception:
                     pass
 
@@ -804,7 +773,6 @@ def init_db() -> None:
         from ...api.v3.projects.services.transitions import (
             ADMIN_ONLY_TRANSITIONS,
             STATUS_NEW,
-            VERSION_ONLY_TRANSITIONS,
             _LEGAL_TRANSITIONS,
         )
 
@@ -821,7 +789,6 @@ def init_db() -> None:
                 from_status=None,
                 to_status=STATUS_NEW,
                 requires_admin=False,
-                version_only=False,
                 active=True,
                 description="Default status assigned to a freshly created project.",
             ))
@@ -838,7 +805,6 @@ def init_db() -> None:
                     from_status=from_s,
                     to_status=to_s,
                     requires_admin=(from_s, to_s) in ADMIN_ONLY_TRANSITIONS,
-                    version_only=(from_s, to_s) in VERSION_ONLY_TRANSITIONS,
                     active=True,
                     description=(
                         f"Transition {from_s} -> {to_s} (seeded from "

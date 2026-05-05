@@ -72,13 +72,11 @@ def _patch_activity(client, headers, aid, **body):
 
 
 def _publish_and_version(client, headers, pid):
-    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
-    assert pub.status_code == 200, pub.text
-    ver = client.post(f"/api/v3/projects/{pid}/versions/create", headers=headers)
-    assert ver.status_code == 201, ver.text
-    vid = ver.json()["data"]["id"]
-    tree = client.get(f"/api/v3/projects/{vid}/tree", headers=headers).json()["data"]
-    return vid, tree
+    """Doc 33: versioning was removed. Tasks/subtasks are now writable on
+    the project directly — no publish + version step required. Returns
+    the original pid + the project's tree."""
+    tree = client.get(f"/api/v3/projects/{pid}/tree", headers=headers).json()["data"]
+    return pid, tree
 
 
 def _make_task(client, headers, aid, *, name="T", start, end, deps=None):

@@ -32,3 +32,19 @@ def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[in
     for sid in descendant_ids:
         dep_repo.cascade_remove_subtask_targets(sid, actor_id=current_user_id)
     repo.soft_delete(subtask_id, deleted_by=current_user_id)
+
+    # Doc 33: subtree audit expansion.
+    from ...projects.services.audit import ACTION_SUBTASK_DELETE, record_audit
+    record_audit(
+        db,
+        project_id=model.project_id,
+        actor_id=current_user_id,
+        action=ACTION_SUBTASK_DELETE,
+        before={
+            "subtask_id": subtask_id,
+            "name": model.name,
+            "task_id": model.task_id,
+        },
+        after=None,
+    )
+    db.commit()

@@ -41,19 +41,20 @@ def _iso(days):
 def _seed_status_transitions(db_session):
     """Seed a small subset of the in-code transitions so the catalog probe
     in the create-project service has rows to validate against."""
+    # Doc 33: ``suspended`` and the ``version_only`` column were dropped
+    # along with the versioning feature.
     rows = [
-        (None, "new", False, False),
-        ("new", "draft", False, False),
-        ("draft", "new", False, False),
-        ("new", "published", True, False),
-        ("draft", "published", True, False),
-        ("published", "closed", True, False),
-        ("new", "suspended", False, True),
+        (None, "new", False),
+        ("new", "draft", False),
+        ("draft", "new", False),
+        ("new", "published", True),
+        ("draft", "published", True),
+        ("published", "closed", True),
     ]
-    for from_s, to_s, admin_only, version_only in rows:
+    for from_s, to_s, admin_only in rows:
         db_session.add(ProjectStatusTransitionModel(
             from_status=from_s, to_status=to_s,
-            requires_admin=admin_only, version_only=version_only,
+            requires_admin=admin_only,
             active=True,
         ))
     db_session.commit()
@@ -90,9 +91,6 @@ class TestStatusTransitionsCatalog:
         assert (None, "new") in edges
         assert ("new", "draft") in edges
         assert ("new", "published") in edges
-        # version-only flag round-trips correctly.
-        suspend_row = [r for r in items if r["toStatus"] == "suspended"][0]
-        assert suspend_row["versionOnly"] is True
 
     def test_create_project_rejects_invalid_status_against_catalog(
         self, client, admin_user, admin_headers, db_session,
@@ -744,59 +742,10 @@ class TestPatchEditableFields:
         assert body["errorIdentifier"] == "invalid_field"
         assert "status" in body["_embedded"]["details"]["rejected"]
 
-    def test_version_status_patch_rejected(
-        self, client, admin_user, admin_headers, db_session,
-    ):
-        """Versions also reject PATCH on status (and on category /
-        project_code / baseline_id, which were never editable)."""
-        p = self._create_baseline(
-            client, admin_user, admin_headers, db_session,
-        )
-        # Doc 27 publish gate: project needs ≥1 milestone with ≥1 activity.
-        from datetime import datetime, timezone, timedelta
-        from app.infrastructure.db.models.activity import ActivityModel
-        from app.infrastructure.db.models.milestone import MilestoneModel
-        from app.infrastructure.db.models.project import ProjectModel
-        now = datetime.now(timezone.utc)
-        proj = db_session.query(ProjectModel).filter_by(id=p["id"]).one()
-        if proj.start_date is None:
-            db_session.query(ProjectModel).filter_by(id=p["id"]).update({
-                "start_date": now + timedelta(days=1),
-                "end_date": now + timedelta(days=90),
-            })
-        m = MilestoneModel(
-            project_id=p["id"], name="M1",
-            start_date=now + timedelta(days=2),
-            end_date=now + timedelta(days=60),
-            position=0,
-        )
-        db_session.add(m)
-        db_session.flush()
-        db_session.add(ActivityModel(
-            project_id=p["id"], milestone_id=m.id, name="A1", type="standard",
-            start_date=now + timedelta(days=3),
-            end_date=now + timedelta(days=50),
-            position=0,
-        ))
-        db_session.commit()
-        client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
-        v = client.post(
-            f"/api/v3/projects/{p['id']}/versions/create", headers=admin_headers,
-        ).json()["data"]
-        for field, value in (
-            ("status", "closed"),
-            ("category", "MSIP"),
-            ("name", "should-not-work"),
-            ("start_date", _iso(99)),
-        ):
-            resp = client.patch(
-                f"/api/v3/projects/{v['id']}",
-                json={field: value},
-                headers=admin_headers,
-            )
-            assert resp.status_code == 422, (field, resp.text)
-            body = resp.json()["error"]
-            assert body["errorIdentifier"] == "invalid_field", (field, body)
+    # Doc 33: ``test_version_status_patch_rejected`` removed — versions
+    # don't exist anymore. The published-project PATCH whitelist still
+    # rejects ``status`` (status changes go through dedicated endpoints),
+    # which is covered by ``test_published_status_patch_rejected`` above.
 
 
 # ---------------------------------------------------------------------------
@@ -834,22 +783,13 @@ def _create_baseline_with_resource_activity(client, admin_headers):
         headers=admin_headers,
     ).json()["data"]["id"]
 
-    # Publish + version so tasks become creatable.
-    client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
-    v = client.post(
-        f"/api/v3/projects/{pid}/versions/create", headers=admin_headers,
-    ).json()["data"]
-    vid = v["id"]
-    # Look up the version's clones of the activities.
-    ms = client.get(
-        f"/api/v3/projects/{vid}/milestones", headers=admin_headers,
-    ).json()["data"]["_embedded"]["elements"]
-    version_mid = ms[0]["id"]
+    # Doc 33: versioning removed; tasks live directly under the project's
+    # M/A subtree.
     acts = client.get(
-        f"/api/v3/milestones/{version_mid}/activities", headers=admin_headers,
+        f"/api/v3/milestones/{mid}/activities", headers=admin_headers,
     ).json()["data"]["_embedded"]["elements"]
     by_type = {a["type"]: a["id"] for a in acts}
-    return pid, vid, by_type["standard"], by_type["resource"]
+    return pid, pid, by_type["standard"], by_type["resource"]
 
 
 class TestTaskSubtaskTypeInheritance:

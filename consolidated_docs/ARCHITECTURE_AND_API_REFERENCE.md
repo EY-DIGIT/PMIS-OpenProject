@@ -221,7 +221,6 @@ Schema highlights to be aware of:
 | POST | `/api/v3/projects/{id}/save` | `projects:update_all` | Move `new` → `draft` |
 | POST | `/api/v3/projects/{id}/publish` | `projects:publish` | Move `draft` → `published`; **doc 27**: rejects (422 `invalid_publish`) projects with zero milestones or any milestone with zero live activities |
 | POST | `/api/v3/projects/{id}/close` | `projects:close` | Move to `closed` |
-| POST | `/api/v3/projects/{id}/versions/create` | `projects:update_all` | Create a new version (active-version constraint) |
 | GET | `/api/v3/projects/{id}/tree` | `projects:read` | Full nested tree (M/A/T/S, recursive subtask nesting) |
 
 ### Master data (`/api/v3/master/*` — doc 20 + 21B follow-up)
@@ -258,18 +257,18 @@ The legacy paths (`/api/v3/divisions`, `/api/v3/resource_types`, `/api/v3/vendor
 **Milestones**
 | Method | Path | Permission | Description |
 |---|---|---|---|
-| POST | `/api/v3/projects/{id}/milestones/create` | `milestones:create` | Create (baseline only). `dependsOn` accepted (doc 21A). **Doc 32**: accepts JSON or multipart; multipart adds optional `body` (comment) + `files` (uploads) inline |
+| POST | `/api/v3/projects/{id}/milestones/create` | `milestones:create` | Create on the project. `dependsOn` accepted (doc 21A). **Doc 32**: accepts JSON or multipart; multipart adds optional `body` (comment) + `files` (uploads) inline. **Doc 33**: versioning was removed — milestones live directly on the project; the "baseline only" rule is gone. |
 | GET | `/api/v3/projects/{id}/milestones` | `milestones:read` | List |
 | GET | `/api/v3/milestones/{id}` | `milestones:read` | Get |
 | PATCH | `/api/v3/milestones/{id}` | `milestones:update` | Update (baseline only) |
 | DELETE | `/api/v3/milestones/{id}` | `milestones:delete` | Soft-delete + cascade |
 | POST | `/api/v3/milestones/{id}/restore` | `milestones:restore` | Restore |
 
-**Activities** — `POST /milestones/{id}/activities/standard/create` (or `…/resource/count/create`, `…/resource/details/create`, `…/transactional/create`), `GET/PATCH/DELETE/restore` on `/activities/{id}`. Same dependency rules as milestones; baseline-only writes. **Doc 32**: every variant of the create endpoint accepts JSON or multipart on the same URL; multipart adds inline `body` + `files`.
+**Activities** — `POST /milestones/{id}/activities/standard/create` (or `…/resource/count/create`, `…/resource/details/create`, `…/transactional/create`), `GET/PATCH/DELETE/restore` on `/activities/{id}`. Same dependency rules as milestones. **Doc 32**: every variant of the create endpoint accepts JSON or multipart on the same URL; multipart adds inline `body` + `files`. **Doc 33**: writable on the project (the "baseline only" rule was dropped with the versioning feature).
 
-**Tasks** — version-only. `POST /activities/{id}/tasks/create` (type derived from parent activity); `GET/PATCH/DELETE/restore` on `/tasks/{id}`. **Doc 24 part 3: no parent-activity hierarchy rule on dependencies.** **Doc 32**: create accepts JSON or multipart.
+**Tasks** — `POST /activities/{id}/tasks/create` (type derived from parent activity); `GET/PATCH/DELETE/restore` on `/tasks/{id}`. **Doc 24 part 3: no parent-activity hierarchy rule on dependencies.** **Doc 32**: create accepts JSON or multipart. **Doc 33**: tasks now live directly under the project's M/A subtree (the version-only rule was dropped along with the versioning feature).
 
-**Subtasks** — version-only.
+**Subtasks** — writable directly under the project (per doc 33; the version-only rule was dropped).
 | Method | Path | Permission | Description |
 |---|---|---|---|
 | POST | `/api/v3/tasks/{task_id}/subtasks/create` | `subtasks:create` | Top-level subtask under task. **Doc 32**: accepts JSON or multipart |
@@ -319,6 +318,7 @@ Polymorphic on M/A/T/S target — see the route files for the full surface.
 }
 ```
 
+> **Doc 33** (in flight, change 1 shipped): versioning removed. The baseline/version split is gone — projects own their M/A/T/S directly. `/versions/create`, `/suspend`, the `suspended` status, and the entire `baseline_version_sync` propagation module were dropped. Tasks/subtasks writable on the project (no version-only rule). Published is a sign-off checkpoint, revertible to draft. New built-in `vendor` role with curated M/A/T/S CRUD permission set. Audit expanded: T/S create + delete + dep-edge changes recorded on `project_audit_logs`; new `actor_role` column. Project response shape no longer includes `isVersion` / `versionOf` / `baselineId` / `versionNo`.
 > **Doc 32** (kamal21, tagged "Doc 30" in commit): every M/A/T/S create endpoint now accepts JSON or multipart on the same URL. Multipart adds optional `body` (comment) and `files` (file uploads) so the create + comment + attachments flow can be one round-trip. Two followups bundled: `_normalize` collapses to IST calendar midnight (legacy-row tolerance), and caller-supplied `position` collisions auto-bump instead of 500.
 > **Doc 31**: milestone-specific dep-date rules — `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict). Status-completion gate added to milestones: cannot mark `completed` while a dep target is incomplete.
 > **Doc 30**: dep-date enforcement for activity/task/subtask deps (`source.start >= target.end`, equality allowed) on create + update, forward and reverse. Publish rejects projects with zero milestones or any milestone holding zero live activities — both gates apply to baselines and versions; specific identifier in `_embedded.details.errorIdentifier` (`no_milestones` / `milestone_without_activity`).

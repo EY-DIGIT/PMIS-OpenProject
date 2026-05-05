@@ -314,6 +314,24 @@ def create_subtask(
             actor_id=current_user_id,
         )
 
+    # Doc 33: subtree audit expansion — record subtask creation on the
+    # project's audit log.
+    from ...projects.services.audit import ACTION_SUBTASK_CREATE, record_audit
+    record_audit(
+        db,
+        project_id=task.project_id,
+        actor_id=current_user_id,
+        action=ACTION_SUBTASK_CREATE,
+        before=None,
+        after={
+            "subtask_id": subtask.id,
+            "task_id": task.id,
+            "parent_subtask_id": (parent_subtask.id if parent_subtask is not None else None),
+            "name": subtask.name,
+            "type": subtask.type,
+            "depends_on": list(desired_deps),
+        },
+    )
     db.commit()
     refreshed = repo.get_by_id(subtask.id)
     out = refreshed or subtask

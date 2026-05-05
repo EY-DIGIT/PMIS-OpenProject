@@ -49,13 +49,8 @@ class ActivityModel(Base):
     # ``dependsOn`` (per the activity_dependencies table) is also 'completed'.
     status = Column(String(32), nullable=True, index=True)
 
-    # Lineage pointer: when a version project is created from a baseline,
-    # each cloned activity records the id of its source baseline activity
-    # here. Baseline activities have cloned_from_id=NULL. Used by the
-    # baseline-to-versions propagation cascade.
-    cloned_from_id = Column(
-        String(36), ForeignKey("activities.id"), nullable=True, index=True,
-    )
+    # Doc 33: ``cloned_from_id`` was removed along with the versioning
+    # feature. Activities live directly under their parent milestone.
 
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

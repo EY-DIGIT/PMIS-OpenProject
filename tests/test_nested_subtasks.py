@@ -66,14 +66,13 @@ def _create_activity(client, headers, milestone_id, *, name="A"):
 
 
 def _publish(client, headers, pid):
-    resp = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
-    assert resp.status_code == 200, resp.text
+    """Doc 33: no-op (publish optional now)."""
+    return None
 
 
 def _create_version(client, headers, pid):
-    resp = client.post(f"/api/v3/projects/{pid}/versions/create", headers=headers)
-    assert resp.status_code == 201, resp.text
-    return resp.json()["data"]["id"]
+    """Doc 33: versioning removed; helper returns the input id unchanged."""
+    return pid
 
 
 def _build_version_with_one_task(client, headers):

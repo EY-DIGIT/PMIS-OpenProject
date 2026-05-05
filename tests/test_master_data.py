@@ -274,7 +274,7 @@ class TestMasterTransitionsCRUD:
     ):
         db_session.add(ProjectStatusTransitionModel(
             from_status="new", to_status="draft",
-            requires_admin=False, version_only=False, active=True,
+            requires_admin=False, active=True,
         ))
         db_session.commit()
         resp = client.get(
@@ -308,7 +308,7 @@ class TestMasterTransitionsCRUD:
     ):
         db_session.add(ProjectStatusTransitionModel(
             from_status="new", to_status="draft",
-            requires_admin=False, version_only=False, active=True,
+            requires_admin=False, active=True,
         ))
         db_session.commit()
         resp = client.post(
@@ -323,7 +323,7 @@ class TestMasterTransitionsCRUD:
     ):
         row = ProjectStatusTransitionModel(
             from_status="new", to_status="published",
-            requires_admin=False, version_only=False, active=True,
+            requires_admin=False, active=True,
         )
         db_session.add(row)
         db_session.commit()
@@ -342,7 +342,7 @@ class TestMasterTransitionsCRUD:
     ):
         row = ProjectStatusTransitionModel(
             from_status="x", to_status="y",
-            requires_admin=False, version_only=False, active=True,
+            requires_admin=False, active=True,
         )
         db_session.add(row)
         db_session.commit()
@@ -531,7 +531,7 @@ class TestOwnerOtherDoesNotPolluteDivisionsCatalog:
         # Seed the minimum status transitions and division built-ins.
         db_session.add(ProjectStatusTransitionModel(
             from_status=None, to_status="new",
-            requires_admin=False, version_only=False, active=True,
+            requires_admin=False, active=True,
         ))
         db_session.commit()
 

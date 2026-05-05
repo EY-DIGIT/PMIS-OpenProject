@@ -508,8 +508,6 @@ class TestVendorProjectionShape:
         # New fields the FE needs.
         assert proj_row["_type"] == "Project"
         assert proj_row["status"] == "new"
-        assert proj_row["isVersion"] is False
-        assert proj_row["versionOf"] is None
         assert proj_row["createdAt"] and "T" in proj_row["createdAt"]
 
     def test_embedded_projects_on_detail_carries_full_shape(
@@ -521,7 +519,6 @@ class TestVendorProjectionShape:
         ).json()["data"]
         proj_row = d["projects"][0]
         assert proj_row["status"] == "new"
-        assert proj_row["isVersion"] is False
         assert proj_row["createdAt"]
 
     def test_dedicated_projects_endpoint_uses_same_shape(
@@ -537,62 +534,8 @@ class TestVendorProjectionShape:
         # Identical key sets across the two surfaces.
         assert set(emb.keys()) == set(scoped.keys())
 
-    def test_version_appears_with_isVersion_true_and_versionOf_set(
-        self, client, admin_user, admin_headers, db_session,
-    ):
-        """Baseline + version both show up for the vendor; the version
-        carries `isVersion=True` and `versionOf=<baseline_id>` so the
-        FE can group them visually."""
-        v1, p = self._setup(client, admin_headers, db_session)
-        # Doc 27 publish gate: project needs ≥1 milestone with ≥1 activity.
-        from app.infrastructure.db.models.activity import ActivityModel
-        from app.infrastructure.db.models.milestone import MilestoneModel
-        from app.infrastructure.db.models.project import ProjectModel
-        from datetime import datetime, timezone, timedelta
-        now = datetime.now(timezone.utc)
-        proj = db_session.query(ProjectModel).filter_by(id=p["id"]).one()
-        if proj.start_date is None:
-            db_session.query(ProjectModel).filter_by(id=p["id"]).update({
-                "start_date": now + timedelta(days=1),
-                "end_date": now + timedelta(days=90),
-            })
-        m = MilestoneModel(
-            project_id=p["id"], name="M1",
-            start_date=now + timedelta(days=2),
-            end_date=now + timedelta(days=60),
-            position=0,
-        )
-        db_session.add(m)
-        db_session.flush()
-        db_session.add(ActivityModel(
-            project_id=p["id"], milestone_id=m.id, name="A1", type="standard",
-            start_date=now + timedelta(days=3),
-            end_date=now + timedelta(days=50),
-            position=0,
-        ))
-        db_session.commit()
-        # Publish + create a version of the baseline.
-        client.post(f"/api/v3/projects/{p['id']}/publish", headers=admin_headers)
-        v_resp = client.post(
-            f"/api/v3/projects/{p['id']}/versions/create", headers=admin_headers,
-        )
-        assert v_resp.status_code == 201, v_resp.text
-        version = v_resp.json()["data"]
-
-        items = client.get(
-            f"/api/v3/vendors/{v1}", headers=admin_headers,
-        ).json()["data"]["projects"]
-        # Both baseline + version are mapped (version inherits the vendor).
-        ids = {x["id"] for x in items}
-        assert p["id"] in ids
-        assert version["id"] in ids
-        # Identify each row.
-        baseline_row = [x for x in items if x["id"] == p["id"]][0]
-        version_row  = [x for x in items if x["id"] == version["id"]][0]
-        assert baseline_row["isVersion"] is False
-        assert baseline_row["versionOf"] is None
-        assert version_row["isVersion"] is True
-        assert version_row["versionOf"] == p["id"]
+    # Doc 33: ``test_version_appears_with_isVersion_true_and_versionOf_set``
+    # was removed along with the versioning feature.
 
 
 class TestCreateVendorWithProjects:

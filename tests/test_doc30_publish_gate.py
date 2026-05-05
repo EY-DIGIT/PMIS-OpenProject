@@ -62,11 +62,8 @@ def _publish(client, headers, pid):
 
 
 def _create_version(client, headers, pid):
-    r = client.post(
-        f"/api/v3/projects/{pid}/versions/create", headers=headers,
-    )
-    assert r.status_code == 201, r.text
-    return r.json()["data"]["id"]
+    """Doc 33: versioning removed; helper is a no-op returning the input id."""
+    return pid
 
 
 # ===========================================================================

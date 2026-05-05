@@ -12,11 +12,7 @@ from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
 )
 from .....infrastructure.db.repositories.milestone_repository import MilestoneRepository
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
-    ACTION_MILESTONE_DELETE,
-    propagate_milestone_soft_delete,
-)
+from ...projects.services.audit import ACTION_MILESTONE_DELETE, record_audit
 
 
 def delete_milestone(db: Session, *, milestone_id: str, current_user_id: Optional[int]) -> None:
@@ -87,6 +83,3 @@ def delete_milestone(db: Session, *, milestone_id: str, current_user_id: Optiona
         after=None,
     )
     db.commit()
-    propagate_milestone_soft_delete(
-        db, baseline_milestone_id=milestone_id, actor_id=current_user_id,
-    )

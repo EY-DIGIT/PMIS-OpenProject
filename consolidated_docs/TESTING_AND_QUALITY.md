@@ -4,7 +4,7 @@
 
 Test framework: pytest + FastAPI `TestClient`. SQLite in-memory DB per test, app `init_db` short-circuited so each test starts from a clean slate (see [tests/conftest.py](../tests/conftest.py)).
 
-Last run: **745 passed, 3 skipped** (full suite, post-doc 32).
+Last run: **737 passed, 3 skipped** (full suite, post-doc 33 change 1).
 
 ### Test Execution
 
@@ -50,6 +50,7 @@ Last run: **745 passed, 3 skipped** (full suite, post-doc 32).
 | `test_doc30_milestone_inline_attachments.py` | **Doc 32** — multipart on milestone create. Same coverage shape as the A/T/S file. |
 | `test_doc30_legacy_project_date_equality.py` | **Doc 32 followup** — `_normalize` collapses to IST calendar midnight so legacy rows (stored as raw UTC midnight pre-doc-29) compare equal against canonical IstCalendarDate inputs. |
 | `test_doc30_position_auto_bump.py` | **Doc 32 followup** — caller-supplied `position` colliding with an existing live row no longer 500s; service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create). |
+| `test_doc33_versioning_removal.py` | **Doc 33 (change 1)** — versioning removed: `/versions/create` and `/suspend` return 404; suspended status rejected; T/S writable on the project directly; project response shape has no version fields; vendor role seeded with curated M/A/T/S CRUD permission set (no lifecycle / RBAC / master-data); audit expansion: T/S create + delete recorded on `project_audit_logs`; `actor_role` column added; `published → draft` is a legal transition. |
 | `test_labels.py` | Display labels (doc 22) — parse / format / resolve / compute / build_label_index |
 | `test_position_heal.py` | Self-heal of duplicate live positions before the partial-unique index can be added (doc 22 hotfix) |
 | `test_hierarchy.py` | Project tree shape: M → A → T → S |
@@ -71,6 +72,9 @@ Last run: **745 passed, 3 skipped** (full suite, post-doc 32).
 - **Milestone-specific dep rules (doc 31)** — milestones use a different rule than the other three kinds: `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict, equality REJECTED). Both directions guarded. Plus a status-completion gate: a milestone cannot be marked `completed` until every dep target is also `completed`.
 - **Publish gates** (doc 30): publish rejects projects with zero milestones (`no_milestones`) and any milestone with zero live activities (`milestone_without_activity`); applies uniformly to baselines and versions.
 - **Inline multipart on M/A/T/S create** (doc 32): every create endpoint accepts JSON or multipart on the same URL; multipart adds optional `body` (comment) and `files` (uploads). File pre-validation runs before the entity insert so failures don't leave orphans. Two followups bundled: `_normalize` collapses to IST calendar midnight (legacy-row tolerance), and caller-supplied `position` collisions auto-bump instead of 500.
+- **Versioning removed** (doc 33 change 1): the baseline/version split is gone — projects own their M/A/T/S directly. `/versions/create`, `/suspend`, the `suspended` status, and the `baseline_version_sync` propagation module were all removed. Tasks/subtasks now writable on the project (no version-only rule). Published is a checkpoint, revertible to draft.
+- **Vendor role** (doc 33 change 1): new built-in `vendor` role seeded with M/A/T/S CRUD + comments + attachments + read-only catalog. Excludes `projects:create/publish/close/delete*`, `rbac:*`, `roles:*`, `permissions:*`, `master_data:manage`, `users:*_all`, work packages, meeting writes.
+- **Audit expansion** (doc 33 change 1): T/S create + delete now recorded on `project_audit_logs`; M/A dep-edge changes get their own action row. New `actor_role VARCHAR(50)` column on the audit log + `idx_project_audit_logs_action`. New action constants for `task.*`, `subtask.*`, `*.dep_change`, `project.vendor.*`, `project.member.*`.
 - **Nested subtasks** (doc 24 part 2): unlimited nesting, label depth, cascade subtree on delete, position uniqueness per parent, env-var depth cap.
 - **Display labels** (doc 22): parse, format, resolve label → id, compute label, bulk index, position-heal hotfix.
 - **HAL+JSON**: response shape validation across endpoints.

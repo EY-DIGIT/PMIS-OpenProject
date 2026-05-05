@@ -85,7 +85,6 @@ def publish_project(
             from_status=project.status,
             to_status=STATUS_PUBLISHED,
             actor_is_admin=actor_is_admin,
-            project_is_version=project.is_version,
             db=db,
         )
     except ValidationError as e:

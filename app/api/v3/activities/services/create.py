@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 
 from .....core.errors import NotFoundError, ValidationError
 from .....core.project_lock import assert_milestone_activity_writable
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
-    ACTION_ACTIVITY_CREATE,
-    propagate_activity_create,
-)
+from ...projects.services.audit import ACTION_ACTIVITY_CREATE, record_audit
 from .....domain.activities.activity import (
     ACTIVITY_STATUS_CHOICES,
     ACTIVITY_STATUS_DEFAULT,
@@ -225,7 +221,6 @@ def create_activity(
         },
     )
     db.commit()
-    propagate_activity_create(db, baseline_activity_id=activity.id, actor_id=current_user_id)
     # Re-read so the returned domain model has the freshly-written mode/count.
     refreshed = repo.get_by_id(activity.id)
     out = refreshed or activity

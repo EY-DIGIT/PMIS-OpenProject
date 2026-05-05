@@ -77,22 +77,20 @@ class ProjectStatusTransitionCreateRequest(BaseModel):
     )
     to_status: str = Field(..., alias="toStatus", min_length=1, max_length=50)
     requires_admin: bool = Field(False, alias="requiresAdmin")
-    version_only: bool = Field(False, alias="versionOnly")
     description: Optional[str] = Field(None, max_length=500)
 
 
 class ProjectStatusTransitionUpdateRequest(BaseModel):
     """PATCH /api/v3/master/project_status_transitions/{id} body.
 
-    Only the policy fields (requiresAdmin, versionOnly, description) are
-    editable. The (from_status, to_status) tuple is the row's identity —
-    patching it would amount to deleting one edge and creating another.
-    Use DELETE + POST for that.
+    Only the policy fields (requiresAdmin, description) are editable.
+    The (from_status, to_status) tuple is the row's identity — patching
+    it would amount to deleting one edge and creating another. Use
+    DELETE + POST for that.
     """
     model_config = ConfigDict(populate_by_name=True)
 
     requires_admin: Optional[bool] = Field(None, alias="requiresAdmin")
-    version_only: Optional[bool] = Field(None, alias="versionOnly")
     description: Optional[str] = Field(None, max_length=500)
 
 

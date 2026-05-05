@@ -153,14 +153,9 @@ def version_activity_id(client, admin_headers):
         headers=admin_headers,
     )
     assert ar.status_code == 201, ar.text
-    # Publish + version.
-    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
-    assert pub.status_code == 200, pub.text
-    vr = client.post(f"/api/v3/projects/{pid}/versions/create", headers=admin_headers)
-    assert vr.status_code == 201, vr.text
-    vid = vr.json()["data"]["id"]
-    # Locate version twin of A1.
-    tree = client.get(f"/api/v3/projects/{vid}/tree", headers=admin_headers).json()["data"]
+    # Doc 33: versioning removed; tasks/subtasks are writable on the
+    # project directly, no publish + version step.
+    tree = client.get(f"/api/v3/projects/{pid}/tree", headers=admin_headers).json()["data"]
     return tree["milestones"][0]["activities"][0]["id"]
 
 

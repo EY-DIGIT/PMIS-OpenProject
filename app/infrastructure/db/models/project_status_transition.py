@@ -54,7 +54,6 @@ class ProjectStatusTransitionModel(Base):
     to_status = Column(String(50), nullable=False, index=True)
 
     requires_admin = Column(Boolean, default=False, nullable=False)
-    version_only = Column(Boolean, default=False, nullable=False)
     active = Column(Boolean, default=True, nullable=False, index=True)
 
     description = Column(String(500), nullable=True)
@@ -74,5 +73,5 @@ class ProjectStatusTransitionModel(Base):
         return (
             f"<ProjectStatusTransitionModel("
             f"{self.from_status} -> {self.to_status}, "
-            f"admin={self.requires_admin}, version_only={self.version_only})>"
+            f"admin={self.requires_admin})>"
         )

@@ -541,33 +541,6 @@ class TestSharedValidationsStillApply:
         )
         assert resp.status_code == 422
 
-    def test_standard_on_version_rejected(self, client, admin_user, admin_headers):
-        """The baseline-only guard still fires on the split endpoints."""
-        pid, mid = _setup_project_and_milestone(client, admin_headers)
-        # Doc 27 publish gate: M1 needs at least one activity.
-        a = client.post(
-            f"/api/v3/milestones/{mid}/activities/standard/create",
-            json={"name": "Seed", "startDate": _iso(4), "endDate": _iso(10)},
-            headers=admin_headers,
-        )
-        assert a.status_code == 201, a.text
-        # Publish + version.
-        pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
-        assert pub.status_code == 200, pub.text
-        vr = client.post(
-            f"/api/v3/projects/{pid}/versions/create", headers=admin_headers,
-        )
-        assert vr.status_code == 201, vr.text
-        vid = vr.json()["data"]["id"]
-        # Fetch the version's cloned milestone.
-        ms = client.get(
-            f"/api/v3/projects/{vid}/milestones", headers=admin_headers,
-        )
-        version_mid = ms.json()["data"]["_embedded"]["elements"][0]["id"]
-        # Attempt to create on the version — must be rejected.
-        resp = client.post(
-            f"/api/v3/milestones/{version_mid}/activities/standard/create",
-            json={"name": "A", "startDate": _iso(4), "endDate": _iso(20)},
-            headers=admin_headers,
-        )
-        assert resp.status_code == 403, resp.text
+    # Doc 33: ``test_standard_on_version_rejected`` removed — the
+    # baseline/version split was dropped along with the versioning feature.
+    # All M/A/T/S writes are allowed on any live project.

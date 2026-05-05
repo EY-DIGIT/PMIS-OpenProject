@@ -13,11 +13,7 @@ from .....infrastructure.db.repositories.activity_repository import ActivityRepo
 from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
 )
-from ...projects.services.audit import record_audit
-from ...projects.services.baseline_version_sync import (
-    ACTION_ACTIVITY_DELETE,
-    propagate_activity_soft_delete,
-)
+from ...projects.services.audit import ACTION_ACTIVITY_DELETE, record_audit
 
 
 def delete_activity(db: Session, *, activity_id: str, current_user_id: Optional[int]) -> None:
@@ -73,6 +69,3 @@ def delete_activity(db: Session, *, activity_id: str, current_user_id: Optional[
         after=None,
     )
     db.commit()
-    propagate_activity_soft_delete(
-        db, baseline_activity_id=activity_id, actor_id=current_user_id,
-    )

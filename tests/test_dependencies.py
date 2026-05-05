@@ -93,23 +93,17 @@ def _create_activity(
 
 
 def _publish(client, admin_headers, project_id):
-    # The project needs at least one milestone with at least one activity
-    # for the doc 27 publish gate. Build helpers in this file always
-    # create activities under each milestone, so the gate is naturally
-    # satisfied by the time we reach this helper.
-    resp = client.post(
-        f"/api/v3/projects/{project_id}/publish", headers=admin_headers
-    )
-    assert resp.status_code == 200, resp.text
+    """Doc 33: tests that used to publish before creating a version no
+    longer need to. Publish is now an optional checkpoint. Keep the helper
+    callable as a no-op so call sites stay readable."""
+    return None
 
 
 def _create_version(client, admin_headers, baseline_id):
-    resp = client.post(
-        f"/api/v3/projects/{baseline_id}/versions/create",
-        headers=admin_headers,
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()["data"]["id"]
+    """Doc 33: versioning was removed. Tests that used to publish + create
+    a version now just continue to operate on the original project — T/S
+    writes are allowed directly on it. This shim returns the input id."""
+    return baseline_id
 
 
 def _list_activities_in(client, admin_headers, milestone_id):
@@ -890,24 +884,17 @@ class TestMilestoneDeleteCascadesDeps:
                     v_m1_under_a1 = ms["id"]
                 if a["name"] == "A2":
                     v_a2 = a["id"]
-        # Build tasks + subtasks under the version, with deps.
+        # Build tasks + subtasks under the project, with deps.
         t1 = _create_task(client, admin_headers, v_a1, name="T1").json()["data"]["id"]
         t2 = _create_task(client, admin_headers, v_a2, name="T2", depends_on=[t1], start_offset=65, end_offset=75).json()["data"]["id"]
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
         s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95).json()["data"]["id"]
 
-        # Find the BASELINE milestone that maps to v_m1_under_a1.
-        baseline_m1 = None
-        for ms_obj in db_session.query(
-            __import__("app.infrastructure.db.models.milestone", fromlist=["MilestoneModel"]).MilestoneModel
-        ).all():
-            if ms_obj.id == v_m1_under_a1:
-                baseline_m1 = ms_obj.cloned_from_id
-                break
-        assert baseline_m1 is not None
-
-        # Delete the baseline milestone — triggers version propagation.
-        resp = client.delete(f"/api/v3/milestones/{baseline_m1}", headers=admin_headers)
+        # Doc 33: with versioning removed, ``v_m1_under_a1`` IS the
+        # milestone we want to delete (no baseline twin to walk up to).
+        # Delete that milestone — cascades soft-delete to its A/T/S subtree
+        # and every dep edge that touches it.
+        resp = client.delete(f"/api/v3/milestones/{v_m1_under_a1}", headers=admin_headers)
         assert resp.status_code in (200, 204), resp.text
         db_session.expire_all()
 

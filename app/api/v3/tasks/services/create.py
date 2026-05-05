@@ -249,6 +249,25 @@ def create_task(
             actor_id=current_user_id,
         )
 
+    # Doc 33: audit task creation at the project level so the project's
+    # log shows every M/A/T/S write, not just M/A.
+    from ...projects.services.audit import ACTION_TASK_CREATE, record_audit
+    record_audit(
+        db,
+        project_id=activity.project_id,
+        actor_id=current_user_id,
+        action=ACTION_TASK_CREATE,
+        before=None,
+        after={
+            "task_id": task.id,
+            "activity_id": activity_id,
+            "name": task.name,
+            "type": task.type,
+            "start_date": task.start_date.isoformat() if task.start_date else None,
+            "end_date": task.end_date.isoformat() if task.end_date else None,
+            "depends_on": list(desired_deps),
+        },
+    )
     db.commit()
     refreshed = repo.get_by_id(task.id)
     out = refreshed or task

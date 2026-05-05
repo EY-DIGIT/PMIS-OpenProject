@@ -35,3 +35,19 @@ def delete_task(db: Session, *, task_id: str, current_user_id: Optional[int]) ->
         actor_id=current_user_id,
     )
     repo.soft_delete_with_cascade(task_id, deleted_by=current_user_id)
+
+    # Doc 33: subtree audit expansion.
+    from ...projects.services.audit import ACTION_TASK_DELETE, record_audit
+    record_audit(
+        db,
+        project_id=model.project_id,
+        actor_id=current_user_id,
+        action=ACTION_TASK_DELETE,
+        before={
+            "task_id": task_id,
+            "name": model.name,
+            "activity_id": model.activity_id,
+        },
+        after=None,
+    )
+    db.commit()
