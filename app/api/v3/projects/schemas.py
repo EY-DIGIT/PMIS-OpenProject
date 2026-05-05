@@ -5,6 +5,8 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
+from ....shared.datetime import IstCalendarDate
+
 from .services.transitions import (
     CATEGORY_OTHERS,
     PROJECT_STATUS_CHOICES,
@@ -81,8 +83,11 @@ class ProjectCreateRequest(BaseModel):
             "list may freely mix the two forms."
         ),
     )
-    start_date: Optional[datetime] = Field(None, alias="startDate")
-    end_date: Optional[datetime] = Field(None, alias="endDate")
+    # Doc 29: IstCalendarDate normalizes any submitted datetime to IST
+    # midnight of the IST-local calendar date. Eliminates cross-format
+    # mismatches between project / milestone / activity creates.
+    start_date: Optional[IstCalendarDate] = Field(None, alias="startDate")
+    end_date: Optional[IstCalendarDate] = Field(None, alias="endDate")
 
     @field_validator("status")
     @classmethod
@@ -161,10 +166,14 @@ class ProjectUpdateRequest(BaseModel):
             "the two forms."
         ),
     )
-    start_date: Optional[datetime] = Field(None, alias="startDate")
-    end_date: Optional[datetime] = Field(None, alias="endDate")
-    actual_start_date: Optional[datetime] = Field(None, alias="actualStartDate")
-    actual_end_date: Optional[datetime] = Field(None, alias="actualEndDate")
+    # Doc 29: IstCalendarDate normalizes any submitted datetime to IST
+    # midnight of the IST-local calendar date. Eliminates cross-format
+    # mismatches between project / milestone / activity creates.
+    start_date: Optional[IstCalendarDate] = Field(None, alias="startDate")
+    end_date: Optional[IstCalendarDate] = Field(None, alias="endDate")
+    # Doc 29: IstCalendarDate normalization (see start_date above).
+    actual_start_date: Optional[IstCalendarDate] = Field(None, alias="actualStartDate")
+    actual_end_date: Optional[IstCalendarDate] = Field(None, alias="actualEndDate")
 
     @field_validator("status")
     @classmethod
@@ -258,8 +267,11 @@ class ProjectUpsertRequest(BaseModel):
             "``VN-...`` code (doc 25); the list may freely mix forms."
         ),
     )
-    start_date: Optional[datetime] = Field(None, alias="startDate")
-    end_date: Optional[datetime] = Field(None, alias="endDate")
+    # Doc 29: IstCalendarDate normalizes any submitted datetime to IST
+    # midnight of the IST-local calendar date. Eliminates cross-format
+    # mismatches between project / milestone / activity creates.
+    start_date: Optional[IstCalendarDate] = Field(None, alias="startDate")
+    end_date: Optional[IstCalendarDate] = Field(None, alias="endDate")
 
     @field_validator("status")
     @classmethod

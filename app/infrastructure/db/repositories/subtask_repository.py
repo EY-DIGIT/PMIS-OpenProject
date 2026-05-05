@@ -78,7 +78,24 @@ class SubtaskRepository:
         self, task_id: str, offset: int = 0, limit: int = 20,
         include_deleted: bool = False,
     ) -> Tuple[List[Subtask], int]:
-        base = self.db.query(SubtaskModel).filter(SubtaskModel.task_id == task_id)
+        """List **TOP-LEVEL** subtasks under a task (paginated).
+
+        Doc 28 fix: pre-fix, this returned every subtask in the subtree
+        flat (because ``task_id`` is denormalized to the root task on
+        every nested row). The FE used the result to render rows and
+        every nested subtask appeared as a sibling of its parent.
+
+        The fix scopes the query to ``parent_subtask_id IS NULL`` so
+        ``total`` and pagination apply only to the top-level subtasks.
+        Callers that need the full subtree (controller list + tree) load
+        the nested rows separately via ``list_nested_under_task`` and
+        embed them recursively.
+        """
+        base = (
+            self.db.query(SubtaskModel)
+            .filter(SubtaskModel.task_id == task_id)
+            .filter(SubtaskModel.parent_subtask_id.is_(None))
+        )
         if not include_deleted:
             base = base.filter(SubtaskModel.deleted_at.is_(None))
         total = base.with_entities(func.count(SubtaskModel.id)).scalar() or 0
@@ -87,6 +104,30 @@ class SubtaskRepository:
             .offset(offset).limit(limit).all()
         )
         return [self._to_domain(r) for r in rows], total
+
+    def list_nested_under_task(
+        self, task_id: str, include_deleted: bool = False,
+    ) -> List[Subtask]:
+        """Return EVERY nested subtask (parent_subtask_id IS NOT NULL)
+        under a given task, flat. Caller groups by parent_subtask_id to
+        embed children under each top-level row.
+
+        Doc 28: the controller's list endpoint loads the top-level rows
+        via ``list_by_task`` then this method to populate ``subtasks[]``
+        recursively. One extra query per task — small constant cost,
+        avoids N+1 across the subtree depth.
+        """
+        q = (
+            self.db.query(SubtaskModel)
+            .filter(SubtaskModel.task_id == task_id)
+            .filter(SubtaskModel.parent_subtask_id.isnot(None))
+        )
+        if not include_deleted:
+            q = q.filter(SubtaskModel.deleted_at.is_(None))
+        rows = q.order_by(
+            SubtaskModel.position.asc(), SubtaskModel.id.asc()
+        ).all()
+        return [self._to_domain(r) for r in rows]
 
     def next_position(self, task_id: str) -> int:
         """Next position for a TOP-LEVEL subtask (parent_subtask_id IS NULL).

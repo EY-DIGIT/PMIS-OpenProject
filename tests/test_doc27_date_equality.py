@@ -168,7 +168,15 @@ class TestStorageIsCanonicalUtc:
             f"Expected UTC-converted storage, got wall-clock: {raw!r}"
         )
 
-    def test_utc_input_stored_unchanged(self, client, admin_user, admin_headers, db_session):
+    def test_utc_input_resolved_to_ist_calendar_date(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Doc 29 update: UTC input is no longer stored unchanged. The
+        ``IstCalendarDate`` schema normalization collapses any input to
+        IST midnight of the IST-local calendar date. UTC midnight ``Z``
+        for May 4 = 5:30 AM IST May 4 → IST date May 4 → IST midnight
+        May 4 → UTC 18:30 prev day. So a UTC ``Z`` input lands as
+        ``YYYY-MM-(DD-1) 18:30:00`` UTC in storage."""
         proj = _create_project(
             client, admin_headers,
             start_iso=_iso_utc(2026, 7, 10),
@@ -180,7 +188,8 @@ class TestStorageIsCanonicalUtc:
             {"pid": pid},
         ).fetchone()
         raw = str(row[0])
-        assert "2026-07-10 00:00" in raw, raw
+        # IST midnight July 10 = July 9 18:30:00 UTC.
+        assert "2026-07-09 18:30" in raw, raw
 
 
 # ===========================================================================

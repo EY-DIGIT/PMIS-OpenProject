@@ -7,6 +7,7 @@ from ....domain.milestones.milestone import (
     MILESTONE_STATUS_CHOICES,
     MILESTONE_STATUS_DEFAULT,
 )
+from ....shared.datetime import IstCalendarDate
 
 
 class MilestoneCreateRequest(BaseModel):
@@ -15,8 +16,13 @@ class MilestoneCreateRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=5000)
-    start_date: datetime = Field(..., alias="startDate")
-    end_date: datetime = Field(..., alias="endDate")
+    # Doc 29: IstCalendarDate normalizes any submitted datetime to IST
+    # midnight of the IST-local calendar date — collapses cross-format
+    # FE inputs (UTC Z, IST +05:30, naive, end-of-day variants) to a
+    # single canonical instant so milestone-vs-project comparisons
+    # don't trip on encoding mismatches.
+    start_date: IstCalendarDate = Field(..., alias="startDate")
+    end_date: IstCalendarDate = Field(..., alias="endDate")
     position: Optional[int] = Field(None, ge=0, description="Optional; auto-assigned if omitted")
 
     # Configurable status — values in MILESTONE_STATUS_CHOICES. Defaults to
@@ -83,8 +89,9 @@ class MilestoneUpdateRequest(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=5000)
-    start_date: Optional[datetime] = Field(None, alias="startDate")
-    end_date: Optional[datetime] = Field(None, alias="endDate")
+    # Doc 29: IstCalendarDate normalization (see MilestoneCreateRequest).
+    start_date: Optional[IstCalendarDate] = Field(None, alias="startDate")
+    end_date: Optional[IstCalendarDate] = Field(None, alias="endDate")
     position: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None
     depends_on: Optional[List[str]] = Field(

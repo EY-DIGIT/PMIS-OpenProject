@@ -1,5 +1,6 @@
 """Subtasks controller."""
-from typing import Any, Dict, Optional
+from collections import defaultdict
+from typing import Any, Dict, List, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -43,7 +44,16 @@ def format_subtask_response(
     resource: Optional[Dict[str, Any]] = None,
     label_index: Optional[LabelIndex] = None,
     base_url: str = "/api/v3",
+    *,
+    nested_subtasks: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
+    """Format a Subtask response.
+
+    Doc 28: when ``nested_subtasks`` is provided, it's emitted under the
+    ``subtasks`` key — recursive structure for tree-rendering FE clients.
+    The list endpoint passes the row's pre-built children here; the
+    single-GET endpoint omits it (single-row reads stay flat).
+    """
     deps = s.get("depends_on") or []
     display_code = (
         label_index.label_of(KIND_SUBTASK, s["id"]) if label_index else None
@@ -51,7 +61,7 @@ def format_subtask_response(
     deps_display = (
         label_index.labels_of(KIND_SUBTASK, deps) if label_index else []
     )
-    return {
+    out = {
         "_type": "Subtask",
         "_links": {
             "self": {"href": f"{base_url}/subtasks/{s['id']}", "title": s["name"]},
@@ -82,6 +92,9 @@ def format_subtask_response(
         "deletedAt": s["deleted_at"],
         "resource": _format_resource(resource),
     }
+    if nested_subtasks is not None:
+        out["subtasks"] = nested_subtasks
+    return out
 
 
 class SubtaskController:
@@ -142,13 +155,62 @@ class SubtaskController:
 
     @staticmethod
     def list(request: Request, task_id: str, query: SubtaskListQuery, db: Session) -> JSONResponse:
-        paged = list_subtasks(db, task_id=task_id, page=query.offset, page_size=query.pageSize, include_deleted=query.includeDeleted)
-        items_data = list(paged.items)
-        idx = (
-            build_label_index_for_project(db, items_data[0].project_id)
-            if items_data else None
+        """List top-level subtasks under a task with nested children
+        embedded recursively (doc 28).
+
+        Response shape:
+          - ``total``    — count of top-level subtasks (paginated)
+          - ``count``    — top-level rows on this page
+          - ``elements`` — top-level rows; each carries a ``subtasks``
+                          array with its descendants nested recursively
+                          (matches the tree endpoint's subtask node shape).
+
+        Pre-doc-28: the response was a flat list of EVERY subtask under
+        the task — top-level + nested — sorted by ``(position, id)``,
+        which mixed depths together. The FE rendered each row at the
+        same indentation, so nesting was invisible.
+        """
+        paged = list_subtasks(
+            db, task_id=task_id,
+            page=query.offset, page_size=query.pageSize,
+            include_deleted=query.includeDeleted,
         )
-        items = [format_subtask_response(s.to_dict(), None, label_index=idx) for s in items_data]
+        top_level = list(paged.items)
+        nested_flat = list(paged.nested)
+
+        # Label index built once across top-level + nested (single
+        # project_id since they're all under the same task).
+        idx = (
+            build_label_index_for_project(
+                db, (top_level[0].project_id if top_level else nested_flat[0].project_id),
+            )
+            if (top_level or nested_flat) else None
+        )
+
+        # Adjacency map: parent_subtask_id → [children domain objects].
+        # Sort each bucket by (position, id) so the nested order matches
+        # the tree endpoint and the underlying SQL ordering.
+        children_by_parent: Dict[str, List] = defaultdict(list)
+        for s in nested_flat:
+            children_by_parent[s.parent_subtask_id].append(s)
+        for bucket in children_by_parent.values():
+            bucket.sort(key=lambda x: (x.position, x.id))
+
+        def _build(s) -> Dict[str, Any]:
+            """Recursive: format ``s`` and embed its children under
+            ``subtasks: [...]``. Each leaf row gets ``subtasks: []`` so
+            the FE iteration stays uniform (no None / missing key).
+            """
+            return format_subtask_response(
+                s.to_dict(),
+                resource=None,
+                label_index=idx,
+                nested_subtasks=[
+                    _build(child) for child in children_by_parent.get(s.id, [])
+                ],
+            )
+
+        items = [_build(s) for s in top_level]
         payload = {
             "_type": "Collection",
             "_links": {"self": {"href": f"/api/v3/tasks/{task_id}/subtasks?offset={paged.page}&pageSize={paged.page_size}"}},
