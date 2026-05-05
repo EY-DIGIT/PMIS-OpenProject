@@ -4,7 +4,7 @@
 
 Test framework: pytest + FastAPI `TestClient`. SQLite in-memory DB per test, app `init_db` short-circuited so each test starts from a clean slate (see [tests/conftest.py](../tests/conftest.py)).
 
-Last run: **737 passed, 3 skipped** (full suite, post-doc 33 change 1).
+Last run: **751 passed, 3 skipped** (full suite, post-doc 33 change 2).
 
 ### Test Execution
 
@@ -51,6 +51,7 @@ Last run: **737 passed, 3 skipped** (full suite, post-doc 33 change 1).
 | `test_doc30_legacy_project_date_equality.py` | **Doc 32 followup** — `_normalize` collapses to IST calendar midnight so legacy rows (stored as raw UTC midnight pre-doc-29) compare equal against canonical IstCalendarDate inputs. |
 | `test_doc30_position_auto_bump.py` | **Doc 32 followup** — caller-supplied `position` colliding with an existing live row no longer 500s; service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create). |
 | `test_doc33_versioning_removal.py` | **Doc 33 (change 1)** — versioning removed: `/versions/create` and `/suspend` return 404; suspended status rejected; T/S writable on the project directly; project response shape has no version fields; vendor role seeded with curated M/A/T/S CRUD permission set (no lifecycle / RBAC / master-data); audit expansion: T/S create + delete recorded on `project_audit_logs`; `actor_role` column added; `published → draft` is a legal transition. |
+| `test_doc33_rbac_extension.py` | **Doc 33 (change 2)** — RBAC extension: `GET /api/v3/master/permissions/by-module` groups the catalog by module prefix (alphabetised, sorted permissions per bucket); runtime-registered permissions appear in the right bucket; `Role` enum + `ROLE_PERMISSIONS` dict + `has_permission`/`get_role_permissions` helpers deleted from `app/core/rbac.py`; `Permission` enum kept as transitional bridge. |
 | `test_labels.py` | Display labels (doc 22) — parse / format / resolve / compute / build_label_index |
 | `test_position_heal.py` | Self-heal of duplicate live positions before the partial-unique index can be added (doc 22 hotfix) |
 | `test_hierarchy.py` | Project tree shape: M → A → T → S |

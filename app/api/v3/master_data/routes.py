@@ -36,6 +36,7 @@ from ....infrastructure.db.repositories.division_repository import (
 from ....infrastructure.db.repositories.project_status_transition_repository import (
     ProjectStatusTransitionRepository,
 )
+from ....infrastructure.db.repositories.rbac_repository import RbacRepository
 from ....infrastructure.db.repositories.resource_type_repository import (
     ResourceTypeRepository,
 )
@@ -800,6 +801,61 @@ def list_master_permissions(
             request=request, offset=offset, pageSize=pageSize, db=db,
         ),
     )
+
+
+@router.get(
+    "/permissions/by-module",
+    dependencies=[require_permission(Permission.MASTER_DATA_VIEW)],
+    summary="List the permission catalog grouped by module (doc 33 change 2)",
+    description=(
+        "Returns the full permission catalog bucketed by module — the "
+        "leading segment of each ``module:action`` code. The FE uses this "
+        "to render a permission picker tree without parsing codes "
+        "client-side. Admin-defined modules (created via "
+        "``POST /master/permissions/create`` with codes like "
+        "``custom_module:my_action``) appear in the same response."
+    ),
+)
+def list_master_permissions_by_module(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    from collections import defaultdict
+    repo = RbacRepository(db)
+    # Fetch every permission row in one go — catalog is small (~50 rows
+    # built-in plus any custom additions). No pagination.
+    rows, total = repo.list_permissions(offset=0, limit=10_000)
+    # Group by module = the part before ``:`` in the code. Codes without
+    # a colon (defensive) bucket under "_uncategorised".
+    buckets: Dict[str, list] = defaultdict(list)
+    for r in rows:
+        module = r.code.split(":", 1)[0] if ":" in r.code else "_uncategorised"
+        buckets[module].append({
+            "_type": "Permission",
+            "code": r.code,
+            "name": r.name,
+            "description": r.description,
+            "isBuiltin": bool(r.is_builtin),
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+            "updatedAt": r.updated_at.isoformat() if r.updated_at else None,
+        })
+    modules_list = [
+        {
+            "_type": "PermissionModule",
+            "module": module,
+            "count": len(perms),
+            "permissions": sorted(perms, key=lambda p: p["code"]),
+        }
+        for module, perms in sorted(buckets.items(), key=lambda kv: kv[0])
+    ]
+    payload = {
+        "_type": "PermissionsByModule",
+        "_links": {"self": {"href": "/api/v3/master/permissions/by-module"}},
+        "moduleCount": len(modules_list),
+        "totalPermissions": total,
+        "_embedded": {"modules": modules_list},
+    }
+    return BaseController.ok(data=payload)
 
 
 @router.get(
