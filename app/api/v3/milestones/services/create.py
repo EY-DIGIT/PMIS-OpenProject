@@ -168,7 +168,22 @@ def create_milestone(
         resolved_vendor_ids = canonical_ids
 
     repo = MilestoneRepository(db)
-    if position is None:
+    # Doc 30 follow-up: auto-bump on position collision.
+    #
+    # Pre-fix, the service only auto-assigned when ``position is None``.
+    # If the caller supplied a position that was already taken by a live
+    # milestone in the same project, the INSERT below tripped the
+    # ``uq_milestones_project_position_live`` unique index and bubbled up
+    # as a 500. Swagger UI's multipart "Try it out" auto-fills the
+    # ``position`` field with ``0``, making the second milestone created
+    # via Swagger a guaranteed crash.
+    #
+    # Position is only an ordering hint; if a caller's preferred slot is
+    # already filled we silently fall back to the next free slot rather
+    # than reject. Genuine "insert at the top" semantics aren't a thing
+    # on this endpoint — repositioning happens via separate
+    # update / move endpoints.
+    if position is None or repo.position_taken(project_id, position):
         position = repo.next_position(project_id)
 
     m = repo.create(

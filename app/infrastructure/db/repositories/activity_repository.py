@@ -108,6 +108,18 @@ class ActivityRepository:
         )
         return (cur or 0) + 1
 
+    def position_taken(self, milestone_id: str, position: int) -> bool:
+        """True iff a live activity in ``milestone_id`` already occupies
+        ``position``. Lets the create service auto-bump caller-supplied
+        positions that would otherwise trip the unique index — see
+        ``MilestoneRepository.position_taken`` for the same rationale.
+        """
+        return self.db.query(ActivityModel.id).filter(
+            ActivityModel.milestone_id == milestone_id,
+            ActivityModel.position == position,
+            ActivityModel.deleted_at.is_(None),
+        ).first() is not None
+
     def get_live_resource(self, activity_id: str) -> Optional[ActivityResource]:
         row = (
             self.db.query(ActivityResourceModel)

@@ -2,19 +2,51 @@
 from typing import Any, Dict, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....core.response import (
+    format_attachment_response,
+    format_comment_response,
+    format_error_response,
+)
 from ....shared.labels import (
     KIND_TASK,
     LabelIndex,
     build_label_index_for_project,
 )
+
+# Doc 30: shared multipart machinery.
+from .._inline_attachments import (
+    Multipart422,
+    extract_files_from_form,
+    parse_form_fields,
+    persist_inline_comment_or_files,
+    pre_validate_files,
+    sanitize_pydantic_errors,
+)
+
 from .schemas import TaskCreateRequest, TaskUpdateRequest, TaskListQuery
 from .services import (
     create_task, get_task_with_resource, list_tasks,
     update_task, delete_task, restore_task,
 )
+
+
+# Doc 30 form-field spec. Tasks accept the same shape as activities
+# minus the type discriminator — type is inherited from the parent
+# activity. ``resourceMode`` / ``resourceCount`` / ``resource`` are
+# only meaningful when the parent's type is 'resource'; the service
+# layer rejects them otherwise.
+_TASK_REQUIRED_STRING_KEYS = ("name",)
+_TASK_OPTIONAL_STRING_KEYS = (
+    "description", "startDate", "endDate", "actualStartDate", "actualEndDate",
+    "resourceMode",
+)
+_TASK_INT_KEYS = ("position", "resourceCount")
+_TASK_ARRAY_KEYS = ("dependsOn",)
+_TASK_OBJECT_KEYS = ("resource",)
 
 
 def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -105,6 +137,119 @@ class TaskController:
         return BaseController.created(data=format_task_response(
             t.to_dict(), r.to_dict() if r else None, label_index=idx,
         ))
+
+    @staticmethod
+    async def create_multipart(
+        request: Request, activity_id: str, db: Session,
+    ) -> JSONResponse:
+        """Doc 30: create a task PLUS optional inline comment / files.
+
+        Multipart form mirrors the JSON body 1:1 (same field names);
+        ``dependsOn`` is JSON-encoded; ``resource`` (when the parent
+        activity is type='resource' in details mode) is JSON-encoded
+        as an object string. Plus the comment/file fields:
+          * ``body``  — optional comment text
+          * ``files`` — optional repeatable file uploads
+        """
+        form = await request.form()
+
+        # ---- 1. Parse + Pydantic-validate task fields -------------------
+        try:
+            fields = parse_form_fields(
+                form,
+                required_string_keys=_TASK_REQUIRED_STRING_KEYS,
+                string_keys=_TASK_OPTIONAL_STRING_KEYS,
+                int_keys=_TASK_INT_KEYS,
+                array_keys=_TASK_ARRAY_KEYS,
+                object_keys=_TASK_OBJECT_KEYS,
+            )
+        except Multipart422 as e:
+            return BaseController.error(
+                format_error_response(
+                    error_type="validation_error",
+                    message="Invalid task form fields.",
+                    details={"errors": e.detail},
+                ),
+                status=422,
+            )
+        try:
+            data = TaskCreateRequest.model_validate(fields)
+        except ValidationError as e:
+            return BaseController.error(
+                format_error_response(
+                    error_type="validation_error",
+                    message="Task field validation failed.",
+                    details={"errors": sanitize_pydantic_errors(e.errors())},
+                ),
+                status=422,
+            )
+
+        body = form.get("body") or ""
+        if not isinstance(body, str):
+            body = ""
+        files = extract_files_from_form(form)
+
+        # ---- 1b. Pre-validate files BEFORE the task is inserted. --------
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+
+        # ---- 2. Create task --------------------------------------------
+        cuid = getattr(request.state, "user_id", None)
+        rd = data.resource.model_dump() if data.resource else None
+        t, r = create_task(
+            db,
+            activity_id=activity_id,
+            name=data.name, description=data.description,
+            start_date=data.start_date, end_date=data.end_date,
+            actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
+        )
+
+        # ---- 3. Inline comment / standalone attachments ----------------
+        comment_payload, standalone_payload, err_tuple = persist_inline_comment_or_files(
+            db,
+            target_kind="task",
+            target_id=t.id,
+            body=body,
+            files=files,
+            current_user_id=cuid,
+            format_comment_response=format_comment_response,
+            format_attachment_response=format_attachment_response,
+            parent_label="Task",
+            retry_endpoint_path=f"POST /api/v3/tasks/{t.id}/comments",
+        )
+        if err_tuple is not None:
+            err_dict, status = err_tuple
+            return BaseController.error(
+                format_error_response(
+                    error_type=err_dict["error_type"],
+                    message=err_dict["message"],
+                    details=err_dict["details"],
+                ),
+                status=status,
+            )
+
+        # ---- 4. Build response -----------------------------------------
+        idx = build_label_index_for_project(db, t.project_id)
+        response_data = format_task_response(
+            t.to_dict(), r.to_dict() if r else None, label_index=idx,
+        )
+        if comment_payload is not None:
+            response_data["comment"] = comment_payload
+        if standalone_payload:
+            response_data["standaloneAttachments"] = standalone_payload
+        return BaseController.created(data=response_data)
 
     @staticmethod
     def list(request: Request, activity_id: str, query: TaskListQuery, db: Session) -> JSONResponse:

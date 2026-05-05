@@ -166,7 +166,13 @@ def create_activity(
             )
 
     repo = ActivityRepository(db)
-    pos = position if position is not None else repo.next_position(milestone_id)
+    # Doc 30 follow-up: auto-bump on position collision (see milestone
+    # create service for full rationale). Caller-supplied position that
+    # already exists in the same milestone falls back to next_position.
+    if position is None or repo.position_taken(milestone_id, position):
+        pos = repo.next_position(milestone_id)
+    else:
+        pos = position
 
     activity = repo.create(
         project_id=milestone.project_id,

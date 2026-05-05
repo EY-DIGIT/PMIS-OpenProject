@@ -97,6 +97,18 @@ class TaskRepository:
         )
         return (cur or 0) + 1
 
+    def position_taken(self, activity_id: str, position: int) -> bool:
+        """True iff a live task in ``activity_id`` already occupies
+        ``position``. Lets the create service auto-bump caller-supplied
+        positions that would otherwise trip the unique index — see
+        ``MilestoneRepository.position_taken`` for the rationale.
+        """
+        return self.db.query(TaskModel.id).filter(
+            TaskModel.activity_id == activity_id,
+            TaskModel.position == position,
+            TaskModel.deleted_at.is_(None),
+        ).first() is not None
+
     def get_live_resource(self, task_id: str) -> Optional[TaskResource]:
         row = (
             self.db.query(TaskResourceModel)

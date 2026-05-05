@@ -2,14 +2,32 @@
 from typing import Any, Dict, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....core.response import (
+    format_attachment_response,
+    format_comment_response,
+    format_error_response,
+)
 from ....shared.labels import (
     KIND_ACTIVITY,
     LabelIndex,
     build_label_index_for_project,
 )
+
+# Doc 30: shared multipart machinery (file pre-validation, generic form
+# parser, error sanitization, comment/attachment dispatcher).
+from .._inline_attachments import (
+    Multipart422,
+    extract_files_from_form,
+    parse_form_fields,
+    persist_inline_comment_or_files,
+    pre_validate_files,
+    sanitize_pydantic_errors,
+)
+
 from .schemas import (
     ActivityUpdateRequest,
     ActivityListQuery,
@@ -22,6 +40,28 @@ from .services import (
     create_activity, get_activity_with_resource, list_activities,
     update_activity, delete_activity, restore_activity,
 )
+
+
+# ---------------------------------------------------------------------------
+# Doc 30 multipart-form specs.
+#
+# Each create variant has its own Pydantic schema and therefore its own
+# field set. The four common fields (name + dates + position + status +
+# dependsOn) are inherited from _ActivityCommonFields; the variants add:
+#   resource/count   → resourceCount (int, REQUIRED)
+#   resource/details → resource (JSON-encoded object, REQUIRED)
+#   standard / transactional → no extras
+# ---------------------------------------------------------------------------
+_ACTIVITY_REQUIRED_STRING_KEYS = ("name",)
+_ACTIVITY_OPTIONAL_STRING_KEYS = (
+    "description", "startDate", "endDate", "actualStartDate", "actualEndDate",
+    "status",
+)
+_ACTIVITY_INT_KEYS_BASE = ("position",)
+_ACTIVITY_ARRAY_KEYS = ("dependsOn",)
+# resource/count adds resourceCount; resource/details adds resource
+_RESOURCE_COUNT_INT_KEYS = _ACTIVITY_INT_KEYS_BASE + ("resourceCount",)
+_RESOURCE_DETAILS_OBJECT_KEYS = ("resource",)
 
 
 def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -98,6 +138,102 @@ def format_activity_response(
         "deletedAt": a["deleted_at"],
         "resource": _format_resource(resource),
     }
+
+
+async def _parse_and_validate_multipart_activity(
+    request: Request,
+    schema_cls: type[BaseModel],
+    *,
+    int_keys: tuple = _ACTIVITY_INT_KEYS_BASE,
+    object_keys: tuple = (),
+):
+    """Doc 30 — shared first-half of every multipart activity-create variant.
+
+    Pulls the form, runs the generic parser with the right key spec for
+    this variant, then validates against the variant's Pydantic schema.
+    Returns ``(data_model, body_str, files_list)`` on success, or a
+    ``JSONResponse`` 422 on parse / validation failure (the caller
+    short-circuits on the response).
+    """
+    form = await request.form()
+    try:
+        fields = parse_form_fields(
+            form,
+            required_string_keys=_ACTIVITY_REQUIRED_STRING_KEYS,
+            string_keys=_ACTIVITY_OPTIONAL_STRING_KEYS,
+            int_keys=int_keys,
+            array_keys=_ACTIVITY_ARRAY_KEYS,
+            object_keys=object_keys,
+        )
+    except Multipart422 as e:
+        return BaseController.error(
+            format_error_response(
+                error_type="validation_error",
+                message="Invalid activity form fields.",
+                details={"errors": e.detail},
+            ),
+            status=422,
+        ), None, None
+    try:
+        data = schema_cls.model_validate(fields)
+    except ValidationError as e:
+        return BaseController.error(
+            format_error_response(
+                error_type="validation_error",
+                message="Activity field validation failed.",
+                details={"errors": sanitize_pydantic_errors(e.errors())},
+            ),
+            status=422,
+        ), None, None
+    body = form.get("body") or ""
+    if not isinstance(body, str):
+        body = ""
+    files = extract_files_from_form(form)
+    return data, body, files
+
+
+def _persist_activity_inline(
+    request: Request,
+    db: Session,
+    activity,
+    body: str,
+    files,
+    *,
+    activity_response: Dict[str, Any],
+) -> JSONResponse:
+    """Doc 30 — third stage: route the comment / files to the right
+    existing service after the activity has been created, build the
+    response. Pre-validation of files MUST have already happened in the
+    caller so a rejected file doesn't leave behind an orphan activity.
+    """
+    current_user_id = getattr(request.state, "user_id", None)
+    comment_payload, standalone_payload, err_tuple = persist_inline_comment_or_files(
+        db,
+        target_kind="activity",
+        target_id=activity.id,
+        body=body,
+        files=files,
+        current_user_id=current_user_id,
+        format_comment_response=format_comment_response,
+        format_attachment_response=format_attachment_response,
+        parent_label="Activity",
+        retry_endpoint_path=f"POST /api/v3/activities/{activity.id}/comments",
+    )
+    if err_tuple is not None:
+        err_dict, status = err_tuple
+        return BaseController.error(
+            format_error_response(
+                error_type=err_dict["error_type"],
+                message=err_dict["message"],
+                details=err_dict["details"],
+            ),
+            status=status,
+        )
+    if comment_payload is not None:
+        activity_response["comment"] = comment_payload
+    if standalone_payload:
+        activity_response["standaloneAttachments"] = standalone_payload
+    return BaseController.created(data=activity_response)
 
 
 class ActivityController:
@@ -245,6 +381,215 @@ class ActivityController:
             resource.to_dict() if resource else None,
             label_index=idx,
         ))
+
+    # ------------------------------------------------------------------
+    # Doc 30: multipart variants. One per type to mirror the JSON
+    # endpoints. The route layer dispatches on Content-Type and routes
+    # the multipart shape to the matching method here.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def create_standard_multipart(
+        request: Request, milestone_id: str, db: Session,
+    ) -> JSONResponse:
+        result = await _parse_and_validate_multipart_activity(
+            request, StandardActivityCreateRequest,
+        )
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        # Pre-validate files BEFORE creating the activity.
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="standard",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=None,
+            resource_count=None,
+            resource=None,
+            current_user_id=current_user_id,
+            status=data.status,
+            depends_on=data.depends_on,
+        )
+        idx = build_label_index_for_project(db, activity.project_id)
+        response_data = format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
+        )
+        return _persist_activity_inline(
+            request, db, activity, body, files,
+            activity_response=response_data,
+        )
+
+    @staticmethod
+    async def create_resource_count_multipart(
+        request: Request, milestone_id: str, db: Session,
+    ) -> JSONResponse:
+        result = await _parse_and_validate_multipart_activity(
+            request, ResourceCountActivityCreateRequest,
+            int_keys=_RESOURCE_COUNT_INT_KEYS,
+        )
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="resource",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode="count",
+            resource_count=data.resource_count,
+            resource=None,
+            current_user_id=current_user_id,
+            status=data.status,
+            depends_on=data.depends_on,
+        )
+        idx = build_label_index_for_project(db, activity.project_id)
+        response_data = format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
+        )
+        return _persist_activity_inline(
+            request, db, activity, body, files,
+            activity_response=response_data,
+        )
+
+    @staticmethod
+    async def create_resource_details_multipart(
+        request: Request, milestone_id: str, db: Session,
+    ) -> JSONResponse:
+        result = await _parse_and_validate_multipart_activity(
+            request, ResourceDetailsActivityCreateRequest,
+            object_keys=_RESOURCE_DETAILS_OBJECT_KEYS,
+        )
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="resource",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode="details",
+            resource_count=None,
+            resource=data.resource.model_dump(),
+            current_user_id=current_user_id,
+            status=data.status,
+            depends_on=data.depends_on,
+        )
+        idx = build_label_index_for_project(db, activity.project_id)
+        response_data = format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
+        )
+        return _persist_activity_inline(
+            request, db, activity, body, files,
+            activity_response=response_data,
+        )
+
+    @staticmethod
+    async def create_transactional_multipart(
+        request: Request, milestone_id: str, db: Session,
+    ) -> JSONResponse:
+        result = await _parse_and_validate_multipart_activity(
+            request, TransactionalActivityCreateRequest,
+        )
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        current_user_id = getattr(request.state, "user_id", None)
+        activity, resource = create_activity(
+            db,
+            milestone_id=milestone_id,
+            name=data.name,
+            description=data.description,
+            type="transactional",
+            start_date=data.start_date,
+            end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=None,
+            resource_count=None,
+            resource=None,
+            current_user_id=current_user_id,
+            status=data.status,
+            depends_on=data.depends_on,
+        )
+        idx = build_label_index_for_project(db, activity.project_id)
+        response_data = format_activity_response(
+            activity.to_dict(),
+            resource.to_dict() if resource else None,
+            label_index=idx,
+        )
+        return _persist_activity_inline(
+            request, db, activity, body, files,
+            activity_response=response_data,
+        )
 
     @staticmethod
     def list(request: Request, milestone_id: str, query: ActivityListQuery, db: Session) -> JSONResponse:

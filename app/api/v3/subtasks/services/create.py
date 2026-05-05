@@ -265,14 +265,23 @@ def create_subtask(
             )
 
     repo = SubtaskRepository(db)
-    if position is None:
-        pos = (
-            repo.next_position_under_subtask(parent_subtask.id)
-            if parent_subtask is not None
-            else repo.next_position(task.id)
-        )
+    # Doc 30 follow-up: auto-bump on position collision (see milestone
+    # create service for full rationale). Subtasks have two scopes:
+    # nested-under-subtask uses ``parent_subtask_id`` as the
+    # uniqueness key; top-level uses ``task_id`` with
+    # ``parent_subtask_id IS NULL``.
+    if parent_subtask is not None:
+        if position is None or repo.position_taken_under_subtask(
+            parent_subtask.id, position,
+        ):
+            pos = repo.next_position_under_subtask(parent_subtask.id)
+        else:
+            pos = position
     else:
-        pos = position
+        if position is None or repo.position_taken(task.id, position):
+            pos = repo.next_position(task.id)
+        else:
+            pos = position
 
     store_mode = resource_mode if type == SUBTASK_TYPE_RESOURCE else None
     store_count = resource_count if (

@@ -87,6 +87,24 @@ class MilestoneRepository:
         )
         return (cur or 0) + 1
 
+    def position_taken(self, project_id: str, position: int) -> bool:
+        """True iff a live milestone in ``project_id`` already occupies
+        ``position``. Used by the create service to detect a caller-supplied
+        ``position`` that would collide with the
+        ``uq_milestones_project_position_live`` unique index, so the
+        request can be transparently bumped to ``next_position`` instead
+        of crashing the INSERT with an IntegrityError → 500.
+
+        Swagger UI auto-fills the ``position`` field with ``0`` when the
+        caller doesn't override it; without this guard, the second
+        milestone created from Swagger always trips the unique index.
+        """
+        return self.db.query(MilestoneModel.id).filter(
+            MilestoneModel.project_id == project_id,
+            MilestoneModel.position == position,
+            MilestoneModel.deleted_at.is_(None),
+        ).first() is not None
+
     # ---------- writes ----------
 
     def create(

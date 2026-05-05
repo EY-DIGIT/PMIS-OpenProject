@@ -3,19 +3,145 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
+from ....core.response import (
+    format_attachment_response,
+    format_comment_response,
+    format_error_response,
+)
 from ....shared.labels import (
     KIND_SUBTASK,
     LabelIndex,
     build_label_index_for_project,
 )
+
+# Doc 30: shared multipart machinery.
+from .._inline_attachments import (
+    Multipart422,
+    extract_files_from_form,
+    parse_form_fields,
+    persist_inline_comment_or_files,
+    pre_validate_files,
+    sanitize_pydantic_errors,
+)
+
 from .schemas import SubtaskCreateRequest, SubtaskUpdateRequest, SubtaskListQuery
 from .services import (
     create_subtask, get_subtask_with_resource, list_subtasks,
     update_subtask, delete_subtask, restore_subtask,
 )
+
+
+# Doc 30 form-field spec — same shape as tasks; subtasks inherit type
+# from the parent task (which inherits from the parent activity).
+_SUBTASK_REQUIRED_STRING_KEYS = ("name",)
+_SUBTASK_OPTIONAL_STRING_KEYS = (
+    "description", "startDate", "endDate", "actualStartDate", "actualEndDate",
+    "resourceMode",
+)
+_SUBTASK_INT_KEYS = ("position", "resourceCount")
+_SUBTASK_ARRAY_KEYS = ("dependsOn",)
+_SUBTASK_OBJECT_KEYS = ("resource",)
+
+
+async def _parse_and_validate_subtask_multipart(request: Request):
+    """Doc 30: shared first-half for both subtask create variants.
+
+    Returns ``(data, body, files)`` on success, or ``(JSONResponse, None,
+    None)`` on parse / validation failure. Both task-scoped create and
+    nested-under-subtask create use the same form schema (parents inject
+    the right ``task_id`` / ``parent_subtask_id``).
+    """
+    form = await request.form()
+    try:
+        fields = parse_form_fields(
+            form,
+            required_string_keys=_SUBTASK_REQUIRED_STRING_KEYS,
+            string_keys=_SUBTASK_OPTIONAL_STRING_KEYS,
+            int_keys=_SUBTASK_INT_KEYS,
+            array_keys=_SUBTASK_ARRAY_KEYS,
+            object_keys=_SUBTASK_OBJECT_KEYS,
+        )
+    except Multipart422 as e:
+        return (
+            BaseController.error(
+                format_error_response(
+                    error_type="validation_error",
+                    message="Invalid subtask form fields.",
+                    details={"errors": e.detail},
+                ),
+                status=422,
+            ),
+            None, None,
+        )
+    try:
+        data = SubtaskCreateRequest.model_validate(fields)
+    except ValidationError as e:
+        return (
+            BaseController.error(
+                format_error_response(
+                    error_type="validation_error",
+                    message="Subtask field validation failed.",
+                    details={"errors": sanitize_pydantic_errors(e.errors())},
+                ),
+                status=422,
+            ),
+            None, None,
+        )
+    body = form.get("body") or ""
+    if not isinstance(body, str):
+        body = ""
+    files = extract_files_from_form(form)
+    return data, body, files
+
+
+def _persist_subtask_inline(
+    request: Request,
+    db: Session,
+    subtask,
+    resource,
+    body: str,
+    files,
+) -> JSONResponse:
+    """Doc 30 third stage — route comment / standalone attachments and
+    build response. Caller must have pre-validated files already."""
+    cuid = getattr(request.state, "user_id", None)
+    comment_payload, standalone_payload, err_tuple = persist_inline_comment_or_files(
+        db,
+        target_kind="subtask",
+        target_id=subtask.id,
+        body=body,
+        files=files,
+        current_user_id=cuid,
+        format_comment_response=format_comment_response,
+        format_attachment_response=format_attachment_response,
+        parent_label="Subtask",
+        retry_endpoint_path=f"POST /api/v3/subtasks/{subtask.id}/comments",
+    )
+    if err_tuple is not None:
+        err_dict, status = err_tuple
+        return BaseController.error(
+            format_error_response(
+                error_type=err_dict["error_type"],
+                message=err_dict["message"],
+                details=err_dict["details"],
+            ),
+            status=status,
+        )
+    idx = build_label_index_for_project(db, subtask.project_id)
+    response_data = format_subtask_response(
+        subtask.to_dict(),
+        resource.to_dict() if resource else None,
+        label_index=idx,
+    )
+    if comment_payload is not None:
+        response_data["comment"] = comment_payload
+    if standalone_payload:
+        response_data["standaloneAttachments"] = standalone_payload
+    return BaseController.created(data=response_data)
 
 
 def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -152,6 +278,78 @@ class SubtaskController:
         return BaseController.created(data=format_subtask_response(
             s.to_dict(), r.to_dict() if r else None, label_index=idx,
         ))
+
+    @staticmethod
+    async def create_multipart(
+        request: Request, task_id: str, db: Session,
+    ) -> JSONResponse:
+        """Doc 30: create a task-scoped subtask + optional comment / files."""
+        result = await _parse_and_validate_subtask_multipart(request)
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        cuid = getattr(request.state, "user_id", None)
+        rd = data.resource.model_dump() if data.resource else None
+        s, r = create_subtask(
+            db,
+            task_id=task_id,
+            name=data.name, description=data.description,
+            start_date=data.start_date, end_date=data.end_date,
+            actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
+        )
+        return _persist_subtask_inline(request, db, s, r, body, files)
+
+    @staticmethod
+    async def create_nested_multipart(
+        request: Request, parent_subtask_id: str, db: Session,
+    ) -> JSONResponse:
+        """Doc 30 + Doc 24: create a subtask nested under another subtask
+        + optional inline comment / files. Same form shape as the
+        task-scoped create; the service infers the root ``task_id``
+        from the parent subtask."""
+        result = await _parse_and_validate_subtask_multipart(request)
+        if isinstance(result[0], JSONResponse):
+            return result[0]
+        data, body, files = result
+        file_err = pre_validate_files(files)
+        if file_err is not None:
+            return BaseController.error(
+                format_error_response(
+                    error_type=file_err["error_type"],
+                    message=file_err["message"],
+                    details=file_err["details"],
+                ),
+                status=422,
+            )
+        cuid = getattr(request.state, "user_id", None)
+        rd = data.resource.model_dump() if data.resource else None
+        s, r = create_subtask(
+            db,
+            parent_subtask_id=parent_subtask_id,
+            name=data.name, description=data.description,
+            start_date=data.start_date, end_date=data.end_date,
+            actual_start_date=data.actual_start_date,
+            actual_end_date=data.actual_end_date,
+            position=data.position,
+            resource_mode=data.resource_mode, resource_count=data.resource_count,
+            resource=rd, current_user_id=cuid,
+            depends_on=data.depends_on,
+        )
+        return _persist_subtask_inline(request, db, s, r, body, files)
 
     @staticmethod
     def list(request: Request, task_id: str, query: SubtaskListQuery, db: Session) -> JSONResponse:

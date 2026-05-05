@@ -210,7 +210,12 @@ def create_task(
             )
 
     repo = TaskRepository(db)
-    pos = position if position is not None else repo.next_position(activity_id)
+    # Doc 30 follow-up: auto-bump on position collision (see milestone
+    # create service for full rationale).
+    if position is None or repo.position_taken(activity_id, position):
+        pos = repo.next_position(activity_id)
+    else:
+        pos = position
 
     store_mode = resource_mode if type == TASK_TYPE_RESOURCE else None
     store_count = resource_count if (

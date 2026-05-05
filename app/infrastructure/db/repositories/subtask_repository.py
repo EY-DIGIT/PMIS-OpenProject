@@ -155,6 +155,34 @@ class SubtaskRepository:
         )
         return (cur or 0) + 1
 
+    def position_taken(self, task_id: str, position: int) -> bool:
+        """True iff a live TOP-LEVEL subtask in ``task_id`` already
+        occupies ``position`` (parent_subtask_id IS NULL — same scope as
+        ``next_position``).
+
+        Lets the create service auto-bump caller-supplied positions that
+        would otherwise trip the unique index. See
+        ``MilestoneRepository.position_taken`` for the same rationale.
+        """
+        return self.db.query(SubtaskModel.id).filter(
+            SubtaskModel.task_id == task_id,
+            SubtaskModel.parent_subtask_id.is_(None),
+            SubtaskModel.position == position,
+            SubtaskModel.deleted_at.is_(None),
+        ).first() is not None
+
+    def position_taken_under_subtask(
+        self, parent_subtask_id: str, position: int,
+    ) -> bool:
+        """True iff a live nested subtask under ``parent_subtask_id``
+        already occupies ``position`` (same scope as
+        ``next_position_under_subtask``)."""
+        return self.db.query(SubtaskModel.id).filter(
+            SubtaskModel.parent_subtask_id == parent_subtask_id,
+            SubtaskModel.position == position,
+            SubtaskModel.deleted_at.is_(None),
+        ).first() is not None
+
     def ancestors(self, subtask_id: str) -> List[SubtaskModel]:
         """Return the subtask's ancestor chain, root-first.
 
