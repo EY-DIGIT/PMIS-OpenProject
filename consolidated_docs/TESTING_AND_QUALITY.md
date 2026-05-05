@@ -4,7 +4,7 @@
 
 Test framework: pytest + FastAPI `TestClient`. SQLite in-memory DB per test, app `init_db` short-circuited so each test starts from a clean slate (see [tests/conftest.py](../tests/conftest.py)).
 
-Last run: **751 passed, 3 skipped** (full suite, post-doc 33 change 2).
+Last run: **777 passed, 3 skipped** (full suite, post-doc 33 change 3 — full doc 33 shipped).
 
 ### Test Execution
 
@@ -52,6 +52,7 @@ Last run: **751 passed, 3 skipped** (full suite, post-doc 33 change 2).
 | `test_doc30_position_auto_bump.py` | **Doc 32 followup** — caller-supplied `position` colliding with an existing live row no longer 500s; service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create). |
 | `test_doc33_versioning_removal.py` | **Doc 33 (change 1)** — versioning removed: `/versions/create` and `/suspend` return 404; suspended status rejected; T/S writable on the project directly; project response shape has no version fields; vendor role seeded with curated M/A/T/S CRUD permission set (no lifecycle / RBAC / master-data); audit expansion: T/S create + delete recorded on `project_audit_logs`; `actor_role` column added; `published → draft` is a legal transition. |
 | `test_doc33_rbac_extension.py` | **Doc 33 (change 2)** — RBAC extension: `GET /api/v3/master/permissions/by-module` groups the catalog by module prefix (alphabetised, sorted permissions per bucket); runtime-registered permissions appear in the right bucket; `Role` enum + `ROLE_PERMISSIONS` dict + `has_permission`/`get_role_permissions` helpers deleted from `app/core/rbac.py`; `Permission` enum kept as transitional bridge. |
+| `test_doc33_2fa_and_password_reset.py` | **Doc 33 (change 3)** — 2FA OTP login flow + forgot-password + notification log. 26 tests across 7 classes covering: stage-1 ephemeral token issuance, channel selection, send-otp cooldown + max-attempts + expiry + single-use, verify-otp success path mints real JWTs, anti-enumeration on forgot-password, email-link / sms-OTP dispatch via `NotificationClient`, reset-password single-use + expired-token rejection, MockNotificationClient writes to `notification_log`. |
 | `test_labels.py` | Display labels (doc 22) — parse / format / resolve / compute / build_label_index |
 | `test_position_heal.py` | Self-heal of duplicate live positions before the partial-unique index can be added (doc 22 hotfix) |
 | `test_hierarchy.py` | Project tree shape: M → A → T → S |
@@ -76,6 +77,9 @@ Last run: **751 passed, 3 skipped** (full suite, post-doc 33 change 2).
 - **Versioning removed** (doc 33 change 1): the baseline/version split is gone — projects own their M/A/T/S directly. `/versions/create`, `/suspend`, the `suspended` status, and the `baseline_version_sync` propagation module were all removed. Tasks/subtasks now writable on the project (no version-only rule). Published is a checkpoint, revertible to draft.
 - **Vendor role** (doc 33 change 1): new built-in `vendor` role seeded with M/A/T/S CRUD + comments + attachments + read-only catalog. Excludes `projects:create/publish/close/delete*`, `rbac:*`, `roles:*`, `permissions:*`, `master_data:manage`, `users:*_all`, work packages, meeting writes.
 - **Audit expansion** (doc 33 change 1): T/S create + delete now recorded on `project_audit_logs`; M/A dep-edge changes get their own action row. New `actor_role VARCHAR(50)` column on the audit log + `idx_project_audit_logs_action`. New action constants for `task.*`, `subtask.*`, `*.dep_change`, `project.vendor.*`, `project.member.*`.
+- **2FA OTP login** (doc 33 change 3): two-stage login. Stage 1 `POST /users/login` returns `{requires_otp: true, ephemeral_token, channels_available}` for users with `two_factor_enabled=True` (default per Q3a.4). Stage 2 `POST /users/login/send-otp` dispatches via `NotificationClient`; stage 3 `POST /users/login/verify-otp` mints the real JWT pair. Single-use codes hashed `HMAC-SHA256(pepper, code)` in `otp_codes`. Cooldown + max-attempts + TTL all env-configurable. Channel selection (email / sms) at login time; SMS gated on `users.phone_number`.
+- **Forgot-password** (doc 33 change 3): `POST /users/forgot-password` always returns 200 (anti-enumeration). Email channel sends URL token; SMS sends 6-digit OTP. `POST /users/reset-password` accepts either form, single-use, expires after `PASSWORD_RESET_TTL_SECONDS` (default 1h).
+- **Notification log** (doc 33 change 3): every dispatched notification recorded on `notification_log` regardless of which backend (`mock` / `http`) handled it. Mock backend is the terminal sink in dev/tests; HTTP backend stub points at the in-flight microservice.
 - **Nested subtasks** (doc 24 part 2): unlimited nesting, label depth, cascade subtree on delete, position uniqueness per parent, env-var depth cap.
 - **Display labels** (doc 22): parse, format, resolve label → id, compute label, bulk index, position-heal hotfix.
 - **HAL+JSON**: response shape validation across endpoints.

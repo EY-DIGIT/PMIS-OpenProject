@@ -497,6 +497,7 @@ def second_admin_user(db_session):
         first_name="Admin",
         last_name="Two",
         status="active",
+        two_factor_enabled=False,
     )
     db_session.add(u)
     db_session.commit()

@@ -35,6 +35,10 @@ from .project_status_transition import ProjectStatusTransitionModel
 from .comment import CommentModel
 from .attachment import AttachmentModel
 from .division import DivisionModel
+# Doc 33 change 3: notification + 2FA + password-reset tables.
+from .notification_log import NotificationLogModel
+from .otp_code import OtpCodeModel
+from .password_reset_token import PasswordResetTokenModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -53,4 +57,5 @@ __all__ = [
     "CommentModel",
     "AttachmentModel",
     "DivisionModel",
+    "NotificationLogModel", "OtpCodeModel", "PasswordResetTokenModel",
 ]

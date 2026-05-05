@@ -531,6 +531,13 @@ class UserController:
         """
         Authenticate user and return token.
 
+        Doc 33 change 3 — 2FA gate: if the user has 2FA enabled (and
+        the global ``REQUIRE_2FA`` setting allows it), this endpoint
+        returns an ephemeral session token + the available channels
+        instead of the access token. The client then calls
+        ``/login/send-otp`` to receive an OTP and ``/login/verify-otp``
+        to mint the real JWT pair.
+
         Args:
             data: Login credentials
             db: Database session
@@ -546,6 +553,27 @@ class UserController:
 
         if result.is_success():
             token_data = result.data
+            # Doc 33 change 3: 2FA gate.
+            from ....infrastructure.db.repositories.user_repository import UserRepository
+            from .services.two_factor import begin_otp_challenge, is_2fa_required_for
+            user_obj = token_data.get("user")
+            if user_obj is not None and is_2fa_required_for(user_obj):
+                challenge = begin_otp_challenge(db, user_obj)
+                if challenge.is_success():
+                    # Return a 200 with requires_otp=True. No JWT minted
+                    # yet — client must call /login/send-otp + /login/verify-otp.
+                    payload = {
+                        "_type": "LoginOtpRequired",
+                        "requires_otp": True,
+                        "ephemeral_token": challenge.data["ephemeral_token"],
+                        "channels_available": challenge.data["channels_available"],
+                        "message": (
+                            "Two-factor authentication required. "
+                            "Call /users/login/send-otp with the "
+                            "ephemeral_token and a chosen channel."
+                        ),
+                    }
+                    return BaseController.ok(payload)
             # Decode the freshly-minted tokens to surface their expiry /
             # issued-at timestamps to the FE. Lets the client schedule a
             # preemptive refresh without having to decode the JWT itself.
@@ -582,6 +610,140 @@ class UserController:
             )
             resp = BaseController.error(error_response, status=401)
             return resp
+
+    @staticmethod
+    def send_otp(data, db: Session) -> JSONResponse:
+        """Doc 33 change 3 — POST /users/login/send-otp."""
+        from .services.two_factor import send_or_resend_otp
+        from ....shared.otp import hash_secret
+        # Map ephemeral_token → user_id by looking it up.
+        from ....infrastructure.db.models.otp_code import OtpCodeModel
+        # First-time send: no row exists yet. We need to fish out the
+        # user_id from the recently-issued ephemeral token. The token
+        # itself is opaque — but the login flow stamped its hash onto a
+        # Login response and the FE passes it back here. We honor either
+        # path:
+        #   (a) an existing OtpCode row already exists for this token →
+        #       pick the user_id from there (resend path).
+        #   (b) no row yet → we need to look up the user. Approach: the
+        #       ephemeral_token only appears on a successful login
+        #       response, and the FE stores it client-side. We DO NOT
+        #       have a server-side mapping from token to user yet, so
+        #       we must add one. Easiest: a tiny in-memory cache keyed
+        #       by hash, but that doesn't survive restarts. Instead,
+        #       the login controller already created a sentinel
+        #       OtpCodeModel row with consumed_at=now and user_id set
+        #       so we can resolve here even before any code is sent.
+        # Implementation note: we sidestep the bookkeeping by stamping
+        # a sentinel OTP row at /login (consumed=True, no code generated).
+        # See login() above where this is wired.
+        token_hash = hash_secret(data.ephemeral_token)
+        sentinel = (
+            db.query(OtpCodeModel)
+            .filter(OtpCodeModel.ephemeral_token_hash == token_hash)
+            .order_by(OtpCodeModel.id.desc())
+            .first()
+        )
+        if sentinel is None:
+            return BaseController.error(
+                format_error_response(
+                    "invalid_credentials",
+                    "Invalid or expired ephemeral session.",
+                ),
+                status=401,
+            )
+        result = send_or_resend_otp(
+            db, user_id=sentinel.user_id,
+            ephemeral_token=data.ephemeral_token,
+            channel=data.channel,
+        )
+        if not result.is_success():
+            err_status = 429 if result.error_type == "cooldown" else (
+                422 if result.error_type == "validation_error" else 401
+            )
+            return BaseController.error(
+                format_error_response(
+                    result.error_type, result.error, details=result.details,
+                ),
+                status=err_status,
+            )
+        payload = {"_type": "OtpSent", **result.data}
+        return BaseController.ok(payload)
+
+    @staticmethod
+    def verify_otp(data, db: Session) -> JSONResponse:
+        """Doc 33 change 3 — POST /users/login/verify-otp.
+
+        On success returns the same shape as a regular /login response
+        (access + refresh tokens + user object + expiry metadata).
+        """
+        from .services.two_factor import verify_otp
+        result = verify_otp(
+            db, ephemeral_token=data.ephemeral_token, code=data.code,
+        )
+        if not result.is_success():
+            return BaseController.error(
+                format_error_response(
+                    result.error_type, result.error, details=result.details,
+                ),
+                status=401,
+            )
+        token_data = result.data
+        # Same response shape as regular login.
+        from .services.refresh import _exp_metadata
+        access_meta = _exp_metadata(token_data["access_token"])
+        refresh_meta = _exp_metadata(token_data["refresh_token"])
+        payload = {
+            "_type": "Login",
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data["refresh_token"],
+            "token_type": token_data["token_type"],
+            "accessTokenExpiresAt": access_meta.get("expiresAt"),
+            "accessTokenIssuedAt": access_meta.get("issuedAt"),
+            "refreshTokenExpiresAt": refresh_meta.get("expiresAt"),
+            "refreshTokenIssuedAt": refresh_meta.get("issuedAt"),
+            "expiresInSeconds": (
+                int(access_meta["exp"] - access_meta["iat"])
+                if access_meta.get("exp") and access_meta.get("iat") else None
+            ),
+            "user": format_user_response(token_data["user"].to_dict()),
+        }
+        return BaseController.ok(payload)
+
+    @staticmethod
+    def forgot_password(data, db: Session) -> JSONResponse:
+        """Doc 33 change 3 — POST /users/forgot-password.
+
+        Always returns 200 (anti-enumeration). The body is identical
+        whether the user exists or not."""
+        from .services.password_reset import request_password_reset
+        result = request_password_reset(
+            db, login_or_email=data.login_or_email, channel=data.channel,
+        )
+        if not result.is_success():
+            # Only fires on validation_error (invalid channel) — other
+            # cases fall through to the generic 200 response.
+            return BaseController.error(
+                format_error_response(result.error_type, result.error),
+                status=422,
+            )
+        return BaseController.ok(result.data)
+
+    @staticmethod
+    def reset_password(data, db: Session) -> JSONResponse:
+        """Doc 33 change 3 — POST /users/reset-password."""
+        from .services.password_reset import perform_password_reset
+        result = perform_password_reset(
+            db, token_or_code=data.token_or_code,
+            new_password=data.new_password,
+        )
+        if not result.is_success():
+            err_status = 422 if result.error_type == "validation_error" else 401
+            return BaseController.error(
+                format_error_response(result.error_type, result.error),
+                status=err_status,
+            )
+        return BaseController.ok(result.data)
 
     @staticmethod
     def introspect(

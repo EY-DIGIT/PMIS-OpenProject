@@ -150,7 +150,14 @@ def _assign_role(db: Session, user_id: int, role_name: str):
 
 @pytest.fixture(scope="function")
 def admin_user(db_session: Session):
-    """Create an admin user (assigned to the seeded ``admin`` role)."""
+    """Create an admin user (assigned to the seeded ``admin`` role).
+
+    Doc 33 change 3: 2FA is mandatory by default at the global config
+    layer. Test fixtures pre-set ``two_factor_enabled=False`` so the
+    pre-existing single-stage /login flow keeps working — the 2FA
+    flow has its own dedicated test file. Tests that exercise 2FA
+    explicitly override this flag.
+    """
     _ensure_rbac_seed(db_session)
     user = UserModel(
         login="admin",
@@ -159,6 +166,7 @@ def admin_user(db_session: Session):
         first_name="Admin",
         last_name="User",
         status="active",
+        two_factor_enabled=False,
     )
     db_session.add(user)
     db_session.commit()
@@ -178,6 +186,7 @@ def member_user(db_session: Session):
         first_name="Member",
         last_name="User",
         status="active",
+        two_factor_enabled=False,
     )
     db_session.add(user)
     db_session.commit()

@@ -185,3 +185,38 @@ class RefreshRequest(BaseModel):
     """
 
     refresh_token: str
+
+
+# ---------------------------------------------------------------------------
+# Doc 33 change 3 — 2FA + forgot-password schemas
+# ---------------------------------------------------------------------------
+
+class OtpSendRequest(BaseModel):
+    """POST /users/login/send-otp body."""
+
+    ephemeral_token: str = Field(..., min_length=10)
+    channel: str = Field(..., description="email or sms")
+
+
+class OtpVerifyRequest(BaseModel):
+    """POST /users/login/verify-otp body."""
+
+    ephemeral_token: str = Field(..., min_length=10)
+    code: str = Field(..., min_length=4, max_length=12)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """POST /users/forgot-password body. Anti-enumeration: this endpoint
+    always returns 200, whether the user exists or not."""
+
+    login_or_email: str = Field(..., min_length=1, max_length=255)
+    channel: str = Field(..., description="email or sms")
+
+
+class ResetPasswordRequest(BaseModel):
+    """POST /users/reset-password body. Accepts either a URL-safe token
+    (email channel) or a numeric OTP (sms channel) — the server hashes
+    and matches whichever form was sent."""
+
+    token_or_code: str = Field(..., min_length=4, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=255)

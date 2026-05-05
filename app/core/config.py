@@ -128,5 +128,75 @@ class Settings(BaseSettings):
         description="NFS export path (informational; for /health only).",
     )
 
+    # ---- Doc 33 change 3: 2FA OTP + forgot-password ----
+
+    # Whether 2FA is mandatory by default. When True (the default per
+    # Q3a.4), every user is forced through the OTP flow at login. Admins
+    # can opt individual users OUT via PATCH /users/{id} setting
+    # ``twoFactorEnabled=false``. Set this env var to False to disable
+    # 2FA entirely for the deployment (e.g. local dev).
+    REQUIRE_2FA: bool = Field(
+        default=True,
+        description="Require 2FA at login by default. Per-user override allowed.",
+    )
+
+    # OTP code TTL in seconds. Default 5 minutes — long enough for a
+    # user to receive an SMS and type it in, short enough to limit
+    # brute-force window.
+    OTP_TTL_SECONDS: int = Field(
+        default=300,
+        description="How long an OTP stays valid (seconds).",
+    )
+
+    # Cooldown between resends. Prevents notification spam + locks out
+    # automated abuse. Default 60s.
+    OTP_RESEND_COOLDOWN_SECONDS: int = Field(
+        default=60,
+        description="Min seconds between OTP send / resend per ephemeral session.",
+    )
+
+    # Max wrong-code attempts before the OTP row is invalidated. Default 5.
+    OTP_MAX_ATTEMPTS: int = Field(
+        default=5,
+        description="Max wrong-code attempts before the OTP is invalidated.",
+    )
+
+    # OTP code length (digits). Default 6.
+    OTP_CODE_LENGTH: int = Field(
+        default=6,
+        description="Number of digits in an OTP code.",
+    )
+
+    # Server-side pepper added to OTP / reset-token hashes. Combined with
+    # SECRET_KEY ensures DB readers cannot regenerate active codes from
+    # the stored hash alone.
+    OTP_HASH_PEPPER: str = Field(
+        default="",
+        description="Server-side pepper for OTP hashing. Defaults to SECRET_KEY when blank.",
+    )
+
+    # Forgot-password reset-token TTL (seconds). Default 1 hour.
+    PASSWORD_RESET_TTL_SECONDS: int = Field(
+        default=3600,
+        description="How long a password-reset token stays valid (seconds).",
+    )
+
+    # Notification client backend. ``mock`` writes to the
+    # notification_log table for inspection during dev/tests; ``http``
+    # POSTs to the real notification microservice (stub until the
+    # service is reachable).
+    NOTIFICATION_CLIENT: str = Field(
+        default="mock",
+        description="Notification client: 'mock' (DB log) or 'http' (real microservice).",
+    )
+
+    # Real notification microservice base URL — used when
+    # NOTIFICATION_CLIENT='http'. The service surface is documented at
+    # https://github.com/EY-DIGIT/PMIS-notification-service.
+    NOTIFICATION_SERVICE_URL: str = Field(
+        default="",
+        description="Base URL of the notification microservice (HTTP backend).",
+    )
+
 
 settings = Settings()

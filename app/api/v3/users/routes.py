@@ -12,7 +12,14 @@ from .schemas import (
     LoginRequest,
     UserListQuery
 )
-from .schemas import IntrospectRequest, RefreshRequest
+from .schemas import (
+    ForgotPasswordRequest,
+    IntrospectRequest,
+    OtpSendRequest,
+    OtpVerifyRequest,
+    RefreshRequest,
+    ResetPasswordRequest,
+)
 from .permissions import (
     USERS_CREATE,
     USERS_READ,
@@ -69,18 +76,90 @@ def refresh(
 @router.post(
     "/login",
     summary="Authenticate user",
-    description="Authenticate user and receive JWT token"
+    description=(
+        "Authenticate user and receive a JWT token. "
+        "Doc 33 change 3: when 2FA is required for the user (per-user "
+        "flag + global ``REQUIRE_2FA``), this endpoint returns "
+        "``{requires_otp: true, ephemeral_token, channels_available}`` "
+        "instead of an access_token. The client then calls "
+        "``/login/send-otp`` and ``/login/verify-otp``."
+    ),
 )
 def login(
     data: LoginRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Authenticate user and return access token.
+    Authenticate user and return access token (or trigger 2FA flow).
 
     No authentication required for this endpoint.
     """
     return UserController.login(data, db)
+
+
+@router.post(
+    "/login/send-otp",
+    summary="Send OTP for 2FA login (doc 33 change 3)",
+    description=(
+        "Generate + dispatch a 6-digit OTP for an in-progress 2FA "
+        "login session. Pass the ``ephemeral_token`` returned from "
+        "``/login`` plus a chosen channel (``email`` or ``sms``). "
+        "Resends are rate-limited per ``OTP_RESEND_COOLDOWN_SECONDS`` "
+        "(default 60s)."
+    ),
+)
+def send_otp(
+    data: OtpSendRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return UserController.send_otp(data, db)
+
+
+@router.post(
+    "/login/verify-otp",
+    summary="Verify OTP and complete login (doc 33 change 3)",
+    description=(
+        "Verify the OTP sent via ``/login/send-otp`` and mint the real "
+        "access + refresh JWT pair. Same response shape as a "
+        "non-2FA ``/login`` success. Wrong codes increment a counter; "
+        "after ``OTP_MAX_ATTEMPTS`` (default 5) the OTP row is "
+        "invalidated and the user must request a new one."
+    ),
+)
+def verify_otp(
+    data: OtpVerifyRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return UserController.verify_otp(data, db)
+
+
+@router.post(
+    "/forgot-password",
+    summary="Request a password-reset link or code (doc 33 change 3)",
+    description=(
+        "Self-service password reset. Body: ``{login_or_email, channel}``. "
+        "``email`` channel sends a clickable reset link; ``sms`` sends "
+        "a numeric code. ALWAYS returns 200 with a generic message "
+        "regardless of whether the account exists (anti-enumeration)."
+    ),
+)
+def forgot_password(
+    data: ForgotPasswordRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return UserController.forgot_password(data, db)
+
+
+@router.post(
+    "/reset-password",
+    summary="Complete a password reset (doc 33 change 3)",
+    description=(
+        "Verify the reset token (URL token from email or 6-digit OTP "
+        "from SMS) and set the new password. Tokens are single-use "
+        "and expire after ``PASSWORD_RESET_TTL_SECONDS`` (default 1h)."
+    ),
+)
+def reset_password(
+    data: ResetPasswordRequest, db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    return UserController.reset_password(data, db)
 
 
 @router.post(

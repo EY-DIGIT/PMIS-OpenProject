@@ -45,6 +45,11 @@ class User:
     # Doc 26: deleted_by holds a UUID string (was int pre-doc-26).
     deleted_by: Optional[str] = None
 
+    # Doc 33 change 3: per-user 2FA flag. Default True (mandatory by
+    # default at the global ``REQUIRE_2FA`` setting); admins can flip
+    # to False per-user.
+    two_factor_enabled: bool = True
+
     # Doc 25: human-readable display identifier (US-XXXX-YYMMDDHHMMSS).
     # Snapshot of ``login`` + ``created_at`` taken at create time; immutable
     # on rename. The integer ``id`` stays the canonical machine identifier

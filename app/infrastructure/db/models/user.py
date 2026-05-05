@@ -15,7 +15,7 @@ from uuid import uuid4
 
 def _utcnow():
     return datetime.now(timezone.utc)
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
 from ..utc_datetime import UtcDateTime
 from ..session import Base
 
@@ -97,6 +97,14 @@ class UserModel(Base):
     # valid; the wire schema enforces it as REQUIRED on create. Edits
     # leave the existing value alone unless the caller sends one.
     phone_number = Column(String(50), nullable=True)
+
+    # Doc 33 change 3: per-user 2FA opt-in. Default True (mandatory by
+    # default per Q3a.4); admins can flip individual users to False via
+    # PATCH /users/{id} when ``REQUIRE_2FA=true`` globally would be too
+    # strict for a particular account (e.g. service accounts, ops
+    # users on shared keys). When the global setting is False, the
+    # column is ignored — no user gets prompted for OTP.
+    two_factor_enabled = Column(Boolean, default=True, nullable=False)
 
     # Soft-delete. A non-NULL deleted_at hides the user from list/get
     # endpoints by default. Project_members mappings stay intact so

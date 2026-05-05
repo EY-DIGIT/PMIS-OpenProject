@@ -89,6 +89,7 @@ class UserRepository:
             division=getattr(model, "division", None),
             division_other=getattr(model, "division_other", None),
             phone_number=getattr(model, "phone_number", None),
+            two_factor_enabled=bool(getattr(model, "two_factor_enabled", True)),
             deleted_at=getattr(model, "deleted_at", None),
             deleted_by=getattr(model, "deleted_by", None),
             user_code=getattr(model, "user_code", None),
