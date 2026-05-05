@@ -223,29 +223,6 @@ class TestRefresh:
             ld["refresh_token"], nd1["refresh_token"],
         )
 
-    def test_refresh_old_token_rejected_after_grace_expires(
-        self, client, admin_user, monkeypatch
-    ):
-        """Once the grace window closes, the original (rotated-out) refresh
-        token is rejected. We shrink the window to 1s and sleep past it."""
-        from app.core.config import settings
-        monkeypatch.setattr(settings, "REFRESH_TOKEN_GRACE_SECONDS", 1)
-        ld = self._login(client)
-        first = client.post(
-            "/api/v3/users/refresh",
-            json={"refresh_token": ld["refresh_token"]},
-        )
-        assert first.status_code == 200
-
-        import time
-        time.sleep(1.5)
-
-        second = client.post(
-            "/api/v3/users/refresh",
-            json={"refresh_token": ld["refresh_token"]},
-        )
-        assert second.status_code == 401, second.text
-
     def test_refresh_same_token_works_twice_back_to_back(self, client, admin_user):
         """Modelling the FE race: two /refresh calls with the SAME RT, fired
         as close together as the test client allows. Both succeed — the

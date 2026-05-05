@@ -72,6 +72,50 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Whether the app runs ``alembic upgrade head`` at startup.
+    #
+    # Default True (existing behavior — boot runs migrations). Set to
+    # False to skip the migration step entirely; the app boots
+    # immediately and assumes the schema is already at head. Used in
+    # deployments where a DBA / CI job runs migrations out-of-band with
+    # elevated credentials, and the runtime app role lacks DDL rights.
+    #
+    # When False, schema mismatches show up at first runtime query —
+    # typical symptom is "column X does not exist" or "relation Y
+    # does not exist" on the first endpoint that touches the new
+    # schema. Either run migrations before flipping this back to True,
+    # or expect feature-level degradation until they're applied.
+    MIGRATIONS_AUTORUN: bool = Field(
+        default=True,
+        description=(
+            "Run ``alembic upgrade head`` at startup. Set False to skip "
+            "(DBA / CI runs migrations separately with elevated creds)."
+        ),
+    )
+
+    # Whether a failed migration crashes the app.
+    #
+    # Default True (existing behavior — alembic non-zero exit raises and
+    # the app refuses to boot). Set to False to log the failure loudly
+    # but continue boot, leaving the schema at whatever state it was in
+    # before. Use this when you want a deploy to succeed even if the DB
+    # role lacks DDL rights — operators can investigate the migration
+    # failure separately while the app keeps serving the un-migrated
+    # subset of features.
+    #
+    # WARNING: skipping a migration leaves the schema behind the code.
+    # Code paths that reference newly-added columns / tables will fail
+    # at first request, NOT at boot. Treat False as a temporary escape
+    # hatch, not a steady-state setting.
+    MIGRATIONS_REQUIRED: bool = Field(
+        default=True,
+        description=(
+            "When False, alembic failure logs ERROR but does not crash "
+            "the app. Use as a temporary escape hatch when migrations "
+            "can't run at boot."
+        ),
+    )
+
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
 

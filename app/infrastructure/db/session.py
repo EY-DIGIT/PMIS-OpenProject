@@ -192,6 +192,19 @@ def init_db() -> None:
     #   migrations are no-ops.
     if engine.dialect.name == "sqlite":
         Base.metadata.create_all(bind=engine)
+    elif not settings.MIGRATIONS_AUTORUN:
+        # Operator opted out of at-boot migrations entirely. Typical use
+        # case: deploys where the runtime DB role lacks DDL rights and a
+        # DBA / CI pipeline runs ``alembic upgrade head`` out-of-band
+        # with elevated credentials. The app boots immediately and
+        # assumes the schema is already at head — first query against a
+        # missing column/table will surface the real error.
+        logging.warning(
+            "MIGRATIONS_AUTORUN=false: skipping alembic upgrade head. "
+            "Schema is assumed to already be at head. If it isn't, "
+            "endpoints touching new columns/tables will fail at first "
+            "request."
+        )
     else:
         # Run ``alembic upgrade head`` as a subprocess so it gets a clean
         # Python state — no shared logger config, no shared SQLAlchemy
@@ -207,8 +220,7 @@ def init_db() -> None:
         import sys
         from pathlib import Path
         try:
-            from app.core.config import settings as _settings
-            if _settings.DATABASE_URL_MIGRATIONS:
+            if settings.DATABASE_URL_MIGRATIONS:
                 logging.info(
                     "alembic will run as DATABASE_URL_MIGRATIONS "
                     "(elevated/admin role); runtime sessions continue to "
@@ -218,9 +230,10 @@ def init_db() -> None:
                 logging.info(
                     "alembic will run as DATABASE_URL (no separate "
                     "DATABASE_URL_MIGRATIONS configured). If migrations "
-                    "fail with 'must be owner of table', set "
+                    "fail with 'must be owner of table', either set "
                     "DATABASE_URL_MIGRATIONS to a role that owns the "
-                    "schema."
+                    "schema, or set MIGRATIONS_AUTORUN=false and run "
+                    "migrations out-of-band with elevated creds."
                 )
         except Exception:
             pass
@@ -236,16 +249,34 @@ def init_db() -> None:
                 env={**__import__("os").environ},
             )
         except subprocess.TimeoutExpired as e:
-            raise RuntimeError(
-                "alembic upgrade head timed out after 120s"
-            ) from e
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"alembic upgrade head failed (exit {result.returncode}):\n"
-                f"STDOUT: {result.stdout}\n"
-                f"STDERR: {result.stderr}"
+            if settings.MIGRATIONS_REQUIRED:
+                raise RuntimeError(
+                    "alembic upgrade head timed out after 120s"
+                ) from e
+            logging.error(
+                "alembic upgrade head timed out after 120s — continuing "
+                "boot anyway because MIGRATIONS_REQUIRED=false. Schema "
+                "may be behind code; investigate the migration runner."
             )
-        logging.info("alembic upgrade head completed successfully")
+        else:
+            if result.returncode != 0:
+                msg = (
+                    f"alembic upgrade head failed (exit {result.returncode}):\n"
+                    f"STDOUT: {result.stdout}\n"
+                    f"STDERR: {result.stderr}"
+                )
+                if settings.MIGRATIONS_REQUIRED:
+                    raise RuntimeError(msg)
+                logging.error(
+                    "%s\n"
+                    "Continuing boot anyway because MIGRATIONS_REQUIRED="
+                    "false. Run the failing migration out-of-band with "
+                    "elevated creds, then either flip the flag back to "
+                    "true or leave it off if a DBA/CI handles migrations.",
+                    msg,
+                )
+            else:
+                logging.info("alembic upgrade head completed successfully")
 
     # SQLite schema drift handler: add missing nullable columns via ALTER TABLE
     # This runs only for SQLite and is idempotent. It MUST run before any
