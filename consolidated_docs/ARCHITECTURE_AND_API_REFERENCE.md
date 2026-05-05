@@ -258,23 +258,23 @@ The legacy paths (`/api/v3/divisions`, `/api/v3/resource_types`, `/api/v3/vendor
 **Milestones**
 | Method | Path | Permission | Description |
 |---|---|---|---|
-| POST | `/api/v3/projects/{id}/milestones/create` | `milestones:create` | Create (baseline only). `dependsOn` accepted (doc 21A) |
+| POST | `/api/v3/projects/{id}/milestones/create` | `milestones:create` | Create (baseline only). `dependsOn` accepted (doc 21A). **Doc 32**: accepts JSON or multipart; multipart adds optional `body` (comment) + `files` (uploads) inline |
 | GET | `/api/v3/projects/{id}/milestones` | `milestones:read` | List |
 | GET | `/api/v3/milestones/{id}` | `milestones:read` | Get |
 | PATCH | `/api/v3/milestones/{id}` | `milestones:update` | Update (baseline only) |
 | DELETE | `/api/v3/milestones/{id}` | `milestones:delete` | Soft-delete + cascade |
 | POST | `/api/v3/milestones/{id}/restore` | `milestones:restore` | Restore |
 
-**Activities** — `POST /milestones/{id}/activities/standard/create` (or `…/resource/create`), `GET/PATCH/DELETE/restore` on `/activities/{id}`. Same dependency rules as milestones; baseline-only writes.
+**Activities** — `POST /milestones/{id}/activities/standard/create` (or `…/resource/count/create`, `…/resource/details/create`, `…/transactional/create`), `GET/PATCH/DELETE/restore` on `/activities/{id}`. Same dependency rules as milestones; baseline-only writes. **Doc 32**: every variant of the create endpoint accepts JSON or multipart on the same URL; multipart adds inline `body` + `files`.
 
-**Tasks** — version-only. `POST /activities/{id}/tasks/create` (type derived from parent activity); `GET/PATCH/DELETE/restore` on `/tasks/{id}`. **Doc 24 part 3: no parent-activity hierarchy rule on dependencies.**
+**Tasks** — version-only. `POST /activities/{id}/tasks/create` (type derived from parent activity); `GET/PATCH/DELETE/restore` on `/tasks/{id}`. **Doc 24 part 3: no parent-activity hierarchy rule on dependencies.** **Doc 32**: create accepts JSON or multipart.
 
 **Subtasks** — version-only.
 | Method | Path | Permission | Description |
 |---|---|---|---|
-| POST | `/api/v3/tasks/{task_id}/subtasks/create` | `subtasks:create` | Top-level subtask under task |
-| POST | `/api/v3/subtasks/{parent_subtask_id}/subtasks/create` | `subtasks:create` | **Nested subtask (doc 24)** |
-| GET | `/api/v3/tasks/{task_id}/subtasks` | `subtasks:read` | List top-level under task |
+| POST | `/api/v3/tasks/{task_id}/subtasks/create` | `subtasks:create` | Top-level subtask under task. **Doc 32**: accepts JSON or multipart |
+| POST | `/api/v3/subtasks/{parent_subtask_id}/subtasks/create` | `subtasks:create` | **Nested subtask (doc 24).** **Doc 32**: accepts JSON or multipart |
+| GET | `/api/v3/tasks/{task_id}/subtasks` | `subtasks:read` | List with descendants embedded recursively under each top-level row (doc 28) |
 | GET | `/api/v3/subtasks/{id}` | `subtasks:read` | Get (response includes `parentSubtaskId`) |
 | PATCH/DELETE/restore | `/api/v3/subtasks/{id}` | `subtasks:update`/`delete`/`restore` | Mutate / cascade-soft-delete entire subtree |
 
@@ -319,6 +319,7 @@ Polymorphic on M/A/T/S target — see the route files for the full surface.
 }
 ```
 
+> **Doc 32** (kamal21, tagged "Doc 30" in commit): every M/A/T/S create endpoint now accepts JSON or multipart on the same URL. Multipart adds optional `body` (comment) and `files` (file uploads) so the create + comment + attachments flow can be one round-trip. Two followups bundled: `_normalize` collapses to IST calendar midnight (legacy-row tolerance), and caller-supplied `position` collisions auto-bump instead of 500.
 > **Doc 31**: milestone-specific dep-date rules — `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict). Status-completion gate added to milestones: cannot mark `completed` while a dep target is incomplete.
 > **Doc 30**: dep-date enforcement for activity/task/subtask deps (`source.start >= target.end`, equality allowed) on create + update, forward and reverse. Publish rejects projects with zero milestones or any milestone holding zero live activities — both gates apply to baselines and versions; specific identifier in `_embedded.details.errorIdentifier` (`no_milestones` / `milestone_without_activity`).
 > **Doc 27** (kamal21): IST/UTC date-equality fixes via `UtcDateTime` column type so cross-format milestone/project date comparisons land on the same calendar day. Stale pre-doc-26 JWTs return 401 not 500.

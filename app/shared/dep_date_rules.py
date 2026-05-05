@@ -28,24 +28,32 @@ collect all of them and produce one ``ValidationError`` listing every
 offender, so the FE can render a single, complete error rather than
 forcing the user through a whack-a-mole loop.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Iterable, List, Optional, Tuple
 
 from ..core.errors import ValidationError
+from .datetime import to_ist_calendar_midnight
 
 
 def _normalize(v: Optional[datetime]) -> Optional[datetime]:
-    """Normalize for cross-comparison.
+    """Normalize for cross-comparison on IST calendar-date semantics.
 
-    SQLite returns naive datetimes; Pydantic parses ISO strings as
-    timezone-aware. Coerce both to naive UTC for consistent ordering.
-    Mirrors ``date_rules._normalize`` exactly.
+    Mirrors ``date_rules._normalize`` (kept aligned post the doc 30
+    follow-up that switched the parent-floor checks to IST calendar
+    midnight). Two inputs that represent the same IST calendar date —
+    regardless of how they were originally encoded — produce the same
+    return value, so dep-date comparisons honour calendar-day semantics
+    even on legacy rows stored as raw UTC midnight before doc 29's
+    ``IstCalendarDate`` schema annotation existed.
+
+    None passes through. Non-datetime inputs aren't expected (validators
+    upstream coerce to datetime); ``to_ist_calendar_midnight`` returns
+    them unchanged so any downstream comparison fires the same TypeError
+    it would have pre-fix.
     """
     if v is None:
         return None
-    if v.tzinfo is not None:
-        return v.astimezone(timezone.utc).replace(tzinfo=None)
-    return v
+    return to_ist_calendar_midnight(v)
 
 
 def _fmt(d: Optional[datetime]) -> str:

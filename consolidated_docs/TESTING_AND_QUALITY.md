@@ -4,7 +4,7 @@
 
 Test framework: pytest + FastAPI `TestClient`. SQLite in-memory DB per test, app `init_db` short-circuited so each test starts from a clean slate (see [tests/conftest.py](../tests/conftest.py)).
 
-Last run: **688 passed, 3 skipped** (full suite, post-doc 31).
+Last run: **745 passed, 3 skipped** (full suite, post-doc 32).
 
 ### Test Execution
 
@@ -46,6 +46,10 @@ Last run: **688 passed, 3 skipped** (full suite, post-doc 31).
 | `test_doc30_dep_dates.py` | **Doc 30** — generic dep-date enforcement (activities/tasks/subtasks): forward (source.start ≥ target.end on create + update), reverse (target.end push past existing successor.start), equality branch, multi-successor enumeration, empty/null handling. (Milestone tests moved to doc 31.) |
 | `test_doc30_publish_gate.py` | **Doc 30** — publish-time structural gate: zero-milestones + empty-milestone rejections, lists every empty milestone, soft-deleted activities count, version publish gate, version inherits publishable graph |
 | `test_doc31_milestone_dep_rules.py` | **Doc 31** — milestone-specific dep-date rules: start floor (`source.start >= target.start`, equality OK), strict end (`source.end > target.end`, equality REJECTED), combined-error enumeration, forward + reverse re-validation on date edits, status-completion gate (`status='completed'` blocked while any dep target is incomplete) |
+| `test_doc30_ats_inline_attachments.py` | **Doc 32** — multipart on activity / task / subtask create endpoints; comment + file uploads inline with the create call (file pre-validation runs before the entity insert so failures don't leave orphans). Filename keeps the historical `doc30` prefix from kamal21's commit; the planned-changes file is renumbered to 32 to disambiguate the "Doc 30" naming collision with my dep-date work. |
+| `test_doc30_milestone_inline_attachments.py` | **Doc 32** — multipart on milestone create. Same coverage shape as the A/T/S file. |
+| `test_doc30_legacy_project_date_equality.py` | **Doc 32 followup** — `_normalize` collapses to IST calendar midnight so legacy rows (stored as raw UTC midnight pre-doc-29) compare equal against canonical IstCalendarDate inputs. |
+| `test_doc30_position_auto_bump.py` | **Doc 32 followup** — caller-supplied `position` colliding with an existing live row no longer 500s; service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create). |
 | `test_labels.py` | Display labels (doc 22) — parse / format / resolve / compute / build_label_index |
 | `test_position_heal.py` | Self-heal of duplicate live positions before the partial-unique index can be added (doc 22 hotfix) |
 | `test_hierarchy.py` | Project tree shape: M → A → T → S |
@@ -66,6 +70,7 @@ Last run: **688 passed, 3 skipped** (full suite, post-doc 31).
 - **Dependencies**: same-project enforcement, no self-edge, cycle detection, soft-delete edge history, cross-milestone (locked-in by explicit tests), cross-task (no hierarchy rule per doc 24 part 3), milestone-to-milestone (doc 21A), **dep-date enforcement (doc 30)** — for activities/tasks/subtasks: `source.start >= target.end` (equality allowed) on every create/update path; reverse direction guarded so editing a target's end_date that would invalidate an existing successor is rejected with all offenders named.
 - **Milestone-specific dep rules (doc 31)** — milestones use a different rule than the other three kinds: `source.start >= target.start` (equality OK) AND `source.end > target.end` (strict, equality REJECTED). Both directions guarded. Plus a status-completion gate: a milestone cannot be marked `completed` until every dep target is also `completed`.
 - **Publish gates** (doc 30): publish rejects projects with zero milestones (`no_milestones`) and any milestone with zero live activities (`milestone_without_activity`); applies uniformly to baselines and versions.
+- **Inline multipart on M/A/T/S create** (doc 32): every create endpoint accepts JSON or multipart on the same URL; multipart adds optional `body` (comment) and `files` (uploads). File pre-validation runs before the entity insert so failures don't leave orphans. Two followups bundled: `_normalize` collapses to IST calendar midnight (legacy-row tolerance), and caller-supplied `position` collisions auto-bump instead of 500.
 - **Nested subtasks** (doc 24 part 2): unlimited nesting, label depth, cascade subtree on delete, position uniqueness per parent, env-var depth cap.
 - **Display labels** (doc 22): parse, format, resolve label → id, compute label, bulk index, position-heal hotfix.
 - **HAL+JSON**: response shape validation across endpoints.

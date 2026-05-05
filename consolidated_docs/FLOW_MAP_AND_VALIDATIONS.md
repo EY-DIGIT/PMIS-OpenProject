@@ -142,7 +142,7 @@ Legal edges (subset rules apply):
 
 Requests that include fields outside the whitelist return 422 `invalid_field` with the `rejected` list in `_embedded.details`.
 
-**Doc 27 publish gate.** Before flipping status to `published`, the publish service runs two structural-completeness checks (in [`app/api/v3/projects/services/publish.py`](app/api/v3/projects/services/publish.py)):
+**Doc 30 publish gate.** Before flipping status to `published`, the publish service runs two structural-completeness checks (in [`app/api/v3/projects/services/publish.py`](app/api/v3/projects/services/publish.py)):
 
 1. **Zero-milestones** — if the project has no live milestones, returns 422 `invalid_publish` with `_embedded.details.errorIdentifier = "no_milestones"`.
 2. **Empty milestone(s)** — if any live milestone has zero live activities, returns 422 `invalid_publish` with `_embedded.details.errorIdentifier = "milestone_without_activity"` plus `details.milestoneIds` and `details.milestoneNames` (full lists, not capped) so the FE can highlight every offender.
@@ -259,7 +259,7 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `PATCH /projects/{uuid}` | JWT | `PROJECTS_UPDATE` | `ProjectUpdateRequest` | `assert_project_editable` + `editable_fields_for(project)` whitelist per state. Dates must be in future (schema). `vendorIds: []` clears list; omit to leave alone. |
 | `DELETE /projects/{uuid}` | JWT | `PROJECTS_DELETE_ALL` | — | Soft-delete + cascade to M/A/T/S. If baseline: also soft-delete every live version. |
 | `POST /projects/{uuid}/save` | JWT | `PROJECTS_UPDATE` | — | `new → draft` iff ≥ 1 live milestone. 422 on zero milestones. Idempotent past `draft`. |
-| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. **Doc 27**: rejects publish (422 `invalid_publish`) if the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity` — names every empty milestone). Locks out PATCH of non-whitelisted fields but published baselines remain editable on the whitelisted set. |
+| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. **Doc 30**: rejects publish (422 `invalid_publish`) if the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity` — names every empty milestone). Locks out PATCH of non-whitelisted fields but published baselines remain editable on the whitelisted set. |
 | `POST /projects/{uuid}/close` | JWT | `PROJECTS_CLOSE` (admin) | `ProjectCloseRequest` (optional) | Transition `{new,draft,published} → closed`. `reason` ≤ 5000 chars. |
 | `POST /projects/{uuid}/suspend` | JWT | `PROJECTS_UPDATE` | — | **Version only** (state-machine guard). |
 | `POST /projects/{uuid}/versions/create` | JWT | `PROJECTS_CREATE` | — | Source must be `is_version=False AND status='published'`. Only **one active version per baseline**; returns 409 if one already exists. Enforced by partial unique index `ux_projects_active_version_per_baseline` + service check. Cloned tree stamps `cloned_from_id` on every M/A. |
@@ -323,7 +323,7 @@ Same deprecation pattern. Built-ins (RFP, ASG, CCN) are protected from delete.
 
 | Endpoint | Auth | Permission | Body | Guards |
 |---|---|---|---|---|
-| `POST /projects/{uuid}/milestones/create` | JWT | `MILESTONES_CREATE` | `MilestoneCreateRequest` | `assert_milestone_activity_writable` (baseline only). |
+| `POST /projects/{uuid}/milestones/create` | JWT | `MILESTONES_CREATE` | `MilestoneCreateRequest` (JSON or multipart) | `assert_milestone_activity_writable` (baseline only). **Doc 32**: accepts multipart with optional `body` (comment) + `files` (uploads); same URL/auth/permission. |
 | `GET /projects/{uuid}/milestones` | JWT | `MILESTONES_READ` | — | Paginated list. |
 | `GET /milestones/{id}` | JWT | `MILESTONES_READ` | — | Single read. |
 | `PATCH /milestones/{id}` | JWT | `MILESTONES_UPDATE` | `MilestoneUpdateRequest` | `assert_milestone_activity_writable` + propagation cascade. |
@@ -331,6 +331,14 @@ Same deprecation pattern. Built-ins (RFP, ASG, CCN) are protected from delete.
 | `POST /milestones/{id}/restore` | JWT | `MILESTONES_RESTORE` (admin) | — | `assert_project_editable` (permissive — no baseline/version rule). |
 
 **Schema validations:** `name` 1-255, `startDate < endDate`, `status ∈ MILESTONE_STATUS_CHOICES` (`not_completed`, `completed`), `dependsOn: List[str]` (UUIDs or labels — doc 21A + doc 22; replaces the legacy JSON `depends` column dropped in doc 22), `vendors` list (renamed from `vendorIds` in doc 15; the legacy `vendorIds` and `vendor_ids` aliases are still accepted on the input side via Pydantic `AliasChoices`).
+
+**Doc 32 multipart shape:** when `Content-Type: multipart/form-data`, the body adds two optional fields:
+- `body` — free-text comment to attach to the just-created milestone.
+- `files` — one or more file uploads to attach. Pre-validated (count, size, mime) BEFORE the milestone insert so a rejected file doesn't leave behind an orphan milestone.
+
+If `body` is set with no `files`, a comment is created. If `files` are set with no `body`, standalone attachments are created. Both can be present. JSON contract is unchanged. Same shape applies to all 7 M/A/T/S create endpoints (4 activity variants, task, top-level subtask, nested subtask).
+
+**Doc 32 followup — position auto-bump:** caller-supplied `position` colliding with an existing live row no longer 500s on the unique-index. Service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create).
 
 **Service validations:**
 - `start_date ≥ project.start_date`
