@@ -61,12 +61,20 @@ Response:
 {
   "data": {
     "_type": "OtpSent",
-    "message": "OTP sent via email."
+    "channel": "email",
+    "expires_in_seconds": 300,
+    "resend_after_seconds": 60
   }
 }
 ```
 
-When `NOTIFICATION_CLIENT=mock`, the response also includes `code: "<6 digits>"` so dev/QA can complete the flow without a real notification channel; in `http` mode the field is absent.
+The OTP code itself is **never returned in the HTTP response** — even with `NOTIFICATION_CLIENT=mock`. In mock mode the dispatched payload (including the plaintext code) is recorded in the `notification_log` table; read it via DB during dev:
+```sql
+SELECT payload FROM notification_log
+ WHERE template_kind = 'otp_login' AND user_id = '<user_uuid>'
+ ORDER BY created_at DESC LIMIT 1;
+```
+With `NOTIFICATION_CLIENT=http`, the code is dispatched to the configured notification microservice and read by the user from email / SMS.
 
 Resend behavior — calls within `OTP_RESEND_COOLDOWN_SECONDS` (default 60) return **429** with the seconds-remaining message. Each successful send writes a row to `notification_log` (channel, recipient, template_kind=`otp_login`, status).
 

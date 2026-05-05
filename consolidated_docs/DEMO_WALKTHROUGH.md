@@ -19,7 +19,7 @@ This walkthrough takes a fresh environment from zero to a fully populated projec
 
 **On first boot**, `init_db()` creates the schema and seeds:
 
-- One admin user: `login=admin`, `password=admin123` — `two_factor_enabled=true` by default. Either flip the env var `REQUIRE_2FA=false` for this walkthrough, or follow the 2FA path in Step 0b. The walkthrough below shows both options.
+- One admin user: `login=admin`, `password=admin123`. **The bootstrap admin is forced single-stage on every boot** (`two_factor_enabled=false`) so the always-reachable break-glass account never gets locked out by an unconfigured notification channel. Other users follow the global `REQUIRE_2FA` + per-user flag normally. Step 0b below still shows the 2FA flow against a regular user you create yourself.
 - Five vendors: Infosys, TCS, Wipro, Accenture, Capgemini
 - Three resource types: rfp, asg, ccn
 - Built-in work package types (not used in this demo)
@@ -28,7 +28,7 @@ This walkthrough takes a fresh environment from zero to a fully populated projec
 
 All the dates in the bodies below are set for **2026**. Replace them with dates in your own future if this document has aged.
 
-For the notification flows (2FA OTP, forgot-password), keep `NOTIFICATION_CLIENT=mock` (the default). In mock mode the server records every dispatch in `notification_log` AND returns the OTP code in the `/login/send-otp` response so you can complete the flow without configuring email/SMS.
+For the notification flows (2FA OTP, forgot-password), the OTP code is **never echoed** in the `/send-otp` HTTP response. With `NOTIFICATION_CLIENT=mock` (default) the dispatched payload — including the plaintext code — lands in the `notification_log` table; read it via DB to complete the flow during dev. With `NOTIFICATION_CLIENT=http` the code goes to the real notification microservice.
 
 ---
 
@@ -76,11 +76,20 @@ If the response instead carries `requires_otp: true` and `ephemeral_token`, your
 
 ## Step 0b — Log in (two-stage 2FA path, doc 33 change 3)
 
-Use this when `REQUIRE_2FA=true` (default) and the user has `two_factor_enabled=true` (the seeded admin's default).
+The bootstrap admin is forced single-stage (`two_factor_enabled=false`) on every boot, so to exercise the 2FA flow you'll need a regular user with the flag on. Either:
+
+- Create a new user via `POST /users/create` (admin needed) — `twoFactorEnabled` defaults to `true` for non-bootstrap users when `REQUIRE_2FA=true`. OR
+- PATCH an existing test user to set `twoFactorEnabled=true`.
+
+Once you have such a user, log in with their credentials.
 
 ### 0b.1 — POST /users/login
 
-Same body as 0a. **Expect 200** with this shape:
+```json
+{ "login": "<test_user_login>", "password": "<test_user_password>" }
+```
+
+**Expect 200** with this shape:
 
 ```json
 {
@@ -94,6 +103,8 @@ Same body as 0a. **Expect 200** with this shape:
 }
 ```
 
+`channels_available` includes `sms` only if the user has a `phoneNumber` recorded; otherwise it's `["email"]` only.
+
 Save `data.ephemeral_token` as `EPHEMERAL_TOKEN`. No JWT issued yet.
 
 ### 0b.2 — POST /users/login/send-otp
@@ -105,7 +116,29 @@ Save `data.ephemeral_token` as `EPHEMERAL_TOKEN`. No JWT issued yet.
 }
 ```
 
-**Expect 200**. Because `NOTIFICATION_CLIENT=mock` (the default), the response also carries `data.code` — copy it as `OTP_CODE`. In production with `NOTIFICATION_CLIENT=http`, the code field is absent and the user reads it from the email/SMS.
+**Expect 200** with this shape (the OTP code is NOT in the response):
+
+```json
+{
+  "data": {
+    "_type": "OtpSent",
+    "channel": "email",
+    "expires_in_seconds": 300,
+    "resend_after_seconds": 60
+  }
+}
+```
+
+To get the actual OTP code:
+
+- **`NOTIFICATION_CLIENT=mock`** (default) — read it from the `notification_log` table via DB:
+  ```sql
+  SELECT payload FROM notification_log
+   WHERE template_kind = 'otp_login' AND user_id = '<user_uuid>'
+   ORDER BY created_at DESC LIMIT 1;
+  ```
+  The `payload` JSON column carries `{ "code": "123456", "ttl_seconds": 300, "purpose": "login_2fa" }`.
+- **`NOTIFICATION_CLIENT=http`** — the code went to the real notification microservice; read from email or wherever that service routes it.
 
 A second call to `/login/send-otp` within `OTP_RESEND_COOLDOWN_SECONDS` (default 60) returns **429** — change `channel` or wait it out.
 
@@ -142,7 +175,13 @@ This is independent of the live admin session — you can do it before or after 
 { "data": { "_type": "PasswordResetRequested", "message": "If the account exists, ..." } }
 ```
 
-The response is **identical** even for a non-existent login — that's the anti-enumeration guarantee. To see what was actually dispatched, peek at the `notification_log` table directly. The most-recent row's `payload.token` (mock backend only) holds the URL token; copy it as `RESET_TOKEN`. In production you'd read this from the email instead.
+The response is **identical** even for a non-existent login — that's the anti-enumeration guarantee. To get the reset token in dev (`NOTIFICATION_CLIENT=mock`), read it from `notification_log`:
+```sql
+SELECT payload FROM notification_log
+ WHERE template_kind IN ('password_reset_link', 'password_reset_otp')
+ ORDER BY created_at DESC LIMIT 1;
+```
+The `payload` JSON column carries the URL token (email channel) or the 6-digit code (SMS channel). Copy it as `RESET_TOKEN`. In production with `NOTIFICATION_CLIENT=http` you'd read this from email/SMS instead.
 
 ### 0c.2 — POST /users/reset-password
 

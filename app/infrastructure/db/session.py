@@ -640,6 +640,15 @@ def init_db() -> None:
     # Idempotent bootstrap admin. Doc 21 part B: admin status now derived
     # from membership in the seeded ``admin`` role (created by the RBAC
     # seed above). The ``UserModel`` no longer has an ``admin`` column.
+    #
+    # Doc 33 change 3 + hotfix: the bootstrap admin is the always-reachable
+    # account for first-boot ops, so it MUST stay single-stage-loginnable.
+    # If 2FA is left on for it, a fresh deploy that hasn't yet wired up
+    # the notification microservice locks the admin out — there's no email
+    # / SMS path to receive the OTP. We force ``two_factor_enabled=false``
+    # on the bootstrap login on every boot (idempotent) so the demo + the
+    # ops break-glass flow keep working. Other users honour ``REQUIRE_2FA``
+    # + their per-user flag normally.
     db = SessionLocal()
     try:
         from .models.role import RoleModel
@@ -657,10 +666,17 @@ def init_db() -> None:
                 first_name="Administrator",
                 last_name="System",
                 status="active",
+                two_factor_enabled=False,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
             db.add(admin_user)
+            db.flush()
+        elif admin_user.two_factor_enabled:
+            # Existing bootstrap admin from a pre-doc-33 deploy: force the
+            # flag off so single-stage login keeps working post-upgrade.
+            admin_user.two_factor_enabled = False
+            admin_user.updated_at = datetime.now(timezone.utc)
             db.flush()
 
         admin_role = (
