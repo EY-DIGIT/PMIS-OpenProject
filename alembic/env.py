@@ -26,7 +26,14 @@ config = context.config
 
 # Override sqlalchemy.url from the env-driven app settings so we never have
 # to keep alembic.ini in sync with .env.
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+#
+# Doc 33: prefer ``DATABASE_URL_MIGRATIONS`` when set so DDL runs as the
+# elevated/admin role on deployments where the runtime app user lacks
+# table ownership. Falls back to ``DATABASE_URL`` for dev/local. The
+# split is invisible to migration code — every ``op.execute`` etc. uses
+# whichever URL is configured here.
+_migration_url = settings.DATABASE_URL_MIGRATIONS or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", _migration_url)
 
 # Logging.
 if config.config_file_name is not None:

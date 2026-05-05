@@ -44,7 +44,32 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = Field(
         default="sqlite:///./pmis.db",
-        description="Database connection URL"
+        description="Database connection URL used by every runtime DB session."
+    )
+
+    # Doc 33: optional separate URL for ``alembic upgrade head``.
+    #
+    # Many production Postgres deployments split DDL from DML across two
+    # roles: a least-privilege ``app`` role for runtime traffic, and an
+    # elevated ``admin`` / ``migrator`` role that owns the tables and
+    # can ALTER / DROP COLUMN / CREATE TABLE.
+    #
+    # When this is set, ``init_db`` runs ``alembic upgrade head`` against
+    # this URL (so DDL goes through the admin role), and every other
+    # session — controllers, repositories, the audit writer — keeps
+    # using ``DATABASE_URL``. Leaving this unset (the default) makes
+    # migrations and runtime share the same connection, which is fine
+    # for dev/local where the same role owns everything.
+    #
+    # Format is identical to DATABASE_URL (e.g.
+    # ``postgresql://pmis_admin:secret@host/pmis``).
+    DATABASE_URL_MIGRATIONS: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional elevated-privilege URL used ONLY for "
+            "``alembic upgrade head`` at startup. Falls back to "
+            "DATABASE_URL when unset."
+        ),
     )
 
     # CORS

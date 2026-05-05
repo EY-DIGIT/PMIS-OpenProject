@@ -198,9 +198,32 @@ def init_db() -> None:
         # engine pool. Calling alembic in-process while the app's own
         # engine is initialized has been observed to hang on Windows.
         # Subprocess pattern is widely used (Django, Flask-Migrate, etc.).
+        #
+        # Doc 33: if ``DATABASE_URL_MIGRATIONS`` is configured, the
+        # alembic env switches to it (see alembic/env.py) so DDL runs as
+        # the elevated role. Log which path is in use so ops can
+        # confirm the right role is being used.
         import subprocess
         import sys
         from pathlib import Path
+        try:
+            from app.core.config import settings as _settings
+            if _settings.DATABASE_URL_MIGRATIONS:
+                logging.info(
+                    "alembic will run as DATABASE_URL_MIGRATIONS "
+                    "(elevated/admin role); runtime sessions continue to "
+                    "use DATABASE_URL."
+                )
+            else:
+                logging.info(
+                    "alembic will run as DATABASE_URL (no separate "
+                    "DATABASE_URL_MIGRATIONS configured). If migrations "
+                    "fail with 'must be owner of table', set "
+                    "DATABASE_URL_MIGRATIONS to a role that owns the "
+                    "schema."
+                )
+        except Exception:
+            pass
 
         project_root = Path(__file__).resolve().parents[3]
         try:
