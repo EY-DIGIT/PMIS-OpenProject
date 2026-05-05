@@ -99,10 +99,10 @@ These rules apply across multiple endpoint groups; they are referenced by name b
 | Guard | Allows | Raises when violated |
 |---|---|---|
 | `assert_project_editable` | Any live (non-deleted) project | `NotFoundError` (404) |
-| `assert_milestone_activity_writable` | Live **baseline** only | `AuthorizationError` (403) on versions; `NotFoundError` (404) on deleted/missing |
-| `assert_task_subtask_writable` | Live **version** only | `AuthorizationError` (403) on baselines |
+| `assert_milestone_activity_writable` | Live project (any) | `NotFoundError` (404) on deleted/missing |
+| `assert_task_subtask_writable` | Live project (any) | `NotFoundError` (404) on deleted/missing |
 
-Used to enforce the rule: **M/A writes on baselines only, T/S writes on versions only, project-level writes on either.**
+> **Doc 33 change 1**: the baseline/version split was removed. The two writability helpers no longer enforce a baseline-only or version-only rule — every M/A/T/S write succeeds on any live project (subject to RBAC + state-machine + dep-rule guards). The helpers are retained for the deleted-project 404 check.
 
 ### 2.2 Date rules — [`app/shared/date_rules.py`](app/shared/date_rules.py)
 
@@ -122,18 +122,18 @@ Schema-level validation (Pydantic) also enforces `end_date >= start_date` withou
 
 ### 2.3 Project state machine — [`app/api/v3/projects/services/transitions.py`](app/api/v3/projects/services/transitions.py)
 
-Statuses: `new`, `draft`, `published`, `closed`, `suspended`.
+Statuses (post-doc-33 change 1): `new`, `draft`, `published`, `closed`. The `suspended` status was removed along with versioning.
 
 Legal edges (subset rules apply):
 - `new ↔ draft` — `new→draft` triggered by the `Save Project` endpoint; `draft→new` allowed by admin
 - `new → published`, `draft → published` — **admin only**
 - `new → closed`, `draft → closed`, `published → closed` — **admin only**
-- `new → suspended`, `draft → suspended`, `published → suspended` — **version only**
 
 **Editable-fields whitelist** per state:
-- Unpublished baseline: `name`, `description`, `owner`, `start_date`, `end_date`, `public`, `active`, `status_explanation`
-- Published baseline: same as unpublished (post-Doc-12 change)
-- Version (any status): `owner`, `public`, `actual_end_date`, `status_explanation`
+- Unpublished project: `name`, `description`, `owner`, `start_date`, `end_date`, `public`, `active`, `status_explanation`
+- Published project: same as unpublished (post-Doc-12 change)
+
+> **Doc 33 change 1**: the "version" project type is gone, so the version-only editable list and the version-only suspended transition were removed. There is one project type now.
 
 > Doc 24 part 1: `start_date` is no longer required to be in the future.
 > Only `end_date` carries the future-only Pydantic check; `start_date`
@@ -149,29 +149,103 @@ Requests that include fields outside the whitelist return 422 `invalid_field` wi
 
 Both gates apply uniformly to baselines and versions (the helper queries by `project_id`, which is the version's own id when publishing a version). The save-to-draft path enforces the ≥1-milestone rule independently; the publish gate is the belt-and-braces version that also catches post-draft deletions.
 
-### 2.4 Baseline → active-version propagation — [`app/api/v3/projects/services/baseline_version_sync.py`](app/api/v3/projects/services/baseline_version_sync.py)
+### 2.4 Baseline → active-version propagation — REMOVED (doc 33 change 1)
 
-After a baseline M/A write commits, the service calls `propagate_*`. Rules:
+The entire `baseline_version_sync` module + propagation flow was deleted along with the versioning feature. Projects now own their M/A/T/S directly; there is no twin to propagate to.
 
-- Targets only **active versions**: `is_version=True AND deleted_at IS NULL AND status NOT IN ('suspended','closed')`.
-- Milestones: `cloned_from_id` lineage → locate version twins.
-- Activities: resolve version's parent milestone first (via M's lineage), then attach.
-- Fields cascaded: `name`, `description`, `start_date`, `end_date`, `position` (milestones); plus `type`, `resource_mode`, `resource_count` (activities).
-- Fields **not** cascaded: `status`, `dependency` (version-local progress tracking). The legacy `milestones.depends` JSON column was dropped in doc 22 — milestone deps now live in the `milestone_dependencies` edge table and **do** propagate via `propagate_milestone_dependency_change` (doc 21A) — that's the one exception to "deps stay version-local".
-- Each version affected gets an audit row `*.cascade_from_baseline` with `cloned_from_baseline_*_id` in the payload.
+Audit-row generation moved into the per-entity write services. The `actor_role` column was added to `project_audit_logs` (doc 33 change 1) capturing the role bucket (`admin` / `member` / `vendor` / `viewer`) the actor occupied at write time.
 
 ### 2.5 Soft-delete cascades
 
 Every cascade path is a soft-delete: stamps `deleted_at` (+ `deleted_by` where the column exists) and never physically removes rows. Reads filter `deleted_at IS NULL` everywhere.
 
-- Project delete → every M/A/T/S + resource row under it (`milestones/services/cascade.py::cascade_soft_delete_project`).
-- Baseline delete → additionally soft-deletes every live version (recursively cascading each).
+- Project delete → every M/A/T/S + resource row under it (`milestones/services/cascade.py::cascade_soft_delete_project`). **Doc 33 change 1**: there's no longer a separate "baseline delete also wipes live versions" step — versioning was removed, so a project delete is one cascade.
 - Milestone delete → descendants A/T/S + their resources, **plus every milestone/A/T/S dependency edge touching the subtree (as source or target) is soft-deleted** via `cascade_remove_for_deleted_milestone_subtree` (doc 21A added milestone-level edge wipe alongside the existing A/T/S sweep).
 - Activity delete → descendants T/S + their resources, **plus every activity/task/subtask dependency edge touching the subtree is soft-deleted** via `cascade_remove_for_deleted_activity_subtree`.
 - Task delete → descendant subtasks + their resources, **plus every task/subtask dependency edge touching the subtree is soft-deleted** via `cascade_remove_for_deleted_task_subtree`.
 - Subtask delete → **doc 24: now BFS over `parent_subtask_id` and soft-deletes the entire descendant subtree of subtasks** (top-level subtask delete cascades to all nested children; nested subtask delete cascades to its own descendants). Resource rows under each soft-deleted subtask are wiped, and `cascade_remove_subtask_targets` is called per descendant id so every dependency edge touching any deleted subtask is soft-deleted.
 
 Dependency edges in `activity_dependencies` / `task_dependencies` / `subtask_dependencies` carry their own `deleted_at` / `deleted_by` columns and a surrogate UUID `id` PK so history is preserved. A partial unique index on `(source, target) WHERE deleted_at IS NULL` enforces one live edge per pair while allowing any number of dead rows to coexist for audit.
+
+### 2.5b Authentication state machines (doc 33 change 3)
+
+**2FA login state machine** — three calls, anchored on the ephemeral session token.
+
+```
+   ┌──────────────────────────────────────────────────┐
+   │  POST /users/login {login, password}             │
+   │  ↓ password OK + 2FA required                    │
+   │  ↓ server:                                       │
+   │     - mints ephemeral_token (random)             │
+   │     - inserts sentinel otp_codes row keyed by    │
+   │       ephemeral_token_hash (links token→user)    │
+   │  ↓ returns {requires_otp:true, ephemeral_token,  │
+   │             channels_available, message}         │
+   └──────────────────────────────────────────────────┘
+                       │
+                       ▼
+   ┌──────────────────────────────────────────────────┐
+   │  POST /users/login/send-otp                      │
+   │      {ephemeral_token, channel}                  │
+   │  ↓ resolve user by ephemeral_token_hash          │
+   │  ↓ enforce OTP_RESEND_COOLDOWN_SECONDS (429)     │
+   │  ↓ generate code, hash with HMAC-SHA256(pepper)  │
+   │  ↓ insert otp_codes row + notification_log row   │
+   │  ↓ dispatch via Mock | Http NotificationClient   │
+   │  ↓ returns {message, code?} (code only in mock)  │
+   └──────────────────────────────────────────────────┘
+                       │
+                       ▼
+   ┌──────────────────────────────────────────────────┐
+   │  POST /users/login/verify-otp                    │
+   │      {ephemeral_token, code}                     │
+   │  ↓ resolve OTP row; check not consumed/expired   │
+   │  ↓ verify code via constant-time HMAC compare    │
+   │  ↓ wrong → attempt_count++; if >= OTP_MAX_       │
+   │     ATTEMPTS, mark consumed and return 401       │
+   │  ↓ right → mark consumed, mint JWT pair          │
+   │  ↓ same shape as single-stage /login response    │
+   └──────────────────────────────────────────────────┘
+```
+
+Settings: `REQUIRE_2FA` (global), `OTP_TTL_SECONDS` (default 300), `OTP_RESEND_COOLDOWN_SECONDS` (default 60), `OTP_MAX_ATTEMPTS` (default 5), `OTP_CODE_LENGTH` (default 6), `OTP_HASH_PEPPER` (falls back to `SECRET_KEY`). Per-user opt-out via `users.two_factor_enabled=false` (PATCH `/users/{id}` with `users:update`).
+
+Service layer: [`app/api/v3/users/services/two_factor.py`](app/api/v3/users/services/two_factor.py). Tables: `otp_codes`, `notification_log`.
+
+**Password-reset state machine** — two calls, anti-enumeration on step 1.
+
+```
+   ┌──────────────────────────────────────────────────┐
+   │  POST /users/forgot-password                     │
+   │      {login_or_email, channel}                   │
+   │  ↓ ALWAYS returns 200 (anti-enumeration)         │
+   │  ↓ if user exists:                               │
+   │     - email channel: random URL-safe token       │
+   │     - sms channel:   6-digit OTP                 │
+   │     - hash with HMAC-SHA256(pepper)              │
+   │     - insert password_reset_tokens row           │
+   │     - dispatch via NotificationClient            │
+   │  ↓ if user doesn't exist: skip insert, same 200  │
+   └──────────────────────────────────────────────────┘
+                       │
+              (out-of-band: email or SMS delivery)
+                       │
+                       ▼
+   ┌──────────────────────────────────────────────────┐
+   │  POST /users/reset-password                      │
+   │      {token_or_code, new_password}               │
+   │  ↓ hash incoming value, lookup row by hash       │
+   │  ↓ check not consumed / not expired              │
+   │  ↓ update users.hashed_password (Argon2)         │
+   │  ↓ mark token row consumed (single-use)          │
+   │  ↓ clear refresh slots → existing sessions die   │
+   │  ↓ returns {message: "Password reset successfully."}│
+   └──────────────────────────────────────────────────┘
+```
+
+Settings: `PASSWORD_RESET_TTL_SECONDS` (default 3600s / 1 hour), shared `OTP_HASH_PEPPER`.
+
+Service layer: [`app/api/v3/users/services/password_reset.py`](app/api/v3/users/services/password_reset.py). Table: `password_reset_tokens` (column `token_hash` unique).
 
 ### 2.6 Dependency system (milestones / activities / tasks / subtasks)
 
@@ -224,7 +298,11 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | Endpoint | Auth | Permission | Body schema | Notes |
 |---|---|---|---|---|
 | `POST /users/introspect` | public | — | `IntrospectRequest` | Token introspection. `isAdmin` resolved from DB (doc 21B). |
-| `POST /users/login` | public | — | `LoginRequest` | Argon2 password check. Returns JWT access + refresh. Inactive users rejected. |
+| `POST /users/login` | public | — | `LoginRequest` | Argon2 password check. **Doc 33 change 3:** when `REQUIRE_2FA=true` AND `users.two_factor_enabled=true`, returns `{requires_otp:true, ephemeral_token, channels_available}` instead of the JWT pair; client follows up with `/login/send-otp` + `/login/verify-otp`. Otherwise returns the JWT pair directly (single-stage). Inactive users rejected. |
+| `POST /users/login/send-otp` | public (ephemeral_token) | — | `OtpSendRequest` | **Doc 33 change 3** — generate + dispatch a 6-digit OTP for an in-progress 2FA session. Body `{ephemeral_token, channel}`. Cooldown enforced via `OTP_RESEND_COOLDOWN_SECONDS` (default 60s) — earlier resends → 429. Mock backend echoes the code in the response; HTTP backend doesn't. |
+| `POST /users/login/verify-otp` | public (ephemeral_token + code) | — | `OtpVerifyRequest` | **Doc 33 change 3** — verify OTP and mint real JWT pair. Wrong codes consume an attempt up to `OTP_MAX_ATTEMPTS` (default 5); correct code consumes the row (single-use). 401 on wrong / expired / consumed / max-attempts-reached. |
+| `POST /users/forgot-password` | public | — | `ForgotPasswordRequest` | **Doc 33 change 3** — self-service password reset request. Body `{login_or_email, channel}`. **Always 200** (anti-enumeration) with a generic message. Email channel sends URL token via `password_reset_link` template; SMS channel sends 6-digit OTP via `password_reset_otp`. TTL `PASSWORD_RESET_TTL_SECONDS` (default 3600s). |
+| `POST /users/reset-password` | public (reset token) | — | `ResetPasswordRequest` | **Doc 33 change 3** — complete password reset. Body `{token_or_code, new_password}`. Single-use; clears the user's refresh slots so existing sessions are killed. 401 on expired/invalid/consumed. |
 | `POST /users/refresh` | public (refresh token) | — | `RefreshRequest` | Rotates the access token; refresh-token grace window of 120s applies (doc 19). |
 | `POST /users/logout` | JWT | `require_authenticated` | — | Revokes the current access JTI + clears all 4 refresh slots. |
 | `GET /users/me` | JWT | `require_authenticated` | — | Current user (now includes `phoneNumber`, `vendor`, `division`, `projects`). |

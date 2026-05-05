@@ -3,7 +3,7 @@
 **Project**: PMIS (Project Management Information System) — FastAPI backend
 **Version**: 3.0.0
 **Status**: Production-ready
-**Last refresh**: 2026-05-04 (after doc 26)
+**Last refresh**: 2026-05-06 (after doc 33)
 
 ---
 
@@ -248,7 +248,8 @@ Schema highlights to be aware of:
 | GET | `/api/v3/master/roles/{id}/permissions` | `master_data:view` | List role's permission set |
 | PUT | `/api/v3/master/roles/{id}/permissions` | `master_data:manage` | Replace permission set |
 | POST/DELETE | `/api/v3/master/roles/{id}/permissions/{code}` | `master_data:manage` | Grant / revoke single |
-| GET | `/api/v3/master/permissions` | `master_data:view` | List permission catalog |
+| GET | `/api/v3/master/permissions` | `master_data:view` | List permission catalog (flat) |
+| GET | `/api/v3/master/permissions/by-module` | `master_data:view` | **Doc 33 change 2** — same catalog grouped by module prefix; modules sorted alphabetically; permissions per module sorted by code |
 | POST | `/api/v3/master/permissions/create` | `master_data:manage` | Create custom permission |
 | PATCH/DELETE | `/api/v3/master/permissions/{code}` | `master_data:manage` | Edit / delete (built-ins protected) |
 
@@ -442,6 +443,22 @@ BOOTSTRAP_ADMIN_LOGIN=admin
 BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 BOOTSTRAP_ADMIN_PASSWORD=admin123
 SUBTASK_MAX_NESTING_DEPTH=                          # doc 24 — None = unlimited
+
+# ---- Doc 33 change 3: 2FA + forgot-password + notifications ----
+REQUIRE_2FA=true                                    # global toggle; per-user via twoFactorEnabled
+OTP_TTL_SECONDS=300                                 # OTP validity
+OTP_RESEND_COOLDOWN_SECONDS=60                      # min seconds between resends
+OTP_MAX_ATTEMPTS=5                                  # wrong codes before invalidation
+OTP_CODE_LENGTH=6
+OTP_HASH_PEPPER=                                    # falls back to SECRET_KEY when blank
+PASSWORD_RESET_TTL_SECONDS=3600                     # forgot-password token TTL
+NOTIFICATION_CLIENT=mock                            # mock | http
+NOTIFICATION_SERVICE_URL=                           # required when NOTIFICATION_CLIENT=http
+
+# ---- Doc 33 hotfix: deploy-time migration controls ----
+DATABASE_URL_MIGRATIONS=                            # optional elevated URL ONLY for `alembic upgrade head` at startup; falls back to DATABASE_URL
+MIGRATIONS_AUTORUN=true                             # set false to skip alembic at boot (DBA runs it out-of-band)
+MIGRATIONS_REQUIRED=true                            # set false to log alembic failures and continue boot anyway
 ```
 
 ### Bootstrap admin
@@ -482,3 +499,12 @@ Numbered docs in [planned_changes/](../planned_changes/) describe every BE shape
 | 24 | Past `start_date`, nested subtasks, drop dependency hierarchy rules |
 | 25 | Human-readable `vendorCode` / `userCode` (`VN-…` / `US-…`); polymorphic lookup; cross-entity vendor inputs accept UUID or code |
 | 26 | `users.id` flipped from `INTEGER` to `VARCHAR(36)` UUID; ~30 FK columns retyped in the same migration; pre-doc-26 JWTs invalidated |
+| 27 | IST/UTC date-equality fixes via `UtcDateTime` column type; pre-doc-26 JWT 401-not-500 |
+| 28/29 | Nested subtask listing fix; calendar-date input normalization across IST/UTC formats |
+| 30 | Dep-date enforcement for activities/tasks/subtasks; publish structural-completeness gate (`no_milestones` / `milestone_without_activity`) |
+| 31 | Milestone-specific dep-date rules (`source.start >= target.start`, `source.end > target.end`); milestone status-completion gate |
+| 32 | M/A/T/S create endpoints accept JSON or multipart on the same URL (inline `body` + `files`) |
+| 33 change 1 | Versioning removed (`/versions/create`, `/suspend`, `suspended` status, `isVersion`/`versionOf`/`baselineId`/`versionNo` fields all gone); tasks/subtasks writable directly on the project; new built-in `vendor` role; audit expanded with `actor_role` |
+| 33 change 2 | RBAC extension: `GET /api/v3/master/permissions/by-module` (catalog grouped by module); dead-code cleanup in `app/core/rbac.py` |
+| 33 change 3 | 2FA OTP login (`/login/send-otp`, `/login/verify-otp`); forgot-password (`/forgot-password`, `/reset-password`); per-user `twoFactorEnabled` toggle; `notification_log` / `otp_codes` / `password_reset_tokens` tables; `MockNotificationClient` (DB sink) + `HttpNotificationClient` (stub) |
+| 33 hotfix | `MIGRATIONS_AUTORUN` / `MIGRATIONS_REQUIRED` env vars + `DATABASE_URL_MIGRATIONS` for deploys where the runtime DB role lacks DDL ownership; PG boolean literal fix in `two_factor_enabled` backfill |
