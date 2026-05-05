@@ -38,7 +38,10 @@ def upgrade() -> None:
     # Add as nullable first, backfill, then mark NOT NULL.
     with op.batch_alter_table("users") as b:
         b.add_column(sa.Column("two_factor_enabled", sa.Boolean(), nullable=True))
-    op.execute("UPDATE users SET two_factor_enabled = 1 WHERE two_factor_enabled IS NULL")
+    # Use SQL boolean literal `true` (not `1`) — Postgres rejects integer
+    # values in a boolean assignment. SQLite accepts both, but the literal
+    # form is portable across both engines.
+    op.execute("UPDATE users SET two_factor_enabled = true WHERE two_factor_enabled IS NULL")
     with op.batch_alter_table("users") as b:
         b.alter_column(
             "two_factor_enabled",
