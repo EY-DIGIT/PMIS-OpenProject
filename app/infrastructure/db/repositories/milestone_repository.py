@@ -14,6 +14,7 @@ from ..models.subtask import SubtaskModel
 from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.milestones.milestone import Milestone
 from ....shared.comments_attachments_cascade import (
+    cascade_restore_comments_and_attachments,
     cascade_soft_delete_comments_and_attachments,
 )
 
@@ -277,18 +278,150 @@ class MilestoneRepository:
 
     def restore(self, milestone_id: str, restored_by: Optional[int]) -> Milestone:
         """
-        Restore a single milestone row. Does NOT auto-restore descendants --
-        the caller can restore them independently if desired. Soft-deleted
-        descendants stay soft-deleted (audit-preserving).
+        Restore a milestone PLUS every A/T/S/resource/comment/attachment
+        that was soft-deleted as part of the same cascade event (doc 34).
+
+        Identification: the soft-delete cascade stamps every row in the
+        subtree with the milestone's exact ``deleted_at`` timestamp.
+        Restoring that timestamp's worth of rows brings back exactly
+        what came down with the milestone — no more (rows soft-deleted
+        independently before the parent went down keep their
+        timestamps and stay dead) and no less.
+
+        Dep edges are NOT auto-restored. They were soft-deleted as a
+        side effect of the entity going away; bringing the entity back
+        doesn't necessarily mean the user wants the old dependencies
+        back (the target may have been gone for a long time, dates may
+        have shifted, etc.). Re-establish via PATCH dependsOn explicitly.
         """
         m = self.get_model(milestone_id, include_deleted=True)
         if m is None:
             raise LookupError(f"Milestone {milestone_id} not found")
         if m.deleted_at is None:
             return self._to_domain(m)  # already live; no-op
+
+        cascade_ts = m.deleted_at
+        now = datetime.now(timezone.utc)
+
+        # Restore the milestone row first.
         m.deleted_at = None
-        m.updated_at = datetime.now(timezone.utc)
+        m.updated_at = now
         m.updated_by = restored_by
+        self.db.flush()
+
+        # Restore every A/T/S/resource row whose deleted_at exactly
+        # matches the cascade timestamp. Top-down order (M is already
+        # done) — A then T then S then their resources.
+        self.db.execute(update(ActivityModel).where(
+            ActivityModel.milestone_id == milestone_id,
+            ActivityModel.deleted_at == cascade_ts,
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+        self.db.execute(update(TaskModel).where(
+            TaskModel.project_id == m.project_id,
+            TaskModel.deleted_at == cascade_ts,
+            TaskModel.activity_id.in_(
+                select(ActivityModel.id).where(
+                    ActivityModel.milestone_id == milestone_id,
+                    ActivityModel.deleted_at.is_(None),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+        self.db.execute(update(SubtaskModel).where(
+            SubtaskModel.project_id == m.project_id,
+            SubtaskModel.deleted_at == cascade_ts,
+            SubtaskModel.task_id.in_(
+                select(TaskModel.id).where(
+                    TaskModel.deleted_at.is_(None),
+                    TaskModel.activity_id.in_(
+                        select(ActivityModel.id).where(
+                            ActivityModel.milestone_id == milestone_id,
+                            ActivityModel.deleted_at.is_(None),
+                        )
+                    ),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+
+        # Resource rows hang off the matching M/A/T/S (now revived).
+        self.db.execute(update(ActivityResourceModel).where(
+            ActivityResourceModel.deleted_at == cascade_ts,
+            ActivityResourceModel.activity_id.in_(
+                select(ActivityModel.id).where(
+                    ActivityModel.milestone_id == milestone_id,
+                    ActivityModel.deleted_at.is_(None),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now))
+        self.db.execute(update(TaskResourceModel).where(
+            TaskResourceModel.deleted_at == cascade_ts,
+            TaskResourceModel.task_id.in_(
+                select(TaskModel.id).where(
+                    TaskModel.deleted_at.is_(None),
+                    TaskModel.activity_id.in_(
+                        select(ActivityModel.id).where(
+                            ActivityModel.milestone_id == milestone_id,
+                            ActivityModel.deleted_at.is_(None),
+                        )
+                    ),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now))
+        self.db.execute(update(SubtaskResourceModel).where(
+            SubtaskResourceModel.deleted_at == cascade_ts,
+            SubtaskResourceModel.subtask_id.in_(
+                select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at.is_(None),
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.deleted_at.is_(None),
+                            TaskModel.activity_id.in_(
+                                select(ActivityModel.id).where(
+                                    ActivityModel.milestone_id == milestone_id,
+                                    ActivityModel.deleted_at.is_(None),
+                                )
+                            ),
+                        )
+                    ),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now))
+
+        # Comments + attachments — match the cascade-deleted set.
+        cascade_restore_comments_and_attachments(
+            self.db,
+            targets=[
+                ("milestone", milestone_id),
+                ("activity", select(ActivityModel.id).where(
+                    ActivityModel.milestone_id == milestone_id,
+                    ActivityModel.deleted_at.is_(None),
+                )),
+                ("task", select(TaskModel.id).where(
+                    TaskModel.deleted_at.is_(None),
+                    TaskModel.activity_id.in_(
+                        select(ActivityModel.id).where(
+                            ActivityModel.milestone_id == milestone_id,
+                            ActivityModel.deleted_at.is_(None),
+                        )
+                    ),
+                )),
+                ("subtask", select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at.is_(None),
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.deleted_at.is_(None),
+                            TaskModel.activity_id.in_(
+                                select(ActivityModel.id).where(
+                                    ActivityModel.milestone_id == milestone_id,
+                                    ActivityModel.deleted_at.is_(None),
+                                )
+                            ),
+                        )
+                    ),
+                )),
+            ],
+            cascade_deleted_at=cascade_ts,
+        )
+
         self.db.commit()
         self.db.refresh(m)
         return self._to_domain(m)

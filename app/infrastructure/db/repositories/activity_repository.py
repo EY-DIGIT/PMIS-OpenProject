@@ -14,6 +14,7 @@ from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.activities.activity import Activity
 from ....domain.activities.activity_resource import ActivityResource
 from ....shared.comments_attachments_cascade import (
+    cascade_restore_comments_and_attachments,
     cascade_soft_delete_comments_and_attachments,
 )
 
@@ -311,14 +312,89 @@ class ActivityRepository:
         self.db.commit()
 
     def restore(self, activity_id: str, restored_by: Optional[int]) -> Activity:
+        """
+        Restore the activity + every T/S/resource/comment/attachment that
+        was soft-deleted as part of the same cascade event (doc 34).
+        Dep edges are NOT auto-restored.
+        """
         a = self.get_model(activity_id, include_deleted=True)
         if a is None:
             raise LookupError(f"Activity {activity_id} not found")
         if a.deleted_at is None:
             return self._to_domain(a)
+
+        cascade_ts = a.deleted_at
+        now = datetime.now(timezone.utc)
+
         a.deleted_at = None
-        a.updated_at = datetime.now(timezone.utc)
+        a.updated_at = now
         a.updated_by = restored_by
+        self.db.flush()
+
+        self.db.execute(update(TaskModel).where(
+            TaskModel.activity_id == activity_id,
+            TaskModel.deleted_at == cascade_ts,
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+        self.db.execute(update(SubtaskModel).where(
+            SubtaskModel.deleted_at == cascade_ts,
+            SubtaskModel.task_id.in_(
+                select(TaskModel.id).where(
+                    TaskModel.activity_id == activity_id,
+                    TaskModel.deleted_at.is_(None),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+
+        # Resources.
+        self.db.execute(update(ActivityResourceModel).where(
+            ActivityResourceModel.activity_id == activity_id,
+            ActivityResourceModel.deleted_at == cascade_ts,
+        ).values(deleted_at=None, updated_at=now))
+        self.db.execute(update(TaskResourceModel).where(
+            TaskResourceModel.deleted_at == cascade_ts,
+            TaskResourceModel.task_id.in_(
+                select(TaskModel.id).where(
+                    TaskModel.activity_id == activity_id,
+                    TaskModel.deleted_at.is_(None),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now))
+        self.db.execute(update(SubtaskResourceModel).where(
+            SubtaskResourceModel.deleted_at == cascade_ts,
+            SubtaskResourceModel.subtask_id.in_(
+                select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at.is_(None),
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.activity_id == activity_id,
+                            TaskModel.deleted_at.is_(None),
+                        )
+                    ),
+                )
+            ),
+        ).values(deleted_at=None, updated_at=now))
+
+        cascade_restore_comments_and_attachments(
+            self.db,
+            targets=[
+                ("activity", activity_id),
+                ("task", select(TaskModel.id).where(
+                    TaskModel.activity_id == activity_id,
+                    TaskModel.deleted_at.is_(None),
+                )),
+                ("subtask", select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at.is_(None),
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.activity_id == activity_id,
+                            TaskModel.deleted_at.is_(None),
+                        )
+                    ),
+                )),
+            ],
+            cascade_deleted_at=cascade_ts,
+        )
+
         self.db.commit()
         self.db.refresh(a)
         return self._to_domain(a)

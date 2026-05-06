@@ -757,6 +757,155 @@ class TestExternalDepBlock:
         )
 
 
+class TestRestoreCascade:
+    """Doc 34 (3/3): restoring an M/A/T/S also restores the rows that
+    were cascade-soft-deleted with it (matched by deleted_at
+    timestamp). Dep edges are NOT auto-restored."""
+
+    def test_milestone_restore_revives_atss_subtree(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.infrastructure.db.repositories.milestone_repository import (
+            MilestoneRepository,
+        )
+        repo = MilestoneRepository(db_session)
+        repo.soft_delete_with_cascade(
+            cascade_tree["target_M"].id, deleted_by=admin_user.id,
+        )
+        # Sanity: subtree is dead.
+        assert _is_deleted(db_session, MilestoneModel, cascade_tree["target_M"].id)
+        assert _is_deleted(db_session, ActivityModel, cascade_tree["target_A"].id)
+        assert _is_deleted(db_session, TaskModel, cascade_tree["target_T"].id)
+        assert _is_deleted(db_session, SubtaskModel, cascade_tree["target_S"].id)
+
+        repo.restore(cascade_tree["target_M"].id, restored_by=admin_user.id)
+
+        # All four levels alive again.
+        assert _is_live(db_session, MilestoneModel, cascade_tree["target_M"].id)
+        assert _is_live(db_session, ActivityModel, cascade_tree["target_A"].id)
+        assert _is_live(db_session, TaskModel, cascade_tree["target_T"].id)
+        assert _is_live(db_session, SubtaskModel, cascade_tree["target_S"].id)
+
+    def test_milestone_restore_revives_comments_and_attachments(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.infrastructure.db.repositories.milestone_repository import (
+            MilestoneRepository,
+        )
+        repo = MilestoneRepository(db_session)
+        repo.soft_delete_with_cascade(
+            cascade_tree["target_M"].id, deleted_by=admin_user.id,
+        )
+        repo.restore(cascade_tree["target_M"].id, restored_by=admin_user.id)
+
+        for kind in ("milestone", "activity", "task", "subtask"):
+            assert _is_live(
+                db_session, CommentModel,
+                cascade_tree["target_comments"][kind].id,
+            ), f"{kind} comment should be revived"
+            assert _is_live(
+                db_session, AttachmentModel,
+                cascade_tree["target_attachments"][kind].id,
+            ), f"{kind} attachment should be revived"
+        # Comment-bound attachment also revived.
+        assert _is_live(
+            db_session, AttachmentModel,
+            cascade_tree["target_comment_bound_attachment"].id,
+        )
+
+    def test_restore_does_not_revive_independently_deleted_rows(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """A comment soft-deleted independently before the milestone
+        cascade should stay dead after the milestone is restored."""
+        independent_ts = datetime(2026, 1, 1, 8, 0, tzinfo=timezone.utc)
+        c = cascade_tree["target_comments"]["activity"]
+        c.deleted_at = independent_ts
+        db_session.commit()
+
+        from app.infrastructure.db.repositories.milestone_repository import (
+            MilestoneRepository,
+        )
+        repo = MilestoneRepository(db_session)
+        repo.soft_delete_with_cascade(
+            cascade_tree["target_M"].id, deleted_by=admin_user.id,
+        )
+        repo.restore(cascade_tree["target_M"].id, restored_by=admin_user.id)
+
+        # The activity-level comment should NOT be revived because its
+        # deleted_at predates the cascade.
+        c_after = db_session.query(CommentModel).filter_by(id=c.id).one()
+        assert c_after.deleted_at is not None, (
+            "comment soft-deleted independently must not be revived by "
+            "the parent's cascade restore"
+        )
+
+    def test_activity_restore_revives_t_and_s_only(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.infrastructure.db.repositories.activity_repository import (
+            ActivityRepository,
+        )
+        repo = ActivityRepository(db_session)
+        repo.soft_delete_with_cascade(
+            cascade_tree["target_A"].id, deleted_by=admin_user.id,
+        )
+        # Milestone untouched — only A/T/S go dead.
+        assert _is_live(db_session, MilestoneModel, cascade_tree["target_M"].id)
+        assert _is_deleted(db_session, ActivityModel, cascade_tree["target_A"].id)
+
+        repo.restore(cascade_tree["target_A"].id, restored_by=admin_user.id)
+        assert _is_live(db_session, ActivityModel, cascade_tree["target_A"].id)
+        assert _is_live(db_session, TaskModel, cascade_tree["target_T"].id)
+        assert _is_live(db_session, SubtaskModel, cascade_tree["target_S"].id)
+
+    def test_task_restore_revives_subtasks(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.infrastructure.db.repositories.task_repository import (
+            TaskRepository,
+        )
+        repo = TaskRepository(db_session)
+        repo.soft_delete_with_cascade(
+            cascade_tree["target_T"].id, deleted_by=admin_user.id,
+        )
+        repo.restore(cascade_tree["target_T"].id, restored_by=admin_user.id)
+        assert _is_live(db_session, TaskModel, cascade_tree["target_T"].id)
+        assert _is_live(db_session, SubtaskModel, cascade_tree["target_S"].id)
+
+    def test_subtask_restore_revives_nested_descendants(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        # Add a nested subtask under target_S.
+        nested = SubtaskModel(
+            id=str(uuid4()),
+            project_id=cascade_tree["target_S"].project_id,
+            task_id=cascade_tree["target_S"].task_id,
+            parent_subtask_id=cascade_tree["target_S"].id,
+            name="nested",
+            type="standard",
+            start_date=datetime(2026, 4, 5),
+            end_date=datetime(2026, 4, 25),
+            position=1,
+        )
+        db_session.add(nested)
+        db_session.commit()
+
+        from app.infrastructure.db.repositories.subtask_repository import (
+            SubtaskRepository,
+        )
+        repo = SubtaskRepository(db_session)
+        repo.soft_delete(
+            cascade_tree["target_S"].id, deleted_by=admin_user.id,
+        )
+        assert _is_deleted(db_session, SubtaskModel, cascade_tree["target_S"].id)
+        assert _is_deleted(db_session, SubtaskModel, nested.id)
+
+        repo.restore(cascade_tree["target_S"].id, restored_by=admin_user.id)
+        assert _is_live(db_session, SubtaskModel, cascade_tree["target_S"].id)
+        assert _is_live(db_session, SubtaskModel, nested.id)
+
+
 class TestPreExistingSoftDeletesNotReStamped:
     def test_already_deleted_comment_is_not_re_touched(
         self, db_session, cascade_tree, admin_user,

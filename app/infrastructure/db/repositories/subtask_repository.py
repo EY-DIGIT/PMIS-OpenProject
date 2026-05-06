@@ -11,6 +11,7 @@ from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.subtasks.subtask import Subtask
 from ....domain.subtasks.subtask_resource import SubtaskResource
 from ....shared.comments_attachments_cascade import (
+    cascade_restore_comments_and_attachments,
     cascade_soft_delete_comments_and_attachments,
 )
 
@@ -383,14 +384,59 @@ class SubtaskRepository:
         return ids
 
     def restore(self, subtask_id: str, restored_by: Optional[int]) -> Subtask:
+        """
+        Restore the subtask + every nested-descendant subtask /
+        resource / comment / attachment that was soft-deleted as part
+        of the same cascade event (doc 34). Dep edges are NOT
+        auto-restored.
+
+        Identification: every row stamped by ``soft_delete`` shares the
+        same ``deleted_at`` timestamp (microsecond-precise via
+        ``datetime.now()``). BFS down ``parent_subtask_id`` collects
+        every descendant whose ``deleted_at`` matches.
+        """
         s = self.get_model(subtask_id, include_deleted=True)
         if s is None:
             raise LookupError(f"Subtask {subtask_id} not found")
         if s.deleted_at is None:
             return self._to_domain(s)
-        s.deleted_at = None
-        s.updated_at = datetime.now(timezone.utc)
-        s.updated_by = restored_by
+
+        cascade_ts = s.deleted_at
+        now = datetime.now(timezone.utc)
+
+        all_ids = {subtask_id}
+        queue = deque([subtask_id])
+        while queue:
+            parent = queue.popleft()
+            children = [
+                r[0] for r in self.db.execute(
+                    select(SubtaskModel.id).where(
+                        SubtaskModel.parent_subtask_id == parent,
+                        SubtaskModel.deleted_at == cascade_ts,
+                    )
+                ).all()
+            ]
+            for cid in children:
+                if cid not in all_ids:
+                    all_ids.add(cid)
+                    queue.append(cid)
+
+        id_list = list(all_ids)
+        self.db.execute(update(SubtaskModel).where(
+            SubtaskModel.id.in_(id_list),
+        ).values(deleted_at=None, updated_at=now, updated_by=restored_by))
+
+        self.db.execute(update(SubtaskResourceModel).where(
+            SubtaskResourceModel.subtask_id.in_(id_list),
+            SubtaskResourceModel.deleted_at == cascade_ts,
+        ).values(deleted_at=None, updated_at=now))
+
+        cascade_restore_comments_and_attachments(
+            self.db,
+            targets=[("subtask", id_list)],
+            cascade_deleted_at=cascade_ts,
+        )
+
         self.db.commit()
         self.db.refresh(s)
         return self._to_domain(s)
