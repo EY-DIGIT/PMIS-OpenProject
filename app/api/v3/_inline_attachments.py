@@ -309,95 +309,69 @@ def persist_inline_comment_or_files(
     parent_label: str,
     retry_endpoint_path: str,
 ) -> Tuple[
-    Optional[Dict[str, Any]],   # comment_payload (or None)
-    List[Dict[str, Any]],        # standalone_payload (possibly empty)
+    Optional[Dict[str, Any]],   # comment_payload (or None when nothing was sent)
+    List[Dict[str, Any]],        # standalone_payload (always [] post-doc-34)
     Optional[Dict[str, Any]],    # error tuple (error_response_dict, status) or None
 ]:
     """Route the inline comment/files for a freshly-created parent row.
 
-    Returns a 3-tuple:
-      * ``(comment_payload, [], None)``                — body present (with or without files)
-      * ``(None, [att_payloads...], None)``            — files only, no body
-      * ``(None, [], None)``                           — neither (nothing to do)
-      * ``(None, [], (error_dict, status))``           — failure mid-way; caller
-                                                         renders the error
-                                                         envelope so the FE can
-                                                         retry against the
-                                                         standalone endpoint.
+    Doc 35 simplification: a single ``create_comment`` call now handles
+    every shape (body-only, files-only, body+files) by writing one row
+    to the unified comments table. The historical "files only goes to
+    a separate standalone-attachment endpoint" branch is gone — files
+    without a body just produce a row with NULL body and a populated
+    JSON ``attachments`` list.
 
-    ``parent_label`` and ``retry_endpoint_path`` go into the failure
-    message so the FE knows which row was orphaned and where to retry.
+    Returns a 3-tuple:
+      * ``(comment_payload, [], None)``       — body and/or files were sent
+      * ``(None, [], None)``                  — neither (nothing to do)
+      * ``(None, [], (error_dict, status))``  — failure mid-way; caller
+                                                renders the error envelope.
+
+    ``standalone_payload`` is kept in the return tuple shape for source
+    compatibility with the four entity controllers; it always returns
+    ``[]`` post-doc-34 since standalone attachments are now just
+    body-NULL comment rows. Controllers can drop their
+    ``standaloneAttachments`` response key — included in the comment
+    payload's ``attachments`` JSON list when present — but leaving the
+    branch in place is harmless.
     """
     body_clean = (body or "").strip()
-    if body_clean:
-        result = create_comment(
-            db,
-            target_kind=target_kind,
-            target_id=target_id,
-            body=body_clean,
-            files=files,
-            author_user_id=current_user_id,
-        )
-        if result.is_success():
-            return format_comment_response(result.data.to_dict()), [], None
-        _log.warning(
-            "Doc 30 inline comment failed for %s %s: %s",
-            target_kind, target_id, result.error,
-        )
-        return None, [], (
-            {
-                "error_type": result.error_type or "internal_error",
-                "message": (
-                    f"{parent_label} {target_id} was created, but the inline "
-                    f"comment / attachment failed: {result.error}. You can "
-                    f"retry the upload via {retry_endpoint_path}."
-                ),
-                "details": {
-                    "id": target_id,
-                    "originalError": result.details,
-                },
+    files = files or []
+
+    if not body_clean and not files:
+        return None, [], None
+
+    result = create_comment(
+        db,
+        target_kind=target_kind,
+        target_id=target_id,
+        body=body_clean or None,
+        files=files,
+        author_user_id=current_user_id,
+    )
+    if result.is_success():
+        return format_comment_response(result.data.to_dict()), [], None
+
+    _log.warning(
+        "Doc 30 inline comment failed for %s %s: %s",
+        target_kind, target_id, result.error,
+    )
+    return None, [], (
+        {
+            "error_type": result.error_type or "internal_error",
+            "message": (
+                f"{parent_label} {target_id} was created, but the inline "
+                f"comment / attachment failed: {result.error}. You can "
+                f"retry the upload via {retry_endpoint_path}."
+            ),
+            "details": {
+                "id": target_id,
+                "originalError": result.details,
             },
-            status_for_error(result.error_type),
-        )
-
-    if files:
-        standalone: List[Dict[str, Any]] = []
-        for upload in files:
-            up_res = upload_standalone_attachment(
-                db,
-                target_kind=target_kind,
-                target_id=target_id,
-                upload=upload,
-                uploaded_by_user_id=current_user_id,
-            )
-            if up_res.is_success():
-                standalone.append(format_attachment_response(up_res.data.to_dict()))
-                continue
-            _log.warning(
-                "Doc 30 inline standalone attachment failed for %s %s, file %s: %s",
-                target_kind, target_id, getattr(upload, "filename", "?"), up_res.error,
-            )
-            return None, [], (
-                {
-                    "error_type": up_res.error_type or "internal_error",
-                    "message": (
-                        f"{parent_label} {target_id} was created. {len(standalone)} "
-                        f"file(s) attached successfully, but '"
-                        f"{getattr(upload, 'filename', '?')}' failed: {up_res.error}. "
-                        f"You can retry via {retry_endpoint_path}."
-                    ),
-                    "details": {
-                        "id": target_id,
-                        "filenameFailed": getattr(upload, "filename", None),
-                        "successfulCount": len(standalone),
-                        "originalError": up_res.details,
-                    },
-                },
-                status_for_error(up_res.error_type),
-            )
-        return None, standalone, None
-
-    return None, [], None
+        },
+        status_for_error(result.error_type),
+    )
 
 
 # ---------------------------------------------------------------------------

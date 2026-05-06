@@ -5,14 +5,16 @@ Subsequent commits in the same doc 34 series add:
   - restore cascade (commit after that)
 
 Each cascade-method on the M/A/T/S repos was extended in this commit
-to also stamp ``deleted_at`` on every comment + attachment whose
-target lives anywhere in the about-to-be-deleted subtree, plus every
-attachment that's bound (via ``comment_id``) to a comment we're
-soft-deleting.
+to also stamp ``deleted_at`` on every comment whose target lives
+anywhere in the about-to-be-deleted subtree.
 
-The tests build a small M → A → T → S tree, attach a comment + an
-attachment at every level, soft-delete the entity at one level, and
-assert the cascade reaches every descendant comment + attachment.
+Doc 35 update: the separate ``attachments`` table was collapsed onto
+``comments.attachments`` (JSON column). What were "standalone
+attachments" are now comment rows with NULL body. What were
+"comment-bound attachments" are now JSON entries on the parent comment
+row. The cascade walk only touches one table now (``comments``) — these
+tests still cover the same lifecycle, but the assertions all read the
+``CommentModel`` row (the JSON column rides along automatically).
 """
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -20,7 +22,7 @@ from uuid import uuid4
 import pytest
 
 from app.infrastructure.db.models.activity import ActivityModel
-from app.infrastructure.db.models.attachment import AttachmentModel
+# Doc 35: AttachmentModel removed (collapsed onto CommentModel.attachments JSON column).
 from app.infrastructure.db.models.comment import CommentModel
 from app.infrastructure.db.models.milestone import MilestoneModel
 from app.infrastructure.db.models.subtask import SubtaskModel
@@ -119,21 +121,54 @@ def _add_attachment(
     target_id=None,
     comment_id=None,
     author_user_id,
-) -> AttachmentModel:
-    a = AttachmentModel(
+) -> CommentModel:
+    """Doc 35 shim — preserves the old test API while writing to the
+    new single-table model.
+
+    Two scenarios covered:
+      * ``target_kind`` + ``target_id`` set, ``comment_id`` None
+        → creates a new comment row with NULL body and one attachment
+        in its JSON column. This is the doc-35 equivalent of a
+        "standalone attachment".
+      * ``comment_id`` set, ``target_kind`` / ``target_id`` None
+        → appends one entry to the parent comment row's
+        ``attachments`` JSON list. Returns the (mutated) parent comment
+        so the test's ``_is_deleted(db, CommentModel, x.id)`` assertions
+        check the parent — which is exactly the cascade target now.
+    """
+    file_entry = {
+        "url": f"local/{uuid4()}",
+        "filename": "x.pdf",
+        "mimeType": "application/pdf",
+        "sizeBytes": 1,
+        "uploadedAt": None,
+    }
+    if comment_id is not None:
+        # Comment-bound: append to the parent comment's JSON list and
+        # return the parent so test assertions look it up by id.
+        parent = db.query(CommentModel).filter_by(id=comment_id).one()
+        existing = list(parent.attachments or [])
+        existing.append(file_entry)
+        parent.attachments = existing
+        # SQLAlchemy doesn't auto-detect mutations to JSON column values;
+        # poke the attribute so the change is flushed.
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(parent, "attachments")
+        db.flush()
+        return parent
+
+    # Standalone: a body-NULL comment row carrying one attachment entry.
+    c = CommentModel(
         id=str(uuid4()),
-        comment_id=comment_id,
         target_kind=target_kind,
         target_id=target_id,
-        original_filename="x.pdf",
-        storage_key=f"k/{uuid4()}",
-        mime_type="application/pdf",
-        size_bytes=1,
-        uploaded_by_user_id=author_user_id,
+        body=None,
+        attachments=[file_entry],
+        author_user_id=author_user_id,
     )
-    db.add(a)
+    db.add(c)
     db.flush()
-    return a
+    return c
 
 
 @pytest.fixture
@@ -305,12 +340,12 @@ class TestMilestoneDeleteCascadesCommentsAttachments:
         )
         for kind in ("milestone", "activity", "task", "subtask"):
             assert _is_deleted(
-                db_session, AttachmentModel,
+                db_session, CommentModel,
                 cascade_tree["target_attachments"][kind].id,
             ), f"target {kind} attachment should be soft-deleted"
         # Sibling milestone attachment stays live.
         assert _is_live(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["sibling_attachments"]["milestone"].id,
         )
 
@@ -326,7 +361,7 @@ class TestMilestoneDeleteCascadesCommentsAttachments:
         # The comment-bound attachment under target_T's comment should
         # follow the comment, not via target_kind/target_id.
         assert _is_deleted(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["target_comment_bound_attachment"].id,
         )
 
@@ -354,7 +389,7 @@ class TestMilestoneDeleteCascadesCommentsAttachments:
         c = db_session.query(CommentModel).filter_by(
             id=cascade_tree["target_comments"]["activity"].id,
         ).one()
-        att = db_session.query(AttachmentModel).filter_by(
+        att = db_session.query(CommentModel).filter_by(
             id=cascade_tree["target_attachments"]["task"].id,
         ).one()
         assert a.deleted_at == ts
@@ -416,7 +451,7 @@ class TestTaskDeleteCascadesCommentsAttachments:
             cascade_tree["target_T"].id, deleted_by=admin_user.id,
         )
         assert _is_deleted(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["target_comment_bound_attachment"].id,
         )
 
@@ -436,7 +471,7 @@ class TestSubtaskDeleteCascadesCommentsAttachments:
             cascade_tree["target_comments"]["subtask"].id,
         )
         assert _is_deleted(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["target_attachments"]["subtask"].id,
         )
         # M / A / T comments + attachments stay live.
@@ -472,7 +507,7 @@ class TestProjectDeleteCascadesEverything:
             )
         # The comment-bound attachment is also gone.
         assert _is_deleted(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["target_comment_bound_attachment"].id,
         )
 
@@ -804,12 +839,12 @@ class TestRestoreCascade:
                 cascade_tree["target_comments"][kind].id,
             ), f"{kind} comment should be revived"
             assert _is_live(
-                db_session, AttachmentModel,
+                db_session, CommentModel,
                 cascade_tree["target_attachments"][kind].id,
-            ), f"{kind} attachment should be revived"
+            ), f"{kind} attachment-row should be revived"
         # Comment-bound attachment also revived.
         assert _is_live(
-            db_session, AttachmentModel,
+            db_session, CommentModel,
             cascade_tree["target_comment_bound_attachment"].id,
         )
 

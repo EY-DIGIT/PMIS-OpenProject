@@ -37,10 +37,11 @@ from app.infrastructure.db.models.activity import ActivityModel
 from app.infrastructure.db.models.task import TaskModel
 from app.infrastructure.db.models.subtask import SubtaskModel
 from app.infrastructure.db.models.comment import CommentModel
-from app.infrastructure.db.models.attachment import AttachmentModel
+# Doc 35: AttachmentModel removed (collapsed onto CommentModel.attachments JSON column).
 from app.infrastructure.db.models.resource_type import ResourceTypeModel
 import app.infrastructure.storage as storage_pkg
 from app.infrastructure.storage.file_storage import FileStorage
+from app.infrastructure.storage import reset_file_client_for_tests
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,11 @@ def temp_storage(tmp_path, monkeypatch):
     )
     tmp.ensure_ready()
     monkeypatch.setattr(storage_pkg.file_storage, "_storage", tmp)
+    # Doc 35: the file client wraps the low-level storage; reset it so
+    # each test sees the freshly-redirected storage.
+    reset_file_client_for_tests()
     yield tmp
+    reset_file_client_for_tests()
 
 
 # ---------------------------------------------------------------------------
@@ -260,12 +265,14 @@ class TestActivityStandardMultipart:
         d = resp.json()["data"]
         assert d["comment"]["body"] == "see spec"
         assert len(d["comment"]["attachments"]) == 1
-        assert d["comment"]["attachments"][0]["originalFilename"] == "a.pdf"
+        assert d["comment"]["attachments"][0]["filename"] == "a.pdf"
 
-    def test_files_only_creates_standalone(
+    def test_files_only_creates_body_null_comment(
         self, client, admin_user, admin_headers, standard_milestone,
         temp_storage, db_session,
     ):
+        """Doc 35: files-only sends now produce a comment row with NULL
+        body. The legacy ``standaloneAttachments`` response key is gone."""
         resp = client.post(
             self._url(standard_milestone.id),
             headers=admin_headers,
@@ -274,8 +281,11 @@ class TestActivityStandardMultipart:
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
-        assert "comment" not in d
-        assert len(d["standaloneAttachments"]) == 1
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        assert len(d["comment"]["attachments"]) == 1
+        assert d["comment"]["attachments"][0]["filename"] == "x.pdf"
+        assert "standaloneAttachments" not in d
 
     def test_bad_extension_rejected_pre_create(
         self, client, admin_user, admin_headers, standard_milestone,
@@ -472,7 +482,11 @@ class TestActivityTransactionalMultipart:
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
         assert d["type"] == "transactional"
-        assert len(d["standaloneAttachments"]) == 1
+        # Doc 35: files-only ⇒ comment row with NULL body, attachments JSON list.
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        assert len(d["comment"]["attachments"]) == 1
+        assert "standaloneAttachments" not in d
 
 
 # ===========================================================================
@@ -530,6 +544,7 @@ class TestTaskMultipart:
         self, client, admin_user, admin_headers, version_activity_id,
         temp_storage, db_session,
     ):
+        """Doc 35: files-only ⇒ comment row with NULL body."""
         resp = client.post(
             self._url(version_activity_id),
             headers=admin_headers,
@@ -538,8 +553,10 @@ class TestTaskMultipart:
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
-        assert "comment" not in d
-        assert len(d["standaloneAttachments"]) == 1
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        assert len(d["comment"]["attachments"]) == 1
+        assert "standaloneAttachments" not in d
 
     def test_bad_extension_does_not_orphan_task(
         self, client, admin_user, admin_headers, version_activity_id,
@@ -616,6 +633,7 @@ class TestSubtaskTaskScopedMultipart:
         self, client, admin_user, admin_headers, version_task_id,
         temp_storage, db_session,
     ):
+        """Doc 35: files-only ⇒ comment row with NULL body."""
         resp = client.post(
             self._url(version_task_id),
             headers=admin_headers,
@@ -623,7 +641,11 @@ class TestSubtaskTaskScopedMultipart:
             files=[("files", ("y.pdf", b"%PDF-1.4 y", "application/pdf"))],
         )
         assert resp.status_code == 201, resp.text
-        assert len(resp.json()["data"]["standaloneAttachments"]) == 1
+        d = resp.json()["data"]
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        assert len(d["comment"]["attachments"]) == 1
+        assert "standaloneAttachments" not in d
 
     def test_bad_extension_does_not_orphan_subtask(
         self, client, admin_user, admin_headers, version_task_id,
@@ -685,10 +707,11 @@ class TestSubtaskNestedMultipart:
         assert d["comment"]["body"] == "nested notes"
         assert len(d["comment"]["attachments"]) == 1
 
-    def test_multipart_files_only_creates_standalone(
+    def test_multipart_files_only_creates_body_null_comment(
         self, client, admin_user, admin_headers, version_subtask_id,
         temp_storage, db_session,
     ):
+        """Doc 35: files-only ⇒ comment row with NULL body."""
         resp = client.post(
             self._url(version_subtask_id),
             headers=admin_headers,
@@ -698,8 +721,10 @@ class TestSubtaskNestedMultipart:
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
         assert d["parentSubtaskId"] == version_subtask_id
-        assert "comment" not in d
-        assert len(d["standaloneAttachments"]) == 1
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        assert len(d["comment"]["attachments"]) == 1
+        assert "standaloneAttachments" not in d
 
     def test_bad_extension_does_not_orphan_nested_subtask(
         self, client, admin_user, admin_headers, version_subtask_id,

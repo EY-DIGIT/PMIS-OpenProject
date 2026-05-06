@@ -197,6 +197,68 @@ class Settings(BaseSettings):
         description="NFS export path (informational; for /health only).",
     )
 
+    # ---- Doc 35: external file server URLs --------------------------------
+    #
+    # The senior wants attachments addressed by URL (with ip:port) so
+    # the FE fetches bytes directly from the file server, not via the
+    # BE's streaming download path. To support that without coupling
+    # this commit to a specific file-server deployment, the storage
+    # layer is split into two parts:
+    #
+    #   1. ``ATTACHMENTS_STORAGE_BASE_PATH`` (above) — where bytes
+    #      actually live on disk (or NFS / future object store).
+    #   2. ``FILE_SERVER_PUBLIC_BASE_URL`` (here) — what URL prefix
+    #      gets stored on the comment row's ``attachments`` JSON
+    #      column. The FE concatenates this with the ``storage_key``
+    #      relative path to get a fetchable URL.
+    #
+    # When unset (default), URLs are persisted as relative paths and
+    # the BE serves them via the fallback route ``GET /files/{key}``.
+    # When set to e.g. ``https://files.pmis.example.org``, every newly
+    # stored row carries a fully-qualified URL the FE hits directly.
+    FILE_SERVER_PUBLIC_BASE_URL: str = Field(
+        default="",
+        description=(
+            "Public URL prefix for stored attachment files. When unset, "
+            "URLs are stored as relative paths and the BE's local "
+            "fallback route serves them. When set to an external server "
+            "URL, every new attachment row stores the full URL and the "
+            "FE fetches bytes directly."
+        ),
+    )
+
+    # When True, the BE mounts a fallback route at ``/files/{key}`` that
+    # streams bytes from the local storage path. Useful for dev and for
+    # legacy URLs that were stored as relative paths before the public
+    # base URL was configured.
+    FILE_SERVER_LOCAL_FALLBACK_ENABLED: bool = Field(
+        default=True,
+        description=(
+            "Mount GET /files/{key} as a local fallback that streams "
+            "bytes from ATTACHMENTS_STORAGE_BASE_PATH. Disable in "
+            "deployments where every URL is fully-qualified to an "
+            "external file server."
+        ),
+    )
+
+    # When the BE is told to forward bytes to an external file server
+    # (e.g. an internal microservice rather than serving locally), set
+    # these. When unset, the local-disk client is used and the BE
+    # stores bytes itself. This is wired but not enabled by default;
+    # flip on once the file server is deployed.
+    FILE_SERVER_BASE_URL: str = Field(
+        default="",
+        description=(
+            "Internal URL of the file-server upload endpoint. When set, "
+            "the BE forwards uploaded bytes there and stores the URL "
+            "the server returns. When unset, bytes are written locally."
+        ),
+    )
+    FILE_SERVER_AUTH_TOKEN: str = Field(
+        default="",
+        description="Auth token for FILE_SERVER_BASE_URL upload calls.",
+    )
+
     # ---- Doc 33 change 3: 2FA OTP + forgot-password ----
 
     # Whether 2FA is mandatory by default. When True (the default per

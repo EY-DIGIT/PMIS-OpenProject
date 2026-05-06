@@ -1,8 +1,21 @@
-"""Tests for standalone attachments — upload, download, list, delete.
+"""Tests for the standalone-attachment endpoints (doc 35: collapsed onto comments).
 
-Comment-bound attachments are exercised in test_comments.py via the
-"create with files" scenarios; this file focuses on the standalone
-attachment lifecycle (no comment).
+After doc 35 there's no separate ``attachments`` table. The
+``POST/GET/DELETE /<entity>/{id}/attachments`` endpoints still exist
+on the wire but route into the unified comments services — a "standalone
+attachment" is a comment row with NULL body and a one-element
+``attachments`` JSON array.
+
+The streaming-download endpoint ``GET /attachments/{id}/download`` is
+gone. Clients fetch bytes directly from ``attachments[i].url`` on the
+comment row (or from the local-fallback ``GET /files/{key}`` route in
+dev).
+
+This file focuses on the standalone-attachment lifecycle:
+  * POST file (no body)         → 201 with NULL body + 1 attachment URL
+  * GET list                     → only file-only rows (body is NULL)
+  * DELETE                       → soft-deletes the comment row
+  * No download endpoint         → asserted 404 for legacy clients
 """
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -12,6 +25,7 @@ import pytest
 from app.infrastructure.db.models.milestone import MilestoneModel
 import app.infrastructure.storage as storage_pkg
 from app.infrastructure.storage.file_storage import FileStorage
+from app.infrastructure.storage import reset_file_client_for_tests
 
 
 # ---------------------------------------------------------------------------
@@ -23,7 +37,11 @@ def temp_storage(tmp_path, monkeypatch):
     tmp = FileStorage(base_path=str(tmp_path / "storage"), subdir_strategy="year_month")
     tmp.ensure_ready()
     monkeypatch.setattr(storage_pkg.file_storage, "_storage", tmp)
+    # Doc 35: the file client wraps the low-level storage; reset it so
+    # each test sees the freshly-redirected storage.
+    reset_file_client_for_tests()
     yield tmp
+    reset_file_client_for_tests()
 
 
 @pytest.fixture(scope="function")
@@ -52,8 +70,13 @@ def sample_milestone(db_session, sample_project):
 
 class TestUploadAttachment:
 
-    def test_upload_success(self, client, admin_user, admin_headers,
-                            sample_milestone, temp_storage):
+    def test_upload_success_creates_body_null_comment(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
+        """Doc 35: upload creates a comment row whose body is NULL and
+        whose ``attachments`` JSON array carries one entry. The wire
+        shape is the comment shape (so the FE iterates ``attachments``
+        the same way it does for body+files comments)."""
         resp = client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
@@ -61,16 +84,23 @@ class TestUploadAttachment:
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()["data"]
-        assert body["_type"] == "Attachment"
-        assert body["originalFilename"] == "doc.pdf"
+        assert body["_type"] == "Comment"
         assert body["targetKind"] == "milestone"
         assert body["targetId"] == sample_milestone.id
-        assert body["commentId"] is None
-        assert body["sizeBytes"] == len(b"%PDF-1.4")
-        assert body["uploadedBy"]["id"] == admin_user.id
+        # File-only send: body is empty / null.
+        assert (body.get("body") or "") == ""
+        # Single attachment in the JSON list, with the URL the FE fetches.
+        atts = body["attachments"]
+        assert len(atts) == 1
+        att = atts[0]
+        assert att["filename"] == "doc.pdf"
+        assert att["mimeType"] == "application/pdf"
+        assert att["sizeBytes"] == len(b"%PDF-1.4")
+        assert att["url"]  # non-empty
 
-    def test_upload_target_not_found(self, client, admin_user, admin_headers,
-                                     temp_storage):
+    def test_upload_target_not_found(
+        self, client, admin_user, admin_headers, temp_storage,
+    ):
         resp = client.post(
             f"/api/v3/milestones/{uuid4()}/attachments",
             headers=admin_headers,
@@ -78,8 +108,9 @@ class TestUploadAttachment:
         )
         assert resp.status_code == 404
 
-    def test_upload_disallowed_extension(self, client, admin_user, admin_headers,
-                                         sample_milestone, temp_storage):
+    def test_upload_disallowed_extension(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
         resp = client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
@@ -97,13 +128,14 @@ class TestUploadAttachment:
 
 
 # ===========================================================================
-# List standalone
+# List standalone (= body-NULL comment rows for that target)
 # ===========================================================================
 
 class TestListStandaloneAttachments:
 
-    def test_list_empty(self, client, admin_user, admin_headers,
-                        sample_milestone, temp_storage):
+    def test_list_empty(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
         resp = client.get(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
@@ -111,16 +143,20 @@ class TestListStandaloneAttachments:
         assert resp.status_code == 200
         assert resp.json()["data"]["total"] == 0
 
-    def test_list_excludes_comment_attachments(self, client, admin_user,
-                                               admin_headers, sample_milestone,
-                                               temp_storage):
-        # Upload one standalone
+    def test_list_excludes_comment_attachments(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
+        """Doc 35: the standalone listing must show only body-NULL rows.
+        A comment row with body+files belongs in ``/comments``, not here."""
+        # Upload one standalone (body-NULL row).
         client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
             files={"file": ("standalone.pdf", b"a", "application/pdf")},
         )
-        # Post a comment with an attachment (should NOT appear in standalone list)
+        # Post a comment WITH a file (body present + files): goes into
+        # the same comments table but with body, so it's filtered out
+        # of the standalone listing.
         client.post(
             f"/api/v3/milestones/{sample_milestone.id}/comments",
             headers=admin_headers,
@@ -133,53 +169,64 @@ class TestListStandaloneAttachments:
         )
         body = resp.json()["data"]
         assert body["total"] == 1
-        assert body["_embedded"]["elements"][0]["originalFilename"] == "standalone.pdf"
+        sole = body["_embedded"]["elements"][0]
+        assert sole["attachments"][0]["filename"] == "standalone.pdf"
+        # And it is body-null.
+        assert (sole.get("body") or "") == ""
 
 
 # ===========================================================================
-# Download
+# Download endpoint REMOVED (doc 35)
 # ===========================================================================
 
-class TestDownloadAttachment:
+class TestDownloadEndpointRemoved:
 
-    def _upload(self, client, headers, milestone_id, name="d.pdf", content=b"hello"):
-        r = client.post(
-            f"/api/v3/milestones/{milestone_id}/attachments",
-            headers=headers,
-            files={"file": (name, content, "application/pdf")},
-        )
-        assert r.status_code == 201
-        return r.json()["data"]["id"]
-
-    def test_download_streams_content(self, client, admin_user, admin_headers,
-                                      sample_milestone, temp_storage):
-        aid = self._upload(client, admin_headers, sample_milestone.id,
-                           "report.pdf", b"the bytes")
-        resp = client.get(
-            f"/api/v3/attachments/{aid}/download",
-            headers=admin_headers,
-        )
-        assert resp.status_code == 200
-        assert resp.content == b"the bytes"
-        cd = resp.headers.get("content-disposition", "")
-        assert "report.pdf" in cd
-
-    def test_download_not_found(self, client, admin_user, admin_headers,
-                                temp_storage):
+    def test_legacy_download_route_returns_404(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
+        """Pre-doc-35 the BE streamed bytes via /attachments/{id}/download.
+        After doc 35 the route is gone — clients fetch from the URL
+        stored on the comment row's ``attachments[].url`` directly."""
         resp = client.get(
             f"/api/v3/attachments/{uuid4()}/download",
             headers=admin_headers,
         )
         assert resp.status_code == 404
 
+    def test_uploaded_file_url_is_resolvable_via_local_fallback(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
+        """Sanity: the URL stored on the row must actually serve bytes
+        when the local fallback is enabled (the dev / no-external-server
+        case). Production deployments with FILE_SERVER_PUBLIC_BASE_URL
+        set point the URL elsewhere; that's covered by separate tests."""
+        up = client.post(
+            f"/api/v3/milestones/{sample_milestone.id}/attachments",
+            headers=admin_headers,
+            files={"file": ("hello.pdf", b"hello world", "application/pdf")},
+        )
+        url = up.json()["data"]["attachments"][0]["url"]
+        # The URL is a relative storage_key in the local-fallback case
+        # (no FILE_SERVER_PUBLIC_BASE_URL set in tests). The fallback
+        # route lives at /files/{key:path}.
+        if not url.startswith("http"):
+            fetch_url = f"/files/{url}"
+        else:
+            fetch_url = url
+        resp = client.get(fetch_url)
+        assert resp.status_code == 200
+        assert resp.content == b"hello world"
+
 
 # ===========================================================================
-# Delete
+# Delete (alias for delete-comment)
 # ===========================================================================
 
 class TestDeleteAttachment:
 
     def _upload(self, client, headers, milestone_id):
+        """Doc 35: the response carries the comment-row id. Treat it as
+        the attachment-id for downstream DELETE / GET calls."""
         r = client.post(
             f"/api/v3/milestones/{milestone_id}/attachments",
             headers=headers,
@@ -188,35 +235,41 @@ class TestDeleteAttachment:
         assert r.status_code == 201
         return r.json()["data"]["id"]
 
-    def test_uploader_can_delete(self, client, admin_user, admin_headers,
-                                 sample_milestone, temp_storage):
+    def test_uploader_can_delete(
+        self, client, admin_user, admin_headers, sample_milestone, temp_storage,
+    ):
         aid = self._upload(client, admin_headers, sample_milestone.id)
         resp = client.delete(f"/api/v3/attachments/{aid}", headers=admin_headers)
         assert resp.status_code == 200
-        # subsequent download fails (soft-deleted hides it)
-        dl = client.get(
-            f"/api/v3/attachments/{aid}/download", headers=admin_headers,
+        # Subsequent list excludes it (soft-deleted).
+        list_resp = client.get(
+            f"/api/v3/milestones/{sample_milestone.id}/attachments",
+            headers=admin_headers,
         )
-        assert dl.status_code == 404
+        assert list_resp.json()["data"]["total"] == 0
 
-    def test_member_cannot_delete_admins(self, client, admin_user, admin_headers,
-                                         member_user, member_token,
-                                         sample_milestone, temp_storage):
+    def test_member_cannot_delete_admins(
+        self, client, admin_user, admin_headers, member_user, member_token,
+        sample_milestone, temp_storage,
+    ):
         member_headers = {"Authorization": f"Bearer {member_token}"}
         aid = self._upload(client, admin_headers, sample_milestone.id)
         resp = client.delete(f"/api/v3/attachments/{aid}", headers=member_headers)
         assert resp.status_code == 403
 
-    def test_admin_can_delete_others(self, client, admin_user, admin_headers,
-                                     member_user, member_token,
-                                     sample_milestone, temp_storage):
+    def test_admin_can_delete_others(
+        self, client, admin_user, admin_headers, member_user, member_token,
+        sample_milestone, temp_storage,
+    ):
         member_headers = {"Authorization": f"Bearer {member_token}"}
         aid = self._upload(client, member_headers, sample_milestone.id)
         resp = client.delete(f"/api/v3/attachments/{aid}", headers=admin_headers)
         assert resp.status_code == 200
 
-    def test_delete_nonexistent(self, client, admin_user, admin_headers,
-                                temp_storage):
-        resp = client.delete(f"/api/v3/attachments/{uuid4()}",
-                             headers=admin_headers)
+    def test_delete_nonexistent(
+        self, client, admin_user, admin_headers, temp_storage,
+    ):
+        resp = client.delete(
+            f"/api/v3/attachments/{uuid4()}", headers=admin_headers,
+        )
         assert resp.status_code == 404

@@ -1,30 +1,20 @@
-"""Upload a standalone attachment (no comment).
+"""Upload a standalone attachment (doc 35: thin wrapper over create_comment).
 
-Distinct from the comment-attachment flow because it's a single-file
-upload directly tied to a target node. Used when the user wants to
-attach a file without writing a comment.
+Pre-doc-34 this wrote a row in the separate ``attachments`` table.
+After doc 35 the table is gone — every attachment lives on a comment
+row. So a "standalone" attachment is just a comment row with no body.
+
+Keeping the same endpoint URL (``POST /<entity>/{id}/attachments``)
+and the same single-file shape preserves the FE contract; under the
+hood we forward into ``create_comment``.
 """
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
-from .....core.config import settings
-from .....domain.comments.attachment import Attachment
-from .....infrastructure.db.repositories.attachment_repository import (
-    AttachmentRepository,
-)
-from .....infrastructure.storage import (
-    StorageUnavailableError,
-    get_storage,
-)
-from .....infrastructure.storage.file_storage import file_extension
+from .....domain.comments.comment import Comment
 from .....shared.service_result import ServiceResult
 
-from ...comments._target_helper import is_valid_target_kind, target_exists
-
-
-def _allowed_extensions() -> set[str]:
-    raw = settings.ATTACHMENTS_ALLOWED_EXTENSIONS or ""
-    return {e.strip().lower().lstrip(".") for e in raw.split(",") if e.strip()}
+from ...comments.services import create_comment
 
 
 def upload_standalone_attachment(
@@ -34,93 +24,23 @@ def upload_standalone_attachment(
     target_id: str,
     upload: UploadFile,
     uploaded_by_user_id: str,
-) -> ServiceResult[Attachment]:
-    if not is_valid_target_kind(target_kind):
-        return ServiceResult.fail(
-            error=f"Invalid target_kind '{target_kind}'.",
-            error_type="validation_error",
-        )
+) -> ServiceResult[Comment]:
+    """Create a comment row with no body and exactly one attachment.
 
+    Returns the resulting ``Comment`` (the controller formats it via
+    ``format_attachment_response`` so the wire shape stays the same as
+    pre-doc-34 for FE compatibility).
+    """
     if upload is None or upload.filename is None:
         return ServiceResult.fail(
             error="No file uploaded.",
             error_type="validation_error",
         )
-
-    if not target_exists(db, target_kind, target_id):
-        return ServiceResult.fail(
-            error=f"Target {target_kind} '{target_id}' not found.",
-            error_type="not_found",
-        )
-
-    # Size + extension validation.
-    upload.file.seek(0, 2)
-    size = upload.file.tell()
-    upload.file.seek(0)
-
-    max_bytes = settings.ATTACHMENTS_MAX_BYTES
-    if size > max_bytes:
-        return ServiceResult.fail(
-            error=(
-                f"File '{upload.filename}' is {size} bytes; "
-                f"maximum is {max_bytes}."
-            ),
-            error_type="validation_error",
-            details={"file": upload.filename, "size": size, "max": max_bytes},
-        )
-
-    ext = file_extension(upload.filename)
-    allowed = _allowed_extensions()
-    if not ext or ext not in allowed:
-        return ServiceResult.fail(
-            error=(
-                f"File '{upload.filename}' has disallowed extension "
-                f"'.{ext}'. Allowed: {', '.join(sorted(allowed))}."
-            ),
-            error_type="validation_error",
-            details={"file": upload.filename, "extension": ext},
-        )
-
-    # Persist.
-    storage = get_storage()
-    written_key = None
-    try:
-        key = storage.generate_storage_key(upload.filename)
-        storage.save(key, upload.file)
-        written_key = key
-
-        attachment = AttachmentRepository(db).create(
-            comment_id=None,
-            target_kind=target_kind,
-            target_id=target_id,
-            original_filename=upload.filename,
-            storage_key=key,
-            mime_type=upload.content_type or "application/octet-stream",
-            size_bytes=size,
-            uploaded_by_user_id=uploaded_by_user_id,
-        )
-        db.commit()
-        return ServiceResult.ok(attachment)
-
-    except StorageUnavailableError as e:
-        db.rollback()
-        if written_key:
-            try:
-                storage.delete(written_key)
-            except Exception:
-                pass
-        return ServiceResult.fail(
-            error=f"File storage unavailable: {e}",
-            error_type="storage_unavailable",
-        )
-    except Exception as e:  # noqa: BLE001
-        db.rollback()
-        if written_key:
-            try:
-                storage.delete(written_key)
-            except Exception:
-                pass
-        return ServiceResult.fail(
-            error=f"Failed to upload attachment: {e}",
-            error_type="internal_error",
-        )
+    return create_comment(
+        db=db,
+        target_kind=target_kind,
+        target_id=target_id,
+        body=None,
+        files=[upload],
+        author_user_id=uploaded_by_user_id,
+    )

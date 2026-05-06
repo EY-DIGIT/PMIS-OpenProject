@@ -397,11 +397,18 @@ def format_comment_response(
     comment_data: Dict[str, Any],
     base_url: str = "/api/v3",
 ) -> Dict[str, Any]:
-    """HAL+JSON shape for a single comment.
+    """HAL+JSON shape for a single comment (doc 35: unified send-event).
 
-    Author info comes embedded as a slim user object. Attachments
-    appear as a nested array (each formatted via
-    ``format_attachment_response``).
+    Each comment row carries body + an inline attachments array of
+    ``{url, filename, mimeType, sizeBytes, uploadedAt}``. Clients fetch
+    file bytes from the URL directly — there is no per-attachment id
+    or BE-streaming download link.
+
+    A row may have:
+      - body present, attachments empty   ⇒ comment-only
+      - body NULL,    attachments present ⇒ file-only ("attachment-only" send)
+      - body present, attachments present ⇒ comment with files (the
+                                            email-shaped happy path)
     """
     cid = comment_data.get("id")
     target_kind = comment_data.get("target_kind")
@@ -432,46 +439,30 @@ def format_comment_response(
         "createdAt": comment_data.get("created_at"),
         "updatedAt": comment_data.get("updated_at"),
         "deletedAt": comment_data.get("deleted_at"),
-        "attachments": [
-            format_attachment_response(a, base_url) for a in attachments
-        ],
+        # Doc 35: each entry is already in wire shape (camelCase keys)
+        # because the domain layer's ``AttachmentInfo.to_dict`` produces
+        # exactly that. Pass through as-is.
+        "attachments": list(attachments),
     }
 
 
 def format_attachment_response(
-    attachment_data: Dict[str, Any],
+    comment_data: Dict[str, Any],
     base_url: str = "/api/v3",
 ) -> Dict[str, Any]:
-    """HAL+JSON shape for a single attachment.
+    """HAL+JSON shape for an "attachment" (doc 35: actually a comment row).
 
-    ``storage_key`` is intentionally NEVER returned to clients — it's
-    an internal detail of where the file lives on disk. Clients fetch
-    bytes via the ``download`` link.
+    Pre-doc-34 this formatted a row from the ``attachments`` table.
+    After doc 35 there's no such table — every attachment lives on a
+    comment row. This formatter is kept under its old name so the
+    POST/GET/DELETE endpoints under ``/<entity>/{id}/attachments`` keep
+    returning a recognisably-shaped payload for the FE.
+
+    Strategy: emit the comment row in the comment shape, with the body
+    typically NULL (file-only path). The FE iterates ``attachments``
+    on the row to render files, exactly like comment rows.
     """
-    aid = attachment_data.get("id")
-    uploader = attachment_data.get("uploaded_by") or {}
-    return {
-        "_type": "Attachment",
-        "_links": {
-            "self": {"href": f"{base_url}/attachments/{aid}"},
-            "download": {"href": f"{base_url}/attachments/{aid}/download"},
-        },
-        "id": aid,
-        "commentId": attachment_data.get("comment_id"),
-        "targetKind": attachment_data.get("target_kind"),
-        "targetId": attachment_data.get("target_id"),
-        "originalFilename": attachment_data.get("original_filename"),
-        "mimeType": attachment_data.get("mime_type"),
-        "sizeBytes": attachment_data.get("size_bytes"),
-        "uploadedBy": {
-            "id": uploader.get("id"),
-            "login": uploader.get("login"),
-            "firstName": uploader.get("first_name"),
-            "lastName": uploader.get("last_name"),
-        },
-        "uploadedAt": attachment_data.get("uploaded_at"),
-        "deletedAt": attachment_data.get("deleted_at"),
-    }
+    return format_comment_response(comment_data, base_url)
 
 
 def format_error_response(

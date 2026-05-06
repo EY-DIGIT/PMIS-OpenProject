@@ -32,8 +32,9 @@ from .revoked_token import RevokedTokenModel
 from .project_status_transition import ProjectStatusTransitionModel
 # ProjectOwnerModel was removed in doc 20 — the project_owners whitelist
 # was already dead since doc 18 made project.owner a strict division code.
+# Doc 35: AttachmentModel removed — file metadata now lives inline on
+# CommentModel.attachments (JSON column).
 from .comment import CommentModel
-from .attachment import AttachmentModel
 from .division import DivisionModel
 # Doc 33 change 3: notification + 2FA + password-reset tables.
 from .notification_log import NotificationLogModel
@@ -55,7 +56,6 @@ __all__ = [
     "RevokedTokenModel",
     "ProjectStatusTransitionModel",
     "CommentModel",
-    "AttachmentModel",
     "DivisionModel",
     "NotificationLogModel", "OtpCodeModel", "PasswordResetTokenModel",
 ]

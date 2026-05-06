@@ -1,10 +1,13 @@
-"""Comments + attachments domain entities."""
-from .comment import Comment
-from .attachment import Attachment
+"""Comments domain entities (doc 35: unified send-event model).
 
-__all__ = ["Comment", "Attachment"]
+The legacy ``Attachment`` standalone domain entity is gone — file
+metadata now travels embedded on the comment row as ``AttachmentInfo``.
+"""
+from .comment import AttachmentInfo, Comment
+
+__all__ = ["AttachmentInfo", "Comment"]
 
 
-# Allowed target kinds for both comments and attachments.
-# Mirrors the design (which puts the panel on every M/A/T/S node).
+# Allowed target kinds for comments + attachment-only sends.
+# Mirrors the design (panel sits on every M/A/T/S node).
 TARGET_KINDS = ("milestone", "activity", "task", "subtask")

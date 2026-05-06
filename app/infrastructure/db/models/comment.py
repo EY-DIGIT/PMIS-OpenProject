@@ -6,6 +6,18 @@ UUID of the target row. We don't enforce a hard FK on ``target_id``
 (that's the trade-off of polymorphism); the application service layer
 checks the target exists before inserting.
 
+Doc 35 (this revision) — "send-event" model:
+  - A row represents one comment-or-attachment "send event" (like an
+    email). It can carry a body, an attachment list, or both.
+  - ``body`` is nullable. A row with ``body NULL`` and a populated
+    ``attachments`` array represents an attachment-only send.
+  - ``attachments`` is a JSON column (JSONB on Postgres) holding a
+    list of objects: ``{url, filename, mimeType, sizeBytes, uploadedAt}``.
+    The URL points at the external file server (or a fallback path
+    served by the BE in dev) — clients fetch bytes directly from the
+    URL and never go through a BE-streaming download.
+  - The separate ``attachments`` table is gone.
+
 Indexed on ``(target_kind, target_id)`` for the dominant read pattern
 ("list comments for this milestone"), and on ``deleted_at`` so the
 default "active rows only" filter stays cheap.
@@ -14,7 +26,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, DateTime, ForeignKey, Index, Integer, String, Text,
+    Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text,
 )
 
 from ..utc_datetime import UtcDateTime
@@ -41,7 +53,15 @@ class CommentModel(Base):
     target_kind = Column(String(20), nullable=False)
     target_id = Column(String(36), nullable=False)
 
-    body = Column(Text, nullable=False)
+    # Doc 35: body is now nullable so a row can be attachment-only.
+    # Service layer enforces "body OR attachments must be present".
+    body = Column(Text, nullable=True)
+
+    # Doc 35: attachments live on the comment row itself as a JSON list.
+    # Each entry: ``{url, filename, mimeType, sizeBytes, uploadedAt}``.
+    # The URL is the external file server's address (with ip:port) where
+    # the FE fetches bytes directly. ``None``/``[]`` ⇒ no attachments.
+    attachments = Column(JSON, nullable=True)
 
     # Doc 26: users.id flipped to UUID String(36).
     author_user_id = Column(
@@ -66,5 +86,6 @@ class CommentModel(Base):
         return (
             f"<CommentModel(id='{self.id}', "
             f"target={self.target_kind}/{self.target_id}, "
-            f"author={self.author_user_id})>"
+            f"author={self.author_user_id}, "
+            f"attachments={len(self.attachments or [])})>"
         )

@@ -35,9 +35,10 @@ import pytest
 from app.core.config import settings
 from app.infrastructure.db.models.milestone import MilestoneModel
 from app.infrastructure.db.models.comment import CommentModel
-from app.infrastructure.db.models.attachment import AttachmentModel
+# Doc 35: AttachmentModel removed — file metadata lives on CommentModel.attachments JSON column.
 import app.infrastructure.storage as storage_pkg
 from app.infrastructure.storage.file_storage import FileStorage
+from app.infrastructure.storage import reset_file_client_for_tests
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,11 @@ def temp_storage(tmp_path, monkeypatch):
     )
     tmp.ensure_ready()
     monkeypatch.setattr(storage_pkg.file_storage, "_storage", tmp)
+    # Doc 35: the file client wraps the low-level storage; reset it so
+    # each test sees the freshly-redirected storage.
+    reset_file_client_for_tests()
     yield tmp
+    reset_file_client_for_tests()
 
 
 @pytest.fixture(scope="function")
@@ -173,19 +178,18 @@ class TestMultipartBodyOnly:
         # No standalone attachments key (since files only goes to that branch).
         assert "standaloneAttachments" not in d
 
-        # DB sanity: 1 milestone, 1 comment row anchored to it, 0 attachment rows.
+        # DB sanity (doc 35: single comments table, no attachments table).
+        # 1 comment row anchored to the milestone, attachments JSON column
+        # is None (no files supplied).
         ms_id = d["id"]
-        assert (
+        rows = (
             db_session.query(CommentModel)
             .filter(CommentModel.target_kind == "milestone")
             .filter(CommentModel.target_id == ms_id)
-            .count()
-        ) == 1
-        assert (
-            db_session.query(AttachmentModel)
-            .filter(AttachmentModel.target_id == ms_id)
-            .count()
-        ) == 0
+            .all()
+        )
+        assert len(rows) == 1
+        assert rows[0].attachments in (None, [])
 
 
 # ===========================================================================
@@ -213,16 +217,23 @@ class TestMultipartBodyAndFiles:
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
-        # Comment carries the body AND the bound files.
+        # Comment carries the body AND the bound files (doc 35: files
+        # ride on the comment row's ``attachments`` JSON column with
+        # camelCase ``filename`` rather than the legacy ``originalFilename``).
         assert d["comment"]["body"] == "See attached spec"
         atts = d["comment"]["attachments"]
         assert len(atts) == 2
-        names = {a["originalFilename"] for a in atts}
+        names = {a["filename"] for a in atts}
         assert names == {"spec.pdf", "notes.txt"}
-        # No standalone attachments — files are bound to the comment.
+        for a in atts:
+            assert a["url"]
+            assert a["mimeType"]
+            assert a["sizeBytes"] >= 0
+        # No standalone attachments — doc 35 collapsed that branch into
+        # the same ``comment`` payload (a body+files send is one row).
         assert "standaloneAttachments" not in d
 
-        # DB: 1 comment, 2 attachments, both with comment_id set, target_kind/id NULL.
+        # DB (doc 35): one comment row, attachments JSON has 2 entries.
         ms_id = d["id"]
         comment_rows = (
             db_session.query(CommentModel)
@@ -230,16 +241,12 @@ class TestMultipartBodyAndFiles:
             .all()
         )
         assert len(comment_rows) == 1
-        cid = comment_rows[0].id
-        att_rows = (
-            db_session.query(AttachmentModel)
-            .filter(AttachmentModel.comment_id == cid)
-            .all()
-        )
-        assert len(att_rows) == 2
-        for a in att_rows:
-            assert a.target_kind is None
-            assert a.target_id is None
+        row_atts = comment_rows[0].attachments or []
+        assert len(row_atts) == 2
+        # Each entry carries a URL field and the original filename.
+        for entry in row_atts:
+            assert entry.get("url")
+            assert entry.get("filename") in {"spec.pdf", "notes.txt"}
 
 
 # ===========================================================================
@@ -247,10 +254,14 @@ class TestMultipartBodyAndFiles:
 # ===========================================================================
 
 class TestMultipartFilesOnly:
-    def test_files_only_creates_standalone_attachments(
+    def test_files_only_creates_body_null_comment_with_attachments(
         self, client, admin_user, admin_headers, dated_project,
         temp_storage, db_session,
     ):
+        """Doc 35: files-only sends now produce a comment row with NULL
+        body and a populated ``attachments`` JSON list — the same shape
+        as a body+files send, just with no body. The legacy
+        ``standaloneAttachments`` response key is gone."""
         resp = client.post(
             _create_url(dated_project.id),
             headers=admin_headers,
@@ -265,28 +276,27 @@ class TestMultipartFilesOnly:
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
-        # No comment row — files-only goes straight to standalone path.
-        assert "comment" not in d
-        assert "standaloneAttachments" in d
-        sa = d["standaloneAttachments"]
-        assert len(sa) == 1
-        assert sa[0]["originalFilename"] == "contract.pdf"
+        # Files-only ⇒ comment payload present, body is empty/null,
+        # ``attachments`` carries the file. No legacy key.
+        assert "comment" in d
+        assert (d["comment"].get("body") or "") == ""
+        atts = d["comment"]["attachments"]
+        assert len(atts) == 1
+        assert atts[0]["filename"] == "contract.pdf"
+        assert atts[0]["url"]
+        assert "standaloneAttachments" not in d
 
-        # DB: 0 comments, 1 attachment with target_kind/target_id set, comment_id NULL.
+        # DB (doc 35): one body-NULL comment row anchored to the milestone.
         ms_id = d["id"]
-        assert (
+        rows = (
             db_session.query(CommentModel)
+            .filter(CommentModel.target_kind == "milestone")
             .filter(CommentModel.target_id == ms_id)
-            .count()
-        ) == 0
-        att_rows = (
-            db_session.query(AttachmentModel)
-            .filter(AttachmentModel.target_kind == "milestone")
-            .filter(AttachmentModel.target_id == ms_id)
             .all()
         )
-        assert len(att_rows) == 1
-        assert att_rows[0].comment_id is None
+        assert len(rows) == 1
+        assert rows[0].body in (None, "")
+        assert len(rows[0].attachments or []) == 1
 
 
 # ===========================================================================

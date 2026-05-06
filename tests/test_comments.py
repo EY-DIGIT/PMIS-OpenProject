@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.infrastructure.db.models.milestone import MilestoneModel
 import app.infrastructure.storage as storage_pkg
 from app.infrastructure.storage.file_storage import FileStorage
+from app.infrastructure.storage import reset_file_client_for_tests
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +31,11 @@ def temp_storage(tmp_path, monkeypatch):
     )
     tmp_storage.ensure_ready()
     monkeypatch.setattr(storage_pkg.file_storage, "_storage", tmp_storage)
+    # Doc 35: the file client wraps the low-level storage; reset it so
+    # each test sees the freshly-redirected storage.
+    reset_file_client_for_tests()
     yield tmp_storage
+    reset_file_client_for_tests()
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +87,9 @@ class TestCreateComment:
 
     def test_create_with_attachments(self, client, admin_user, admin_headers,
                                      sample_milestone, temp_storage):
+        """Doc 35: attachments now ride as a JSON list on the comment row,
+        each entry carrying a public ``url`` the FE fetches directly.
+        Pre-doc-35 each was a separate row with its own id + download link."""
         resp = client.post(
             f"/api/v3/milestones/{sample_milestone.id}/comments",
             headers=admin_headers,
@@ -94,10 +102,15 @@ class TestCreateComment:
         assert resp.status_code == 201, resp.text
         atts = resp.json()["data"]["attachments"]
         assert len(atts) == 2
-        names = {a["originalFilename"] for a in atts}
+        names = {a["filename"] for a in atts}
         assert names == {"report.pdf", "notes.txt"}
+        # Each entry carries a public URL — non-empty and ends with the
+        # uploaded filename (the local-fallback URL shape includes the
+        # original name).
         for a in atts:
-            assert "download" in a["_links"]
+            assert a["url"]
+            assert a["mimeType"]
+            assert a["sizeBytes"] >= 0
 
     def test_reject_empty_body_no_files(self, client, admin_user, admin_headers,
                                         sample_milestone, temp_storage):

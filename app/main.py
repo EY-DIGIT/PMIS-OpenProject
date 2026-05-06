@@ -129,6 +129,78 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(api_v3_router)
 
+
+# ---------------------------------------------------------------------------
+# Doc 35: local fallback file route.
+#
+# Comment rows now store an attachment URL directly. When the deployment
+# hasn't configured FILE_SERVER_PUBLIC_BASE_URL (typical for dev), the
+# stored URL is a relative storage_key and the FE expects the BE to
+# serve the bytes itself. This route provides exactly that fallback.
+# Disabled by setting FILE_SERVER_LOCAL_FALLBACK_ENABLED=False once a
+# real external file server is reachable from the FE directly.
+# ---------------------------------------------------------------------------
+if settings.FILE_SERVER_LOCAL_FALLBACK_ENABLED:
+    from urllib.parse import quote
+    from fastapi import HTTPException
+    from fastapi.responses import StreamingResponse
+
+    from app.infrastructure.storage import (
+        StorageUnavailableError,
+        get_storage,
+    )
+
+    @app.get("/files/{storage_key:path}", include_in_schema=False, tags=["files"])
+    def serve_local_file(storage_key: str):
+        """Stream bytes for an attachment stored on the local FileStorage.
+
+        ``storage_key`` is the relative path the storage layer assigned
+        when the file was uploaded (e.g. ``attachments/2026/05/abc.pdf``).
+        Path-escape attempts are blocked inside ``FileStorage.absolute_path``.
+
+        Auth-free by design — the URLs are unguessable (UUID-prefixed)
+        and this route exists only for the dev-fallback scenario where
+        an external file server isn't deployed. Production deployments
+        either set FILE_SERVER_PUBLIC_BASE_URL to a real CDN / file
+        server (FE fetches there directly, this route is unused) or
+        flip FILE_SERVER_LOCAL_FALLBACK_ENABLED=False (route gone).
+        """
+        storage = get_storage()
+        try:
+            stream = storage.open(storage_key)
+        except StorageUnavailableError:
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        # Reuse the original filename from the trailing path component
+        # so the browser's Save-As dialog shows something readable.
+        suggested_name = storage_key.rsplit("/", 1)[-1]
+        # storage_key embeds a UUID prefix like "{uuid}_{name}"; strip
+        # the UUID for display.
+        if "_" in suggested_name:
+            suggested_name = suggested_name.split("_", 1)[1] or suggested_name
+
+        def chunk_iter():
+            try:
+                while True:
+                    chunk = stream.read(64 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                stream.close()
+
+        safe = quote(suggested_name)
+        return StreamingResponse(
+            chunk_iter(),
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": (
+                    f'inline; filename="{suggested_name}"; '
+                    f"filename*=UTF-8''{safe}"
+                ),
+            },
+        )
+
 # OpenAPI security scheme configuration
 from fastapi.openapi.utils import get_openapi
 

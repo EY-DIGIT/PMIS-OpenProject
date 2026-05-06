@@ -169,7 +169,8 @@ def init_db() -> None:
         ActivityModel, ActivityDependencyModel, ActivityResourceModel,
         TaskModel, TaskDependencyModel, TaskResourceModel,
         SubtaskModel, SubtaskDependencyModel, SubtaskResourceModel,
-        CommentModel, AttachmentModel,
+        # Doc 35: AttachmentModel removed (collapsed onto CommentModel.attachments JSON column).
+        CommentModel,
         DivisionModel,
     )
     from ...core.security import hash_password
