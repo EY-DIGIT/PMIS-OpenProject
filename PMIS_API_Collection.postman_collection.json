@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "038456ea-e6ef-4ebd-ae10-018e97469740",
+    "_postman_id": "d485264c-d55e-4898-8b3a-6210ee41c51d",
     "name": "PMIS API",
-    "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
+    "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -10,7 +10,7 @@
       "name": "Activities",
       "item": [
         {
-          "name": "Create a resource activity (count mode) under milestone",
+          "name": "Create an activity under a milestone (doc 38)",
           "request": {
             "method": "POST",
             "header": [
@@ -18,15 +18,10 @@
                 "key": "Authorization",
                 "value": "Bearer {{accessToken}}",
                 "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/resource/count/create",
+              "raw": "{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/create",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -36,8 +31,6 @@
                 "milestones",
                 ":milestone_id",
                 "activities",
-                "resource",
-                "count",
                 "create"
               ],
               "variable": [
@@ -48,170 +41,7 @@
                 }
               ]
             },
-            "description": "Create a resource/count activity. Accepts JSON or multipart (doc 30). ``resourceCount`` is required.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resourceCount\": 0\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create a resource activity (details mode, full classification) under milestone",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/resource/details/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "milestones",
-                ":milestone_id",
-                "activities",
-                "resource",
-                "details",
-                "create"
-              ],
-              "variable": [
-                {
-                  "key": "milestone_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Create a resource/details activity. Accepts JSON or multipart (doc 30). The ``resource`` block (with typeOfResourceId + division + resource fields) is JSON-encoded as a string in multipart since multipart can't carry typed nested objects.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resource\": null\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create a standard activity under milestone",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/standard/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "milestones",
-                ":milestone_id",
-                "activities",
-                "standard",
-                "create"
-              ],
-              "variable": [
-                {
-                  "key": "milestone_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Create a standard activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create a transactional activity under milestone",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/transactional/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "milestones",
-                ":milestone_id",
-                "activities",
-                "transactional",
-                "create"
-              ],
-              "variable": [
-                {
-                  "key": "milestone_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Create a transactional activity. Accepts JSON or multipart (doc 30).",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).\n\nDoc 38: type / resource fields are no longer accepted here. Set ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate`` via PATCH after the row exists."
           },
           "response": []
         },
@@ -374,7 +204,7 @@
           "response": []
         },
         {
-          "name": "Update activity (handles type transitions + resource upsert)",
+          "name": "Update activity",
           "request": {
             "method": "PATCH",
             "header": [
@@ -408,10 +238,10 @@
                 }
               ]
             },
-            "description": "Update activity (handles type transitions + resource upsert)",
+            "description": "Update activity",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"type\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0,\n    \"typeOfResourceId\": \"\",\n    \"division\": \"\",\n    \"divisionOther\": \"\"\n  },\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"ownerDivision\": \"\",\n  \"concernedDivision\": \"\",\n  \"vendorId\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -838,7 +668,7 @@
                 }
               ]
             },
-            "description": "Assign a role to a user"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -865,7 +695,7 @@
                 "login"
               ]
             },
-            "description": "Authenticate user and receive a JWT token. Doc 33 change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAuthenticate user and receive a JWT token. Doc 33 change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login\": \"\",\n  \"password\": \"\"\n}",
@@ -879,7 +709,7 @@
           "response": []
         },
         {
-          "name": "Complete a password reset (doc 33 change 3)",
+          "name": "Complete a password reset",
           "request": {
             "method": "POST",
             "header": [
@@ -906,7 +736,7 @@
                 "reset-password"
               ]
             },
-            "description": "Verify the reset token (URL token from email or 6-digit OTP from SMS) and set the new password. Tokens are single-use and expire after ``PASSWORD_RESET_TTL_SECONDS`` (default 1h).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nVerify the reset token (URL token from email or 6-digit OTP from SMS) and set the new password. Tokens are single-use and expire after ``PASSWORD_RESET_TTL_SECONDS`` (default 1h).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token_or_code\": \"\",\n  \"new_password\": \"\"\n}",
@@ -947,7 +777,7 @@
                 "create"
               ]
             },
-            "description": "Create a new user",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nCreate a new user",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login\": \"\",\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"phone_number\": \"\"\n}",
@@ -990,12 +820,12 @@
                 }
               ]
             },
-            "description": "Delete user by ID. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nDelete user by ID. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
           },
           "response": []
         },
         {
-          "name": "Effective permissions for a user (role-derived ∪ direct)",
+          "name": "Effective permissions for a user (role-derived \u222a direct)",
           "request": {
             "method": "GET",
             "header": [
@@ -1025,7 +855,7 @@
                 }
               ]
             },
-            "description": "Effective permissions for a user (role-derived ∪ direct)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -1053,7 +883,7 @@
                 "permissions"
               ]
             },
-            "description": "Returns the caller's effective permission set + admin flag.\n\nUsed by the FE to decide which UI actions to show. Requires only\nauthentication — no separate permission to read your own grants."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the caller's effective permission set + admin flag.\n\nUsed by the FE to decide which UI actions to show. Requires only\nauthentication \u2014 no separate permission to read your own grants."
           },
           "response": []
         },
@@ -1080,7 +910,7 @@
                 "me"
               ]
             },
-            "description": "Get currently authenticated user"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet currently authenticated user"
           },
           "response": []
         },
@@ -1114,7 +944,7 @@
                 }
               ]
             },
-            "description": "Get user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` — see doc 25). The dispatcher auto-detects via the ``US-`` prefix."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` \u2014 see doc 25). The dispatcher auto-detects via the ``US-`` prefix."
           },
           "response": []
         },
@@ -1155,7 +985,7 @@
                 }
               ]
             },
-            "description": "Grant a direct permission to a user"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -1182,7 +1012,7 @@
                 "introspect"
               ]
             },
-            "description": "Public token introspection. Returns metadata (active, exp, iat, jti, sub, userId, role, isAdmin) for the supplied access_token and/or refresh_token. NEVER rotates — use POST /users/refresh to mint a fresh access + refresh pair from a valid refresh token. When both tokens are supplied, the response shape becomes {access: {...}, refresh: {...}}.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nPublic token introspection. Returns metadata (active, exp, iat, jti, sub, userId, role, isAdmin) for the supplied access_token and/or refresh_token. NEVER rotates \u2014 use POST /users/refresh to mint a fresh access + refresh pair from a valid refresh token. When both tokens are supplied, the response shape becomes {access: {...}, refresh: {...}}.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"access_token\": \"\",\n  \"refresh_token\": \"\"\n}",
@@ -1226,7 +1056,7 @@
                 }
               ]
             },
-            "description": "List a user's roles"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -1278,7 +1108,7 @@
                 }
               ]
             },
-            "description": "List all users with pagination"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nList all users with pagination"
           },
           "response": []
         },
@@ -1305,7 +1135,7 @@
                 "logout"
               ]
             },
-            "description": "Hard logout. Revokes the access token (adds its jti to the blacklist) AND clears the user's refresh-token jti. After this call, the just-used access token will be rejected by the auth middleware on every subsequent request, and the refresh token can no longer mint new access tokens. Idempotent."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nHard logout. Revokes the access token (adds its jti to the blacklist) AND clears the user's refresh-token jti. After this call, the just-used access token will be rejected by the auth middleware on every subsequent request, and the refresh token can no longer mint new access tokens. Idempotent."
           },
           "response": []
         },
@@ -1337,7 +1167,7 @@
                 "refresh"
               ]
             },
-            "description": "Validates the supplied refresh token and issues a fresh access + refresh pair. The user row's stored refresh_token_jti is rotated atomically — concurrent refreshes with the same token can only succeed once. Response includes accessTokenExpiresAt + refreshTokenExpiresAt so the client can schedule the next preemptive refresh.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nValidates the supplied refresh token and issues a fresh access + refresh pair. The user row's stored refresh_token_jti is rotated atomically \u2014 concurrent refreshes with the same token can only succeed once. Response includes accessTokenExpiresAt + refreshTokenExpiresAt so the client can schedule the next preemptive refresh.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refresh_token\": \"\"\n}",
@@ -1351,7 +1181,7 @@
           "response": []
         },
         {
-          "name": "Request a password-reset link or code (doc 33 change 3)",
+          "name": "Request a password-reset link or code",
           "request": {
             "method": "POST",
             "header": [
@@ -1378,7 +1208,7 @@
                 "forgot-password"
               ]
             },
-            "description": "Self-service password reset. Body: ``{login_or_email, channel}``. ``email`` channel sends a clickable reset link; ``sms`` sends a numeric code. ALWAYS returns 200 with a generic message regardless of whether the account exists (anti-enumeration).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSelf-service password reset. Body: ``{login_or_email, channel}``. ``email`` channel sends a clickable reset link; ``sms`` sends a numeric code. ALWAYS returns 200 with a generic message regardless of whether the account exists (anti-enumeration).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login_or_email\": \"\",\n  \"channel\": \"\"\n}",
@@ -1422,7 +1252,7 @@
                 }
               ]
             },
-            "description": "Clears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users — returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nClears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users \u2014 returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
           },
           "response": []
         },
@@ -1463,12 +1293,12 @@
                 }
               ]
             },
-            "description": "Revoke a direct permission from a user"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
         {
-          "name": "Send OTP for 2FA login (doc 33 change 3)",
+          "name": "Send OTP for 2FA login",
           "request": {
             "method": "POST",
             "header": [
@@ -1496,7 +1326,7 @@
                 "send-otp"
               ]
             },
-            "description": "Generate + dispatch a 6-digit OTP for an in-progress 2FA login session. Pass the ``ephemeral_token`` returned from ``/login`` plus a chosen channel (``email`` or ``sms``). Resends are rate-limited per ``OTP_RESEND_COOLDOWN_SECONDS`` (default 60s).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGenerate + dispatch a 6-digit OTP for an in-progress 2FA login session. Pass the ``ephemeral_token`` returned from ``/login`` plus a chosen channel (``email`` or ``sms``). Resends are rate-limited per ``OTP_RESEND_COOLDOWN_SECONDS`` (default 60s).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"ephemeral_token\": \"\",\n  \"channel\": \"\"\n}",
@@ -1546,7 +1376,7 @@
                 }
               ]
             },
-            "description": "Unassign a role from a user (lockout-protected for 'admin')"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -1585,7 +1415,7 @@
                 }
               ]
             },
-            "description": "Update user details. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user details. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"phone_number\": \"\"\n}",
@@ -1634,7 +1464,7 @@
                 }
               ]
             },
-            "description": "Update user password. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user password. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"password\": \"\"\n}",
@@ -1648,7 +1478,7 @@
           "response": []
         },
         {
-          "name": "Verify OTP and complete login (doc 33 change 3)",
+          "name": "Verify OTP and complete login",
           "request": {
             "method": "POST",
             "header": [
@@ -1676,7 +1506,7 @@
                 "verify-otp"
               ]
             },
-            "description": "Verify the OTP sent via ``/login/send-otp`` and mint the real access + refresh JWT pair. Same response shape as a non-2FA ``/login`` success. Wrong codes increment a counter; after ``OTP_MAX_ATTEMPTS`` (default 5) the OTP row is invalidated and the user must request a new one.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nVerify the OTP sent via ``/login/send-otp`` and mint the real access + refresh JWT pair. Same response shape as a non-2FA ``/login`` success. Wrong codes increment a counter; after ``OTP_MAX_ATTEMPTS`` (default 5) the OTP row is invalidated and the user must request a new one.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"ephemeral_token\": \"\",\n  \"code\": \"\"\n}",
@@ -1695,7 +1525,7 @@
       "name": "Catalogs",
       "item": [
         {
-          "name": "List divisions catalog (DEPRECATED — use /api/v3/master/divisions)",
+          "name": "List divisions catalog (DEPRECATED \u2014 use /api/v3/master/divisions)",
           "request": {
             "method": "GET",
             "header": [
@@ -1716,12 +1546,12 @@
                 "divisions"
               ]
             },
-            "description": "Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` — tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too."
+            "description": "Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` \u2014 tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too."
           },
           "response": []
         },
         {
-          "name": "List project status transition catalog (DEPRECATED — use /api/v3/master/project_status_transitions)",
+          "name": "List project status transition catalog (DEPRECATED \u2014 use /api/v3/master/project_status_transitions)",
           "request": {
             "method": "GET",
             "header": [
@@ -2148,7 +1978,7 @@
                 }
               ]
             },
-            "description": "Fallback route that serves the bytes of an attachment file from local storage. Auth-free — URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused."
+            "description": "Fallback route that serves the bytes of an attachment file from local storage. Auth-free \u2014 URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused."
           },
           "response": []
         }
@@ -2171,7 +2001,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) — surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n  - notification client config + reachability — diagnostic for the\n    2FA / forgot-password flow. Exposes which backend is selected\n    (``mock`` or ``http``), the configured service URL, and a quick\n    reachability probe so ops can tell at a glance whether the BE\n    will actually dispatch OTP emails or silently sink them in\n    the audit table.\n\nThe NFS server / export are reported back from settings (informational\n— the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
+            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n  - notification client config + reachability \u2014 diagnostic for the\n    2FA / forgot-password flow. Exposes which backend is selected\n    (``mock`` or ``http``), the configured service URL, and a quick\n    reachability probe so ops can tell at a glance whether the BE\n    will actually dispatch OTP emails or silently sink them in\n    the audit table.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
           },
           "response": []
         }
@@ -2223,90 +2053,6 @@
           "response": []
         },
         {
-          "name": "Create a activity status (doc 37 part 1)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_statuses",
-                "create"
-              ]
-            },
-            "description": "Built-ins (activity statuses) are seeded at boot and protected from delete; structural flags locked on built-ins.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"in_progress\",\n  \"label\": \"In Progress\",\n  \"description\": \"Custom activity status\",\n  \"active\": true,\n  \"isTerminal\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create a activity type (doc 37 part 1)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_types/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_types",
-                "create"
-              ]
-            },
-            "description": "Built-ins (activity types) are seeded at boot and protected from delete; structural flags locked on built-ins.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"custom_kind\",\n  \"label\": \"Custom Kind\",\n  \"description\": \"Custom activity type\",\n  \"active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Create a custom permission (delegates)",
           "request": {
             "method": "POST",
@@ -2335,7 +2081,7 @@
                 "create"
               ]
             },
-            "description": "Create a custom permission (delegates)",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -2391,7 +2137,7 @@
           "response": []
         },
         {
-          "name": "Create a milestone status (doc 37 part 1)",
+          "name": "Create a milestone status (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -2419,10 +2165,10 @@
                 "create"
               ]
             },
-            "description": "Built-ins (milestone statuses) are seeded at boot and protected from delete; structural flags locked on built-ins.",
+            "description": "Create a milestone status (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"in_progress\",\n  \"label\": \"In Progress\",\n  \"description\": \"Custom milestone status\",\n  \"active\": true,\n  \"isTerminal\": false\n}",
+              "raw": "{\n  \"code\": \"\",\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isTerminal\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2433,7 +2179,7 @@
           "response": []
         },
         {
-          "name": "Create a notification template (doc 36)",
+          "name": "Create a notification template (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -2461,10 +2207,10 @@
                 "create"
               ]
             },
-            "description": "409 when an active row already covers the (templateKind, channel) pair. Built-in placeholder validation runs for the well-known kinds (otp_login / password_reset_link / password_reset_otp).",
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAdds a new template row. Returns 409 if an active row already exists for the (templateKind, channel) pair \u2014 the renderer lookup invariant is at most one active row per pair. To replace an existing template, PATCH the existing row instead.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"templateKind\": \"custom_event\",\n  \"channel\": \"email\",\n  \"subject\": \"Hello {name}\",\n  \"body\": \"<p>Hi {name}, this is a test.</p>\",\n  \"isHtml\": true,\n  \"description\": \"Custom test template\"\n}",
+              "raw": "{\n  \"template_kind\": \"\",\n  \"channel\": \"\",\n  \"subject\": \"\",\n  \"body\": \"\",\n  \"is_html\": false,\n  \"description\": \"\",\n  \"active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2475,7 +2221,7 @@
           "response": []
         },
         {
-          "name": "Create a project category (doc 37 part 1)",
+          "name": "Create a project category (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -2503,10 +2249,10 @@
                 "create"
               ]
             },
-            "description": "Built-ins (project categories) are seeded at boot and protected from delete; structural flags locked on built-ins.",
+            "description": "Create a project category (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"PILOT\",\n  \"label\": \"Pilot\",\n  \"description\": \"Custom project category\",\n  \"active\": true,\n  \"requiresOther\": false\n}",
+              "raw": "{\n  \"code\": \"\",\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"requiresOther\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2587,7 +2333,7 @@
                 "create"
               ]
             },
-            "description": "Create a role (delegates to POST /api/v3/roles/create)",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
@@ -2643,6 +2389,90 @@
           "response": []
         },
         {
+          "name": "Create an activity status (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_statuses",
+                "create"
+              ]
+            },
+            "description": "Create an activity status (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isTerminal\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create an activity type (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_types/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_types",
+                "create"
+              ]
+            },
+            "description": "Create an activity type (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Delete a permission (built-ins protected)",
           "request": {
             "method": "DELETE",
@@ -2673,7 +2503,7 @@
                 }
               ]
             },
-            "description": "Delete a permission (built-ins protected)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -2708,7 +2538,7 @@
                 }
               ]
             },
-            "description": "Delete a role (delegates; built-in 'admin' role protected)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -2748,7 +2578,7 @@
                 }
               ]
             },
-            "description": "Edit a permission's name/description (delegates)",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -2762,7 +2592,7 @@
           "response": []
         },
         {
-          "name": "Get a activity status by code (doc 37 part 1)",
+          "name": "Get a milestone status by code",
           "request": {
             "method": "GET",
             "header": [
@@ -2773,63 +2603,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/in_progress",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_statuses",
-                "in_progress"
-              ]
-            },
-            "description": ""
-          },
-          "response": []
-        },
-        {
-          "name": "Get a activity type by code (doc 37 part 1)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_types/custom_kind",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_types",
-                "custom_kind"
-              ]
-            },
-            "description": ""
-          },
-          "response": []
-        },
-        {
-          "name": "Get a milestone status by code (doc 37 part 1)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/in_progress",
+              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2838,15 +2612,22 @@
                 "v3",
                 "master",
                 "milestone_statuses",
-                "in_progress"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Get a milestone status by code"
           },
           "response": []
         },
         {
-          "name": "Get a notification template by id (doc 36)",
+          "name": "Get a notification template (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -2857,7 +2638,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/notification_templates/1",
+              "raw": "{{baseUrl}}/api/v3/master/notification_templates/{template_id}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2866,10 +2647,17 @@
                 "v3",
                 "master",
                 "notification_templates",
-                "1"
+                ":template_id"
+              ],
+              "variable": [
+                {
+                  "key": "template_id",
+                  "value": "0",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -2904,12 +2692,12 @@
                 }
               ]
             },
-            "description": "Get a permission row (delegates)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
         {
-          "name": "Get a project category by code (doc 37 part 1)",
+          "name": "Get a project category by code",
           "request": {
             "method": "GET",
             "header": [
@@ -2920,7 +2708,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/project_categories/PILOT",
+              "raw": "{{baseUrl}}/api/v3/master/project_categories/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2929,10 +2717,17 @@
                 "v3",
                 "master",
                 "project_categories",
-                "PILOT"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Get a project category by code"
           },
           "response": []
         },
@@ -2967,7 +2762,77 @@
                 }
               ]
             },
-            "description": "Get a role (delegates to GET /api/v3/roles/{id})"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
+          },
+          "response": []
+        },
+        {
+          "name": "Get an activity status by code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_statuses",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get an activity status by code"
+          },
+          "response": []
+        },
+        {
+          "name": "Get an activity type by code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_types/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_types",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get an activity type by code"
           },
           "response": []
         },
@@ -3044,7 +2909,7 @@
                 }
               ]
             },
-            "description": "Grant a permission to a role (delegates)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -3080,12 +2945,12 @@
                 }
               ]
             },
-            "description": "List a role's permissions (delegates)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
         {
-          "name": "List activity status (doc 37 part 1)",
+          "name": "List activity statuses",
           "request": {
             "method": "GET",
             "header": [
@@ -3109,16 +2974,18 @@
               "query": [
                 {
                   "key": "include_inactive",
-                  "value": "false"
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": ""
+            "description": "List activity statuses"
           },
           "response": []
         },
         {
-          "name": "List activity type (doc 37 part 1)",
+          "name": "List activity types",
           "request": {
             "method": "GET",
             "header": [
@@ -3142,11 +3009,13 @@
               "query": [
                 {
                   "key": "include_inactive",
-                  "value": "false"
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": ""
+            "description": "List activity types"
           },
           "response": []
         },
@@ -3213,7 +3082,7 @@
           "response": []
         },
         {
-          "name": "List milestone status (doc 37 part 1)",
+          "name": "List milestone statuses",
           "request": {
             "method": "GET",
             "header": [
@@ -3237,16 +3106,18 @@
               "query": [
                 {
                   "key": "include_inactive",
-                  "value": "false"
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": ""
+            "description": "List milestone statuses"
           },
           "response": []
         },
         {
-          "name": "List notification templates (doc 36)",
+          "name": "List notification templates (admin view shows soft-disabled rows too)",
           "request": {
             "method": "GET",
             "header": [
@@ -3270,16 +3141,18 @@
               "query": [
                 {
                   "key": "include_inactive",
-                  "value": "false"
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": "List active notification templates. ?include_inactive=true also returns soft-deactivated rows."
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. Doc 36 moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
           },
           "response": []
         },
         {
-          "name": "List project category (doc 37 part 1)",
+          "name": "List project categories (admin view shows soft-disabled rows too)",
           "request": {
             "method": "GET",
             "header": [
@@ -3303,11 +3176,13 @@
               "query": [
                 {
                   "key": "include_inactive",
-                  "value": "false"
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
                 }
               ]
             },
-            "description": ""
+            "description": "List project categories (admin view shows soft-disabled rows too)"
           },
           "response": []
         },
@@ -3454,7 +3329,7 @@
                 }
               ]
             },
-            "description": "List roles (delegates to GET /api/v3/roles)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
@@ -3495,12 +3370,12 @@
                 }
               ]
             },
-            "description": "List the permission catalog (delegates)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
         {
-          "name": "List the permission catalog grouped by module (doc 33 change 2)",
+          "name": "List the permission catalog grouped by module",
           "request": {
             "method": "GET",
             "header": [
@@ -3523,7 +3398,43 @@
                 "by-module"
               ]
             },
-            "description": "Returns the full permission catalog bucketed by module — the leading segment of each ``module:action`` code. The FE uses this to render a permission picker tree without parsing codes client-side. Admin-defined modules (created via ``POST /master/permissions/create`` with codes like ``custom_module:my_action``) appear in the same response."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the full permission catalog bucketed by module \u2014 the leading segment of each ``module:action`` code. The FE uses this to render a permission picker tree without parsing codes client-side. Admin-defined modules (created via ``POST /master/permissions/create`` with codes like ``custom_module:my_action``) appear in the same response."
+          },
+          "response": []
+        },
+        {
+          "name": "Re-activate a soft-disabled notification template (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/notification_templates/{template_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "notification_templates",
+                ":template_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "template_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=true``. Returns 409 when another active row already covers the (templateKind, channel) pair \u2014 at most one active row per pair is the lookup invariant the renderer relies on."
           },
           "response": []
         },
@@ -3564,7 +3475,7 @@
                 }
               ]
             },
-            "description": "Replace a role's permission set (delegates)",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -3614,7 +3525,7 @@
           "response": []
         },
         {
-          "name": "Restore a soft-disabled activity status (doc 37 part 1)",
+          "name": "Restore a soft-disabled activity status (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -3625,7 +3536,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/in_progress/restore",
+              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/{code}/restore",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3634,16 +3545,23 @@
                 "v3",
                 "master",
                 "activity_statuses",
-                "in_progress",
+                ":code",
                 "restore"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Restore a soft-disabled activity status (admin)"
           },
           "response": []
         },
         {
-          "name": "Restore a soft-disabled activity type (doc 37 part 1)",
+          "name": "Restore a soft-disabled activity type (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -3654,7 +3572,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_types/custom_kind/restore",
+              "raw": "{{baseUrl}}/api/v3/master/activity_types/{code}/restore",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3663,11 +3581,18 @@
                 "v3",
                 "master",
                 "activity_types",
-                "custom_kind",
+                ":code",
                 "restore"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Restore a soft-disabled activity type (admin)"
           },
           "response": []
         },
@@ -3708,7 +3633,7 @@
           "response": []
         },
         {
-          "name": "Restore a soft-disabled milestone status (doc 37 part 1)",
+          "name": "Restore a soft-disabled milestone status (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -3719,7 +3644,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/in_progress/restore",
+              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/{code}/restore",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3728,45 +3653,23 @@
                 "v3",
                 "master",
                 "milestone_statuses",
-                "in_progress",
+                ":code",
                 "restore"
-              ]
-            },
-            "description": ""
-          },
-          "response": []
-        },
-        {
-          "name": "Restore a soft-disabled notification template (doc 36)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/notification_templates/1/restore",
-              "host": [
-                "{{baseUrl}}"
               ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "notification_templates",
-                "1",
-                "restore"
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Restore a soft-disabled milestone status (admin)"
           },
           "response": []
         },
         {
-          "name": "Restore a soft-disabled project category (doc 37 part 1)",
+          "name": "Restore a soft-disabled project category (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -3777,7 +3680,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/project_categories/PILOT/restore",
+              "raw": "{{baseUrl}}/api/v3/master/project_categories/{code}/restore",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3786,11 +3689,18 @@
                 "v3",
                 "master",
                 "project_categories",
-                "PILOT",
+                ":code",
                 "restore"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "Restore a soft-disabled project category (admin)"
           },
           "response": []
         },
@@ -3904,12 +3814,12 @@
                 }
               ]
             },
-            "description": "Revoke a permission from a role (delegates)"
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off."
           },
           "response": []
         },
         {
-          "name": "Soft-deactivate a activity status (doc 37 part 1)",
+          "name": "Soft-deactivate a milestone status (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -3920,63 +3830,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/in_progress",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_statuses",
-                "in_progress"
-              ]
-            },
-            "description": "Built-ins protected. Sets active=false."
-          },
-          "response": []
-        },
-        {
-          "name": "Soft-deactivate a activity type (doc 37 part 1)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_types/custom_kind",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_types",
-                "custom_kind"
-              ]
-            },
-            "description": "Built-ins protected. Sets active=false."
-          },
-          "response": []
-        },
-        {
-          "name": "Soft-deactivate a milestone status (doc 37 part 1)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/in_progress",
+              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3985,15 +3839,22 @@
                 "v3",
                 "master",
                 "milestone_statuses",
-                "in_progress"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": "Built-ins protected. Sets active=false."
+            "description": "Soft-deactivate a milestone status (admin)"
           },
           "response": []
         },
         {
-          "name": "Soft-deactivate a notification template (doc 36)",
+          "name": "Soft-deactivate a notification template (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4004,7 +3865,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/notification_templates/1",
+              "raw": "{{baseUrl}}/api/v3/master/notification_templates/{template_id}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4013,15 +3874,22 @@
                 "v3",
                 "master",
                 "notification_templates",
-                "1"
+                ":template_id"
+              ],
+              "variable": [
+                {
+                  "key": "template_id",
+                  "value": "0",
+                  "description": ""
+                }
               ]
             },
-            "description": ""
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=false``. Built-in rows are protected from hard delete but CAN be soft-deactivated \u2014 when no active row covers the (kind, channel) pair, the renderer falls back to a generic body. To bring it back, POST /restore."
           },
           "response": []
         },
         {
-          "name": "Soft-deactivate a project category (doc 37 part 1)",
+          "name": "Soft-deactivate a project category (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4032,7 +3900,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/project_categories/PILOT",
+              "raw": "{{baseUrl}}/api/v3/master/project_categories/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4041,15 +3909,92 @@
                 "v3",
                 "master",
                 "project_categories",
-                "PILOT"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": "Built-ins protected. Sets active=false."
+            "description": "Soft-deactivate a project category (admin)"
           },
           "response": []
         },
         {
-          "name": "Soft-delete a division (admin) — sets active=false",
+          "name": "Soft-deactivate an activity status (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_statuses",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-deactivate an activity status (admin)"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-deactivate an activity type (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_types/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_types",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-deactivate an activity type (admin)"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a division (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4084,7 +4029,7 @@
           "response": []
         },
         {
-          "name": "Soft-delete a resource type (admin) — sets active=false",
+          "name": "Soft-delete a resource type (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4114,12 +4059,12 @@
                 }
               ]
             },
-            "description": "Soft-delete a resource type (admin) — sets active=false"
+            "description": "Soft-delete a resource type (admin) \u2014 sets active=false"
           },
           "response": []
         },
         {
-          "name": "Soft-delete a transition (admin) — sets active=false",
+          "name": "Soft-delete a transition (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4149,7 +4094,7 @@
                 }
               ]
             },
-            "description": "Soft-delete a transition (admin) — sets active=false"
+            "description": "Soft-delete a transition (admin) \u2014 sets active=false"
           },
           "response": []
         },
@@ -4189,90 +4134,6 @@
           "response": []
         },
         {
-          "name": "Update a activity status (doc 37 part 1)",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/in_progress",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_statuses",
-                "in_progress"
-              ]
-            },
-            "description": "Code is NEVER updatable. label/description/active editable. Structural flags locked on built-ins.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"label\": \"Renamed In Progress\",\n  \"description\": \"Updated description\",\n  \"isTerminal\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Update a activity type (doc 37 part 1)",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/master/activity_types/custom_kind",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "master",
-                "activity_types",
-                "custom_kind"
-              ]
-            },
-            "description": "Code is NEVER updatable. label/description/active editable. Structural flags locked on built-ins.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"label\": \"Renamed Custom Kind\",\n  \"description\": \"Updated description\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Update a division (admin)",
           "request": {
             "method": "PATCH",
@@ -4308,10 +4169,10 @@
                 }
               ]
             },
-            "description": "Patch ``label`` / ``requiresOther`` / ``email`` / ``phoneNumber``. ``code`` is NOT patchable — every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept ``email`` / ``phoneNumber`` updates so admins can attach contact details to the seeded divisions, but reject ``label`` / ``requiresOther`` changes with 403.",
+            "description": "Patch ``label`` / ``requiresOther`` / ``email`` / ``phoneNumber``. ``code`` is NOT patchable \u2014 every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept ``email`` / ``phoneNumber`` updates so admins can attach contact details to the seeded divisions, but reject ``label`` / ``requiresOther`` changes with 403.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"\",\n  \"requiresOther\": false,\n  \"email\": \"\",\n  \"phone_number\": \"\"\n}",
+              "raw": "{\n  \"label\": \"\",\n  \"requiresOther\": false,\n  \"email\": \"user@example.com\",\n  \"phone_number\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4322,7 +4183,7 @@
           "response": []
         },
         {
-          "name": "Update a milestone status (doc 37 part 1)",
+          "name": "Update a milestone status (admin)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -4338,7 +4199,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/in_progress",
+              "raw": "{{baseUrl}}/api/v3/master/milestone_statuses/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4347,13 +4208,20 @@
                 "v3",
                 "master",
                 "milestone_statuses",
-                "in_progress"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": "Code is NEVER updatable. label/description/active editable. Structural flags locked on built-ins.",
+            "description": "Update a milestone status (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Renamed In Progress\",\n  \"description\": \"Updated description\",\n  \"isTerminal\": false\n}",
+              "raw": "{\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isTerminal\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4364,7 +4232,7 @@
           "response": []
         },
         {
-          "name": "Update a notification template (doc 36)",
+          "name": "Update a notification template (admin)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -4380,7 +4248,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/notification_templates/1",
+              "raw": "{{baseUrl}}/api/v3/master/notification_templates/{template_id}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4389,13 +4257,20 @@
                 "v3",
                 "master",
                 "notification_templates",
-                "1"
+                ":template_id"
+              ],
+              "variable": [
+                {
+                  "key": "template_id",
+                  "value": "0",
+                  "description": ""
+                }
               ]
             },
-            "description": "templateKind and channel are immutable. Built-ins editable on subject/body. Placeholder validation against the row's pinned (kind, channel).",
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nEdit ``subject`` / ``body`` / ``isHtml`` / ``description`` / ``active``. ``templateKind`` and ``channel`` are immutable \u2014 they're the row's identity. Built-in rows ARE editable on subject/body (the whole point of moving templates to DB). Placeholder validation runs against the row's existing kind+channel; a body referencing an unknown placeholder for that pair returns 422.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subject\": \"Updated subject\",\n  \"body\": \"<p>Updated body with {code} and {ttl_minutes} placeholders.</p>\"\n}",
+              "raw": "{\n  \"subject\": \"\",\n  \"body\": \"\",\n  \"is_html\": false,\n  \"description\": \"\",\n  \"active\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4406,7 +4281,7 @@
           "response": []
         },
         {
-          "name": "Update a project category (doc 37 part 1)",
+          "name": "Update a project category (admin)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -4422,7 +4297,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/master/project_categories/PILOT",
+              "raw": "{{baseUrl}}/api/v3/master/project_categories/{code}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4431,13 +4306,20 @@
                 "v3",
                 "master",
                 "project_categories",
-                "PILOT"
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
               ]
             },
-            "description": "Code is NEVER updatable. label/description/active editable. Structural flags locked on built-ins.",
+            "description": "Update a project category (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Renamed Pilot\",\n  \"description\": \"Updated description\",\n  \"requiresOther\": false\n}",
+              "raw": "{\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"requiresOther\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4532,7 +4414,7 @@
                 }
               ]
             },
-            "description": "Update a role (delegates to PATCH /api/v3/roles/{id})",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -4634,6 +4516,104 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update an activity status (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_statuses/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_statuses",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update an activity status (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isTerminal\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update an activity type (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/activity_types/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "activity_types",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update an activity type (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\",\n  \"description\": \"\",\n  \"active\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5235,10 +5215,10 @@
                 }
               ]
             },
-            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape — milestone fields only) OR ``multipart/form-data`` (doc 30 — milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
+            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape \u2014 milestone fields only) OR ``multipart/form-data`` (doc 30 \u2014 milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"not_completed\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"vendors\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5460,7 +5440,7 @@
       "name": "Permissions",
       "item": [
         {
-          "name": "Create a custom permission (DEPRECATED — use POST /api/v3/master/permissions/create)",
+          "name": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
           "request": {
             "method": "POST",
             "header": [
@@ -5486,7 +5466,7 @@
                 "permissions"
               ]
             },
-            "description": "Create a custom permission (DEPRECATED — use POST /api/v3/master/permissions/create)",
+            "description": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -5500,7 +5480,7 @@
           "response": []
         },
         {
-          "name": "Delete a permission (DEPRECATED — use DELETE /api/v3/master/permissions/{code})",
+          "name": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -5529,12 +5509,12 @@
                 }
               ]
             },
-            "description": "Delete a permission (DEPRECATED — use DELETE /api/v3/master/permissions/{code})"
+            "description": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})",
+          "name": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
           "request": {
             "method": "PATCH",
             "header": [
@@ -5568,7 +5548,7 @@
                 }
               ]
             },
-            "description": "Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})",
+            "description": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -5582,7 +5562,7 @@
           "response": []
         },
         {
-          "name": "Get a permission row (DEPRECATED — use GET /api/v3/master/permissions/{code})",
+          "name": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})",
           "request": {
             "method": "GET",
             "header": [
@@ -5611,12 +5591,12 @@
                 }
               ]
             },
-            "description": "Get a permission row (DEPRECATED — use GET /api/v3/master/permissions/{code})"
+            "description": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)",
+          "name": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)",
           "request": {
             "method": "GET",
             "header": [
@@ -5651,7 +5631,7 @@
                 }
               ]
             },
-            "description": "List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)"
+            "description": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)"
           },
           "response": []
         }
@@ -5885,7 +5865,7 @@
                 }
               ]
             },
-            "description": "Returns the full project tree in one call: milestones → activities → tasks → subtasks, with resource details inlined for resource-type entities. Soft-deleted rows are filtered by default; pass `includeDeleted=true` to include them (admin-only in practice)."
+            "description": "Returns the full project tree in one call: milestones \u2192 activities \u2192 tasks \u2192 subtasks, with resource details inlined for resource-type entities. Soft-deleted rows are filtered by default; pass `includeDeleted=true` to include them (admin-only in practice)."
           },
           "response": []
         }
@@ -5978,10 +5958,10 @@
                 }
               ]
             },
-            "description": "Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards — re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.",
+            "description": "Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards \u2014 re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -6022,7 +6002,7 @@
             "description": "Create project",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -6115,7 +6095,7 @@
                 }
               ]
             },
-            "description": "Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field — NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects."
+            "description": "Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field \u2014 NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects."
           },
           "response": []
         },
@@ -6237,7 +6217,7 @@
                 }
               ]
             },
-            "description": "Maps to the 'Save Project' button in the Step-1 wizard. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Adding a milestone alone does NOT change status — only this explicit save call does. Idempotent: a no-op once past 'new'."
+            "description": "Maps to the 'Save Project' button in the Step-1 wizard. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Adding a milestone alone does NOT change status \u2014 only this explicit save call does. Idempotent: a no-op once past 'new'."
           },
           "response": []
         },
@@ -6313,7 +6293,7 @@
             "description": "Update project",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -6401,7 +6381,7 @@
       "name": "Roles",
       "item": [
         {
-          "name": "Create role (DEPRECATED — use POST /api/v3/master/roles/create)",
+          "name": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
           "request": {
             "method": "POST",
             "header": [
@@ -6428,7 +6408,7 @@
                 "create"
               ]
             },
-            "description": "Create role (DEPRECATED — use POST /api/v3/master/roles/create)",
+            "description": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
@@ -6442,7 +6422,7 @@
           "response": []
         },
         {
-          "name": "Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})",
+          "name": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -6471,12 +6451,12 @@
                 }
               ]
             },
-            "description": "Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})"
+            "description": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "Get role (DEPRECATED — use GET /api/v3/master/roles/{id})",
+          "name": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})",
           "request": {
             "method": "GET",
             "header": [
@@ -6505,12 +6485,12 @@
                 }
               ]
             },
-            "description": "Get role (DEPRECATED — use GET /api/v3/master/roles/{id})"
+            "description": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})",
+          "name": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})",
           "request": {
             "method": "POST",
             "header": [
@@ -6546,12 +6526,12 @@
                 }
               ]
             },
-            "description": "Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})"
+            "description": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)",
+          "name": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)",
           "request": {
             "method": "GET",
             "header": [
@@ -6581,12 +6561,12 @@
                 }
               ]
             },
-            "description": "List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)"
+            "description": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)"
           },
           "response": []
         },
         {
-          "name": "List roles (DEPRECATED — use GET /api/v3/master/roles)",
+          "name": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)",
           "request": {
             "method": "GET",
             "header": [
@@ -6621,12 +6601,12 @@
                 }
               ]
             },
-            "description": "List roles (DEPRECATED — use GET /api/v3/master/roles)"
+            "description": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)"
           },
           "response": []
         },
         {
-          "name": "Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)",
+          "name": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
           "request": {
             "method": "PUT",
             "header": [
@@ -6661,7 +6641,7 @@
                 }
               ]
             },
-            "description": "Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)",
+            "description": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -6675,7 +6655,7 @@
           "response": []
         },
         {
-          "name": "Revoke a single permission from a role (DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})",
+          "name": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -6711,12 +6691,12 @@
                 }
               ]
             },
-            "description": "Revoke a single permission from a role (DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})"
+            "description": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})",
+          "name": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
           "request": {
             "method": "PATCH",
             "header": [
@@ -6750,7 +6730,7 @@
                 }
               ]
             },
-            "description": "Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})",
+            "description": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -6790,7 +6770,7 @@
       "name": "Subtasks",
       "item": [
         {
-          "name": "Create a subtask nested under another subtask (doc 24)",
+          "name": "Create a subtask nested under another subtask",
           "request": {
             "method": "POST",
             "header": [
@@ -6826,10 +6806,10 @@
                 }
               ]
             },
-            "description": "Create a subtask nested under another subtask. Same body as the task-scoped create endpoint. Accepts JSON or multipart (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a subtask nested under another subtask. Same body as the task-scoped create endpoint. Accepts JSON or multipart (same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -6876,10 +6856,10 @@
                 }
               ]
             },
-            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7085,7 +7065,7 @@
             "description": "Update subtask (handles type transitions + resource upsert)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"type\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0\n  },\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"status\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7137,10 +7117,10 @@
                 }
               ]
             },
-            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7346,7 +7326,7 @@
             "description": "Update task (handles type transitions + resource upsert)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"type\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0\n  },\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"status\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7432,7 +7412,7 @@
                 }
               ]
             },
-            "description": "Returns full vendor detail — name, description, email, contact person, phone number, soft-delete metadata — plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
+            "description": "Returns full vendor detail \u2014 name, description, email, contact person, phone number, soft-delete metadata \u2014 plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
           },
           "response": []
         },
@@ -7493,7 +7473,7 @@
                 }
               ]
             },
-            "description": "Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out — they're preserved on disk but no longer presented in the vendor's project list per product rule."
+            "description": "Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out \u2014 they're preserved on disk but no longer presented in the vendor's project list per product rule."
           },
           "response": []
         },
