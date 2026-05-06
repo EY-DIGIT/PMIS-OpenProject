@@ -141,7 +141,15 @@ def _render_email(
         return subject, body
 
     if template_kind == TEMPLATE_PASSWORD_RESET_LINK:
-        token = payload.get("token", "")
+        # The password_reset service writes the token under the
+        # ``reset_token`` key. ``token`` is accepted as a fallback so
+        # earlier callers don't break, but the canonical key is
+        # ``reset_token``. Was missing for one release — produced
+        # emails with an empty token block.
+        token = (
+            payload.get("reset_token")
+            or payload.get("token", "")
+        )
         ttl_seconds = int(payload.get("ttl_seconds", 3600))
         ttl_minutes = max(1, ttl_seconds // 60)
         # The reset URL is composed by whichever FE host the deploy is
@@ -161,7 +169,14 @@ def _render_email(
     if template_kind == TEMPLATE_PASSWORD_RESET_OTP:
         # Email channel sending the OTP form (rare — usually OTP is SMS,
         # link is email — but supported for completeness).
-        code = payload.get("code", payload.get("token", ""))
+        # password_reset service writes the SMS-channel value under
+        # ``code``; ``token`` / ``reset_token`` are accepted as
+        # fallbacks for caller variability.
+        code = (
+            payload.get("code")
+            or payload.get("reset_token")
+            or payload.get("token", "")
+        )
         ttl_seconds = int(payload.get("ttl_seconds", 3600))
         ttl_minutes = max(1, ttl_seconds // 60)
         subject = "PMIS password reset code"
@@ -199,7 +214,11 @@ def _render_sms(template_kind: str, payload: Dict[str, Any]) -> str:
         )
 
     if template_kind == TEMPLATE_PASSWORD_RESET_OTP:
-        code = payload.get("code", payload.get("token", ""))
+        code = (
+            payload.get("code")
+            or payload.get("reset_token")
+            or payload.get("token", "")
+        )
         ttl_seconds = int(payload.get("ttl_seconds", 3600))
         ttl_minutes = max(1, ttl_seconds // 60)
         return (
@@ -211,7 +230,10 @@ def _render_sms(template_kind: str, payload: Dict[str, Any]) -> str:
         # Reset-link via SMS isn't a sensible flow (the link is too
         # long), but keep a degraded fallback so the dispatch doesn't
         # crash if mis-configured.
-        token = payload.get("token", "")
+        token = (
+            payload.get("reset_token")
+            or payload.get("token", "")
+        )
         return f"PMIS password reset token: {token[:24]}..."
 
     logger.warning(

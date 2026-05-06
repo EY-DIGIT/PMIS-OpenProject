@@ -649,6 +649,9 @@ class TestHttpNotificationClient:
     def test_email_password_reset_link(
         self, db_session, monkeypatch
     ):
+        """The canonical key the password_reset service writes is
+        ``reset_token``. The body must embed it — was missing for one
+        release, producing emails with an empty token paragraph."""
         from app.shared.notifications import (
             CHANNEL_EMAIL,
             TEMPLATE_PASSWORD_RESET_LINK,
@@ -666,11 +669,39 @@ class TestHttpNotificationClient:
             channel=CHANNEL_EMAIL,
             recipient="alice@example.com",
             template_kind=TEMPLATE_PASSWORD_RESET_LINK,
-            payload={"token": "abc-token", "ttl_seconds": 3600},
+            payload={"reset_token": "abc-token", "ttl_seconds": 3600},
         )
         body = recorder["body"]
         assert "abc-token" in body["body"]
         assert "60 minutes" in body["body"]
+
+    def test_email_password_reset_link_legacy_token_key(
+        self, db_session, monkeypatch
+    ):
+        """Older callers pass the value under ``token`` instead of
+        ``reset_token``. Both must work — the renderer accepts both
+        for backwards compat."""
+        from app.shared.notifications import (
+            CHANNEL_EMAIL,
+            TEMPLATE_PASSWORD_RESET_LINK,
+            HttpNotificationClient,
+        )
+        self._patch_settings(monkeypatch)
+        recorder = self._stub_httpx(
+            monkeypatch,
+            response_json={"success": True, "message": "ok", "provider": "smtp"},
+        )
+        client = HttpNotificationClient(db_session)
+        client.send(
+            user_id=None,
+            channel=CHANNEL_EMAIL,
+            recipient="bob@example.com",
+            template_kind=TEMPLATE_PASSWORD_RESET_LINK,
+            payload={"token": "legacy-token", "ttl_seconds": 1800},
+        )
+        body = recorder["body"]
+        assert "legacy-token" in body["body"]
+        assert "30 minutes" in body["body"]
 
     def test_sms_otp_login(self, db_session, monkeypatch):
         from app.shared.notifications import (
