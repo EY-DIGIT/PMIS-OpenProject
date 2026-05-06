@@ -36,6 +36,7 @@ class SubtaskRepository:
             position=s.position,
             resource_mode=s.resource_mode,
             resource_count=s.resource_count,
+            status=getattr(s, "status", None),
             created_at=s.created_at,
             updated_at=s.updated_at,
             created_by=s.created_by,

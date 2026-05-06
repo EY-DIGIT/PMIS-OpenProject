@@ -209,6 +209,7 @@ def format_subtask_response(
         "position": s["position"],
         "resourceMode": s.get("resource_mode"),
         "resourceCount": s.get("resource_count"),
+        "status": s.get("status"),
         "dependsOn": deps,
         "dependsOnDisplay": deps_display,
         "createdAt": s["created_at"],
@@ -437,6 +438,7 @@ class SubtaskController:
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
+            status=data.status,  # doc 38: status now editable on PATCH
         )
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.ok(data=format_subtask_response(

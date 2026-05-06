@@ -104,6 +104,7 @@ def format_task_response(
         "position": t["position"],
         "resourceMode": t.get("resource_mode"),
         "resourceCount": t.get("resource_count"),
+        "status": t.get("status"),
         "dependsOn": deps,
         "dependsOnDisplay": deps_display,
         "createdAt": t["created_at"],
@@ -291,6 +292,7 @@ class TaskController:
             resource_mode=data.resource_mode, resource_count=data.resource_count,
             resource=rd, current_user_id=cuid,
             depends_on=data.depends_on,
+            status=data.status,  # doc 38: status now editable on PATCH
         )
         idx = build_label_index_for_project(db, t.project_id)
         return BaseController.ok(data=format_task_response(

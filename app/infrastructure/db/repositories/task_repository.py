@@ -36,6 +36,7 @@ class TaskRepository:
             position=t.position,
             resource_mode=t.resource_mode,
             resource_count=t.resource_count,
+            status=getattr(t, "status", None),
             created_at=t.created_at,
             updated_at=t.updated_at,
             created_by=t.created_by,

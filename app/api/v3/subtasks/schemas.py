@@ -66,6 +66,8 @@ class SubtaskUpdateRequest(BaseModel):
     resource_count: Optional[int] = Field(None, ge=1, alias="resourceCount")
     resource: Optional[ResourcePayload] = None
     depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
+    # Doc 38: lifecycle status, accepted on PATCH only.
+    status: Optional[str] = None
 
     @field_validator("type", mode="before")
     @classmethod
