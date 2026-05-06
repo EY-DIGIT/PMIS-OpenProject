@@ -72,8 +72,13 @@ def upgrade() -> None:
 
     # ---- 2. Backfill — only rows where user_code IS NULL. Idempotent
     # if the migration is re-run after a previous partial completion.
+    #
+    # Slug source is the user's full name (first + last) so the 4-char
+    # slug is recognisable to humans (US-RAVI-..., US-PRIY-...). Falls
+    # back to ``login`` (employee id) when neither name is populated —
+    # legacy bootstrap admin rows lack a name.
     rows = bind.execute(sa.text(
-        "SELECT id, login, created_at FROM users "
+        "SELECT id, login, first_name, last_name, created_at FROM users "
         "WHERE user_code IS NULL"
     )).fetchall()
     backfilled = 0
@@ -81,8 +86,14 @@ def upgrade() -> None:
         # Row could be a tuple or a Row mapping depending on dialect/version.
         uid = row[0] if not hasattr(row, "id") else row.id
         ulogin = row[1] if not hasattr(row, "login") else row.login
-        ucreated = row[2] if not hasattr(row, "created_at") else row.created_at
-        base = build_code("US", ulogin or "", ucreated)
+        ufirst = row[2] if not hasattr(row, "first_name") else row.first_name
+        ulast = row[3] if not hasattr(row, "last_name") else row.last_name
+        ucreated = row[4] if not hasattr(row, "created_at") else row.created_at
+        name_source = " ".join(
+            part for part in (ufirst, ulast) if part and str(part).strip()
+        ).strip()
+        slug_source = name_source or (ulogin or "")
+        base = build_code("US", slug_source, ucreated)
         code = generate_unique_code(
             bind, table="users", code_column="user_code",
             base_code=base, exclude_id=uid,

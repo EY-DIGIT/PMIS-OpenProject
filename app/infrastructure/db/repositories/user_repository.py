@@ -162,14 +162,30 @@ class UserRepository:
         the assignment immediately.
 
         Doc 25: human-readable ``user_code`` is generated BEFORE insert
-        from ``(login, created_at)`` so the model row + returned domain
-        object both carry it. ``created_at`` is computed in Python so the
-        code's IST timestamp segment matches the row's stored timestamp
-        exactly.
+        from ``(name_source, created_at)`` so the model row + returned
+        domain object both carry it. ``created_at`` is computed in
+        Python so the code's IST timestamp segment matches the row's
+        stored timestamp exactly.
+
+        ``name_source`` is the user's full name (first + last) so the
+        4-character slug is recognisable to humans (``US-RAVI-...``,
+        ``US-PRIY-...``). ``login`` is the corporate Employee ID,
+        which produced unhelpful slugs like ``US-2300-...`` from
+        all-numeric ids — switched away from that source to avoid that.
+        Falls back to ``login`` when no name fields are populated (the
+        bootstrap admin path supplies neither first nor last name).
         """
         now = _utcnow()
         clean_login = (login or "").strip()
-        base_code = build_code("US", clean_login, now)
+        # Full-name source for the slug. The slugifier strips
+        # non-alphanumerics and uppercases, so a single space between
+        # first + last contributes nothing — names like "Priya Sharma"
+        # cleanly become "PRIY".
+        name_source = " ".join(
+            part for part in (first_name, last_name) if part and part.strip()
+        ).strip()
+        slug_source = name_source or clean_login
+        base_code = build_code("US", slug_source, now)
         code = generate_unique_code(
             self.db.connection(),
             table="users", code_column="user_code",

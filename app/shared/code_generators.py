@@ -21,8 +21,10 @@ Examples:
 
   ``VN-ACME-260502143015`` — vendor "Acme Corp" created 2026-05-02 14:30:15 IST
   ``VN-3MIN-260502143015`` — vendor "3M India" created same instant
-  ``US-ADMI-260101000000`` — user with login "admin" created 2026-01-01 IST
-  ``US-Z000-260502143015`` — user with login "z" (single char, padded with zeros)
+  ``US-RAVI-260502143015`` — user "Ravi Kumar" created 2026-05-02 IST
+  ``US-PRIY-260502143015`` — user "Priya Sharma" created same instant
+  ``US-ADMI-260101000000`` — bootstrap admin (no name → falls back to ``login``)
+  ``US-Z000-260502143015`` — single-char source (e.g. login "z"), padded with zeros
 
 Stability
 ---------

@@ -218,14 +218,41 @@ class TestUserCodeOnCreate:
         assert d["userCode"] is not None
         assert _USER_CODE_RE.match(d["userCode"]), d["userCode"]
 
-    def test_slug_from_login(
+    def test_slug_from_full_name(
         self, client, admin_user, admin_headers, db_session,
     ):
+        """Doc 25 follow-up: the 4-char slug now comes from the user's
+        full name (first + last) instead of the login / employee id.
+        Login was producing unhelpful slugs like ``US-2300-...`` from
+        all-numeric corp ids, so it was switched to name."""
+        v = _create_vendor(client, admin_headers)
+        p = _seed_project(db_session)
+        body = _user_body(
+            # Login is irrelevant to the slug now — pass an arbitrary id.
+            vendor_ref=v["id"], project_ids=[p.id], login="adminlike",
+        )
+        # _user_body's defaults set firstName="Doc", lastName="Twentyfive".
+        # Slug = first 4 alphanumeric uppercase of "Doc Twentyfive" = "DOCT".
+        resp = client.post(
+            "/api/v3/users/create", json=body, headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["userCode"].startswith("US-DOCT-")
+
+    def test_slug_falls_back_to_login_when_no_name(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """When neither firstName nor lastName is supplied, fall back
+        to the login (matches how the bootstrap admin row gets its
+        ``US-ADMI-...`` code)."""
         v = _create_vendor(client, admin_headers)
         p = _seed_project(db_session)
         body = _user_body(
             vendor_ref=v["id"], project_ids=[p.id], login="adminlike",
         )
+        # Strip the default firstName / lastName so the fallback fires.
+        body["firstName"] = None
+        body["lastName"] = None
         resp = client.post(
             "/api/v3/users/create", json=body, headers=admin_headers,
         )
