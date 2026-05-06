@@ -93,16 +93,20 @@ def _create_activity(
 
 
 def _publish(client, admin_headers, project_id):
-    """Doc 33: tests that used to publish before creating a version no
-    longer need to. Publish is now an optional checkpoint. Keep the helper
-    callable as a no-op so call sites stay readable."""
-    return None
+    """Publish a project so tasks / subtasks can be created on it.
+
+    Post-doc-33 follow-up: T/S writes are gated on
+    ``project.status == 'published'``. Pre-publish, task / subtask
+    create returns 422 ``publish_required``. Tests that build a T/S
+    chain therefore need to publish first.
+    """
+    r = client.post(f"/api/v3/projects/{project_id}/publish", headers=admin_headers)
+    assert r.status_code == 200, r.text
 
 
 def _create_version(client, admin_headers, baseline_id):
-    """Doc 33: versioning was removed. Tests that used to publish + create
-    a version now just continue to operate on the original project — T/S
-    writes are allowed directly on it. This shim returns the input id."""
+    """Doc 33: versioning was removed. Helper kept as a no-op shim that
+    returns the input id so call sites stay readable."""
     return baseline_id
 
 

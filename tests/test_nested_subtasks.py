@@ -66,8 +66,15 @@ def _create_activity(client, headers, milestone_id, *, name="A"):
 
 
 def _publish(client, headers, pid):
-    """Doc 33: no-op (publish optional now)."""
-    return None
+    """Publish a project so tasks / subtasks can be created on it.
+
+    Post-doc-33 follow-up: T/S writes are gated on
+    ``project.status == 'published'``. Pre-publish, task / subtask
+    create returns 422 ``publish_required``. This helper does the
+    publish-as-admin step the FE-equivalent flow would.
+    """
+    r = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
+    assert r.status_code == 200, r.text
 
 
 def _create_version(client, headers, pid):
@@ -82,7 +89,7 @@ def _build_version_with_one_task(client, headers):
     _create_activity(client, headers, m1, name="A1")
     _publish(client, headers, pid)
     vid = _create_version(client, headers, pid)
-    # Locate version twin of A1.
+    # Locate the activity (M1 / A1).
     tree = client.get(f"/api/v3/projects/{vid}/tree", headers=headers).json()["data"]
     v_a1 = tree["milestones"][0]["activities"][0]["id"]
     t_resp = client.post(

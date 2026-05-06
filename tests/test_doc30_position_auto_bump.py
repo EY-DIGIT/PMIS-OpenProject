@@ -249,18 +249,24 @@ class TestActivityPositionCollision:
 
 @pytest.fixture(scope="function")
 def version_task(client, admin_headers, project_with_one_milestone):
-    """Build a versioned project so task + subtask creates are allowed."""
+    """Build a published project so task + subtask creates are allowed.
+
+    Post-doc-33 follow-up: T/S writes are gated on
+    ``project.status == 'published'``. Pre-publish, task / subtask
+    create returns 422 ``publish_required``. So the fixture has to
+    publish before returning.
+    """
     pid, m1 = project_with_one_milestone
-    a1 = client.post(
+    client.post(
         f"/api/v3/milestones/{m1['id']}/activities/standard/create",
         json={
             "name": "A1",
             "startDate": _future_iso(3), "endDate": _future_iso(80),
         },
         headers=admin_headers,
-    ).json()["data"]
-    # Doc 33: versioning removed; tasks/subtasks now live directly under
-    # the project's M/A subtree.
+    )
+    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
+    assert pub.status_code == 200, pub.text
     tree = client.get(f"/api/v3/projects/{pid}/tree", headers=admin_headers).json()["data"]
     v_a1 = tree["milestones"][0]["activities"][0]["id"]
     t1 = client.post(

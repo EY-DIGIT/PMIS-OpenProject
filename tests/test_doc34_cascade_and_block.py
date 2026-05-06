@@ -181,8 +181,22 @@ def cascade_tree(db_session, sample_project, admin_user):
     Each entity carries one direct comment + one standalone attachment.
     The target_T's comment carries a comment-bound attachment too — used
     to verify the comment_id sweep in the cascade.
+
+    Post-doc-33 follow-up: T/S writes (incl. ``delete_task`` /
+    ``delete_subtask``) are gated on ``project.status == 'published'``.
+    Bump the sample project's status here so delete tests don't trip
+    the publish-required gate. Rows themselves still go in via direct
+    ORM inserts which bypass the gate (matching the pre-existing
+    fixture style).
     """
     pid = sample_project.id
+
+    # Bump the project to ``published`` so the delete-cascade tests
+    # below can call ``delete_task`` / ``delete_subtask`` without
+    # tripping the new ``publish_required`` gate.
+    sample_project.status = "published"
+    db_session.add(sample_project)
+    db_session.flush()
 
     # Target subtree (will be deleted).
     target_M = _make_milestone(db_session, project_id=pid, name="target_M")

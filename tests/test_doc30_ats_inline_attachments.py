@@ -158,8 +158,11 @@ def version_activity_id(client, admin_headers):
         headers=admin_headers,
     )
     assert ar.status_code == 201, ar.text
-    # Doc 33: versioning removed; tasks/subtasks are writable on the
-    # project directly, no publish + version step.
+    # Post-doc-33 follow-up: T/S writes are gated on the project being
+    # ``published``. Publish here so the downstream task / subtask
+    # fixtures can create rows.
+    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
+    assert pub.status_code == 200, pub.text
     tree = client.get(f"/api/v3/projects/{pid}/tree", headers=admin_headers).json()["data"]
     return tree["milestones"][0]["activities"][0]["id"]
 

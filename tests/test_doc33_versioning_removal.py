@@ -57,6 +57,26 @@ def _make_activity(client, headers, mid):
     return r.json()["data"]["id"]
 
 
+def _publish(client, headers, pid):
+    """Publish a project so tasks / subtasks can be created on it.
+
+    Required by the post-doc-33 follow-up that gates T/S writes on
+    ``status == 'published'``. Pre-publish, T/S create returns 422.
+    """
+    r = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
+    assert r.status_code == 200, r.text
+
+
+def _make_published_project_with_activity(client, headers):
+    """Bootstrap helper: project + milestone + activity + publish.
+    Returns ``(pid, mid, aid)`` ready for T/S creates."""
+    pid = _make_project(client, headers)
+    mid = _make_milestone(client, headers, pid)
+    aid = _make_activity(client, headers, mid)
+    _publish(client, headers, pid)
+    return pid, mid, aid
+
+
 # ===========================================================================
 # Removed endpoints
 # ===========================================================================
@@ -110,17 +130,22 @@ class TestResponseShape:
 
 
 # ===========================================================================
-# T/S writable on project (no version required)
+# T/S writes are gated on project.status == 'published'
+#
+# Post-doc-33 follow-up: tasks + subtasks can only be added once the
+# project has been published (the senior's "publish, then add T/S"
+# rule). Pre-publish (status=new or draft), T/S create returns
+# 422 ``publish_required``. Post-publish, the same calls succeed.
 # ===========================================================================
 
-class TestTaskSubtaskOnProject:
-    def test_task_creatable_on_project_directly(
+class TestTaskSubtaskRequirePublish:
+    def test_task_create_rejected_before_publish(
         self, client, admin_user, admin_headers,
     ):
         pid = _make_project(client, admin_headers)
         mid = _make_milestone(client, admin_headers, pid)
         aid = _make_activity(client, admin_headers, mid)
-        # No publish, no version creation — just create the task.
+        # No publish — task create should fail with the publish-required gate.
         resp = client.post(
             f"/api/v3/activities/{aid}/tasks/create",
             json={
@@ -130,14 +155,92 @@ class TestTaskSubtaskOnProject:
             },
             headers=admin_headers,
         )
-        assert resp.status_code == 201, resp.text
+        assert resp.status_code == 422, resp.text
+        # The gate carries a structured details payload.
+        body = resp.json()
+        err = body.get("error") or {}
+        details = err.get("_embedded", {}).get("details", {})
+        assert details.get("errorIdentifier") == "publish_required"
+        assert details.get("requiredStatus") == "published"
 
-    def test_subtask_creatable_on_project_directly(
+    def test_subtask_create_rejected_before_publish_via_orm_seeded_task(
+        self, client, admin_user, admin_headers, db_session, sample_project,
+    ):
+        """Subtask create on a non-published project is rejected.
+
+        We can't build a task on a non-published project via the public
+        API (the same gate blocks task create too). To exercise the
+        subtask gate in isolation, we seed a task directly via the ORM
+        on the shared sample_project (which stays in ``new``) and try
+        to create a subtask under it through the API.
+        """
+        from datetime import datetime
+        from uuid import uuid4
+        from app.infrastructure.db.models.activity import ActivityModel
+        from app.infrastructure.db.models.milestone import MilestoneModel
+        from app.infrastructure.db.models.task import TaskModel
+
+        # Pin a date range on the sample project (it ships without one).
+        sample_project.start_date = datetime(2026, 5, 1)
+        sample_project.end_date = datetime(2026, 12, 31)
+        db_session.add(sample_project)
+        db_session.commit()
+
+        # Seed M / A / T directly via ORM so the publish gate doesn't
+        # interfere with the test's setup.
+        m = MilestoneModel(
+            id=str(uuid4()),
+            project_id=sample_project.id,
+            name="M", description="-",
+            start_date=datetime(2026, 5, 1), end_date=datetime(2026, 12, 31),
+            position=1, status="not_completed",
+        )
+        db_session.add(m); db_session.flush()
+        a = ActivityModel(
+            id=str(uuid4()), project_id=sample_project.id, milestone_id=m.id,
+            name="A", type="standard",
+            start_date=datetime(2026, 5, 1), end_date=datetime(2026, 12, 31),
+            position=1,
+        )
+        db_session.add(a); db_session.flush()
+        t = TaskModel(
+            id=str(uuid4()), project_id=sample_project.id, activity_id=a.id,
+            name="T", type="standard",
+            start_date=datetime(2026, 5, 1), end_date=datetime(2026, 12, 31),
+            position=1,
+        )
+        db_session.add(t); db_session.commit()
+
+        # Sample project is still in ``new`` (never published) — subtask
+        # create against the seeded task must fail with publish_required.
+        resp = client.post(
+            f"/api/v3/tasks/{t.id}/subtasks/create",
+            json={"name": "S-blocked", "startDate": _iso(5), "endDate": _iso(30)},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        details = resp.json().get("error", {}).get("_embedded", {}).get("details", {})
+        assert details.get("errorIdentifier") == "publish_required"
+
+    def test_task_creatable_after_publish(
         self, client, admin_user, admin_headers,
     ):
-        pid = _make_project(client, admin_headers)
-        mid = _make_milestone(client, admin_headers, pid)
-        aid = _make_activity(client, admin_headers, mid)
+        pid, mid, aid = _make_published_project_with_activity(
+            client, admin_headers,
+        )
+        resp = client.post(
+            f"/api/v3/activities/{aid}/tasks/create",
+            json={"name": "T1", "startDate": _iso(4), "endDate": _iso(40)},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_subtask_creatable_after_publish(
+        self, client, admin_user, admin_headers,
+    ):
+        pid, mid, aid = _make_published_project_with_activity(
+            client, admin_headers,
+        )
         t = client.post(
             f"/api/v3/activities/{aid}/tasks/create",
             json={"name": "T", "startDate": _iso(4), "endDate": _iso(40)},
@@ -160,9 +263,9 @@ class TestAuditExpansion:
     def test_task_create_recorded_in_project_audit(
         self, client, admin_user, admin_headers, db_session,
     ):
-        pid = _make_project(client, admin_headers)
-        mid = _make_milestone(client, admin_headers, pid)
-        aid = _make_activity(client, admin_headers, mid)
+        pid, _mid, aid = _make_published_project_with_activity(
+            client, admin_headers,
+        )
         client.post(
             f"/api/v3/activities/{aid}/tasks/create",
             json={"name": "AuditedT", "startDate": _iso(4), "endDate": _iso(40)},
@@ -180,9 +283,9 @@ class TestAuditExpansion:
     def test_subtask_create_recorded(
         self, client, admin_user, admin_headers, db_session,
     ):
-        pid = _make_project(client, admin_headers)
-        mid = _make_milestone(client, admin_headers, pid)
-        aid = _make_activity(client, admin_headers, mid)
+        pid, _mid, aid = _make_published_project_with_activity(
+            client, admin_headers,
+        )
         t = client.post(
             f"/api/v3/activities/{aid}/tasks/create",
             json={"name": "T", "startDate": _iso(4), "endDate": _iso(40)},
@@ -206,9 +309,9 @@ class TestAuditExpansion:
     def test_task_delete_recorded(
         self, client, admin_user, admin_headers, db_session,
     ):
-        pid = _make_project(client, admin_headers)
-        mid = _make_milestone(client, admin_headers, pid)
-        aid = _make_activity(client, admin_headers, mid)
+        pid, _mid, aid = _make_published_project_with_activity(
+            client, admin_headers,
+        )
         t = client.post(
             f"/api/v3/activities/{aid}/tasks/create",
             json={"name": "T-del", "startDate": _iso(4), "endDate": _iso(40)},

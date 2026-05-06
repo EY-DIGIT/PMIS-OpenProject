@@ -783,8 +783,11 @@ def _create_baseline_with_resource_activity(client, admin_headers):
         headers=admin_headers,
     ).json()["data"]["id"]
 
-    # Doc 33: versioning removed; tasks live directly under the project's
-    # M/A subtree.
+    # Post-doc-33 follow-up: T/S writes require ``status == 'published'``.
+    # Publish here so the downstream task / subtask tests can create rows.
+    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=admin_headers)
+    assert pub.status_code == 200, pub.text
+
     acts = client.get(
         f"/api/v3/milestones/{mid}/activities", headers=admin_headers,
     ).json()["data"]["_embedded"]["elements"]

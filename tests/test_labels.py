@@ -114,9 +114,15 @@ def _create_subtask(client, admin_headers, task_id, *, name="S", deps=None,
 
 
 def _publish_and_version(client, admin_headers, baseline_id):
-    """Doc 33: versioning was removed. Tasks/subtasks are writable on the
-    project directly. Returns ``(project_id, milestone_id, activity_id)``
-    using the existing project's first M/A pair."""
+    """Publish the project so tasks / subtasks can be created on it.
+
+    Post-doc-33 follow-up: T/S writes are gated on
+    ``project.status == 'published'``. Helper publishes the project,
+    then returns ``(project_id, milestone_id, activity_id)`` of the
+    first M / A pair the caller can hang T/S off.
+    """
+    pub = client.post(f"/api/v3/projects/{baseline_id}/publish", headers=admin_headers)
+    assert pub.status_code == 200, pub.text
     ms = client.get(
         f"/api/v3/projects/{baseline_id}/milestones", headers=admin_headers,
     ).json()["data"]["_embedded"]["elements"]

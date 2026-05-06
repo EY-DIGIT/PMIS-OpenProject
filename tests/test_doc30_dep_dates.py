@@ -72,9 +72,14 @@ def _patch_activity(client, headers, aid, **body):
 
 
 def _publish_and_version(client, headers, pid):
-    """Doc 33: versioning was removed. Tasks/subtasks are now writable on
-    the project directly — no publish + version step required. Returns
-    the original pid + the project's tree."""
+    """Publish the project so tasks / subtasks can be created on it.
+
+    Post-doc-33 follow-up: T/S writes are gated on
+    ``project.status == 'published'``. Helper publishes then returns
+    ``(pid, tree)`` so callers can locate the M / A ids they need.
+    """
+    pub = client.post(f"/api/v3/projects/{pid}/publish", headers=headers)
+    assert pub.status_code == 200, pub.text
     tree = client.get(f"/api/v3/projects/{pid}/tree", headers=headers).json()["data"]
     return pid, tree
 
