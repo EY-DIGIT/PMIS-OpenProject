@@ -367,10 +367,35 @@ class HttpNotificationClient(NotificationClient):
 
 
 def get_notification_client(db: Session) -> NotificationClient:
-    """Factory: pick the backend based on ``settings.NOTIFICATION_CLIENT``."""
-    backend = (settings.NOTIFICATION_CLIENT or "mock").lower()
+    """Factory: pick the backend based on settings.
+
+    Selection rules (first match wins):
+
+      1. ``NOTIFICATION_CLIENT=mock`` — explicit opt-out → always mock.
+         Used by the test suite via the ``mock_notification_client``
+         autouse fixture so unit tests never hit a real service.
+      2. ``NOTIFICATION_CLIENT=http`` — explicit opt-in → http.
+      3. Empty / unset ``NOTIFICATION_CLIENT`` AND
+         ``NOTIFICATION_SERVICE_URL`` is set → http (auto-detect).
+         The presence of a service URL is a strong signal of intent —
+         ops configured it, they want real dispatch. This is the
+         common deployment path: the only env var operators have to
+         set is the URL itself, which they need anyway.
+      4. Otherwise → mock (safe default for fresh local dev).
+
+    The auto-detect rule (#3) was added because ops kept setting
+    ``NOTIFICATION_SERVICE_URL`` but forgetting ``NOTIFICATION_CLIENT``;
+    OTPs would silently sink into ``notification_log`` instead of
+    dispatching. With auto-detect, configuring the URL is enough.
+    """
+    backend = (settings.NOTIFICATION_CLIENT or "").strip().lower()
+    has_url = bool((settings.NOTIFICATION_SERVICE_URL or "").strip())
+
+    if backend == "mock":
+        return MockNotificationClient(db)
     if backend == "http":
         return HttpNotificationClient(db)
-    # ``mock`` and any unknown value fall back to the mock — safer
-    # default than crashing on misconfig.
+    # No explicit setting — auto-detect by URL presence.
+    if has_url:
+        return HttpNotificationClient(db)
     return MockNotificationClient(db)

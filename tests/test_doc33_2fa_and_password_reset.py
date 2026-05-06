@@ -566,6 +566,43 @@ class TestHttpNotificationClient:
         c = get_notification_client(db_session)
         assert isinstance(c, HttpNotificationClient)
 
+    def test_factory_auto_picks_http_when_url_set_but_client_unset(
+        self, db_session, monkeypatch,
+    ):
+        """Setting NOTIFICATION_SERVICE_URL alone is enough — the
+        factory infers HTTP intent. Common deploy footgun was setting
+        the URL but forgetting NOTIFICATION_CLIENT=http; OTPs then
+        silently sank into notification_log."""
+        from app.core.config import settings as _settings
+        from app.shared.notifications import (
+            HttpNotificationClient,
+            get_notification_client,
+        )
+        monkeypatch.setattr(_settings, "NOTIFICATION_CLIENT", "")
+        monkeypatch.setattr(
+            _settings, "NOTIFICATION_SERVICE_URL", "http://notif.test",
+        )
+        c = get_notification_client(db_session)
+        assert isinstance(c, HttpNotificationClient)
+
+    def test_factory_explicit_mock_overrides_url(
+        self, db_session, monkeypatch,
+    ):
+        """Explicit NOTIFICATION_CLIENT=mock wins even if a URL is set
+        (used by the test suite to keep CI from hitting external
+        services)."""
+        from app.core.config import settings as _settings
+        from app.shared.notifications import (
+            MockNotificationClient,
+            get_notification_client,
+        )
+        monkeypatch.setattr(_settings, "NOTIFICATION_CLIENT", "mock")
+        monkeypatch.setattr(
+            _settings, "NOTIFICATION_SERVICE_URL", "http://notif.test",
+        )
+        c = get_notification_client(db_session)
+        assert isinstance(c, MockNotificationClient)
+
     def test_email_otp_login_renders_subject_and_body(
         self, db_session, monkeypatch
     ):
