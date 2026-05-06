@@ -265,7 +265,7 @@ Three sister repos run as standalone services alongside the monolith. They share
 
 | Port | Repo | Notes |
 |------|------|-------|
-| 8001 | `PMIS-user-management` | Slim user/auth slice. Lacks 2FA, forgot/reset, RBAC user-side endpoints (those still live only in the monolith). |
+| 8001 | `PMIS-user-management` | User/auth slice. **Doc 37 part 2 foundation shipped (commit `f840fde`)** — model layer brought to monolith parity (doc-21B RBAC tables, doc-33 2FA/password-reset, doc-36 notification templates). Routes / services / RBAC repository / monolith proxy plumbing pending — see `planned_changes/37` part 2 status section for the runbook. |
 | 8002 | `PMIS-notification-service` | Stateless. `POST /api/v1/notifications/{email,sms,otp}/send` + `/otp/verify`. Mock + real provider backends. |
 | 8003 | `PMIS-project-management` | Slim project slice. Still carries `/projects/{id}/suspend` and `/projects/{id}/versions/create` from before doc 33 — divergence will need to be reconciled when versioning-removal is migrated to microservices. |
 
