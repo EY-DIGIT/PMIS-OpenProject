@@ -55,6 +55,7 @@ def seed_builtin_divisions(db_session):
         db_session.add(DivisionModel(
             code=code, label=label,
             is_builtin=True, requires_other=requires_other, active=True,
+            email="ops@pmis.example", phone_number="+910000000000",
         ))
     db_session.commit()
 
@@ -89,6 +90,7 @@ class TestMasterDivisionsList:
         db_session.add(DivisionModel(
             code="legacy", label="Legacy", is_builtin=False,
             requires_other=False, active=False,
+            email="legacy@pmis.example", phone_number="+910000000001",
         ))
         db_session.commit()
 
@@ -104,6 +106,7 @@ class TestMasterDivisionsList:
         db_session.add(DivisionModel(
             code="legacy", label="Legacy", is_builtin=False,
             requires_other=False, active=False,
+            email="legacy@pmis.example", phone_number="+910000000001",
         ))
         db_session.commit()
         resp = client.get(
@@ -133,7 +136,12 @@ class TestMasterDivisionsCreate:
         resp = client.post(
             "/api/v3/master/divisions/create",
             headers=admin_headers,
-            json={"code": "engineering", "label": "Engineering"},
+            json={
+                "code": "engineering",
+                "label": "Engineering",
+                "email": "eng@uidai.example",
+                "phoneNumber": "+91 80 1234 5678",
+            },
         )
         assert resp.status_code == 201, resp.text
         d = resp.json()["data"]
@@ -149,7 +157,11 @@ class TestMasterDivisionsCreate:
         resp = client.post(
             "/api/v3/master/divisions/create",
             headers=admin_headers,
-            json={"label": "Field Operations"},
+            json={
+                "label": "Field Operations",
+                "email": "ops@uidai.example",
+                "phoneNumber": "+91 80 1234 5678",
+            },
         )
         assert resp.status_code == 201
         assert resp.json()["data"]["code"] == "field_operations"
@@ -161,7 +173,12 @@ class TestMasterDivisionsCreate:
         resp = client.post(
             "/api/v3/master/divisions/create",
             headers=admin_headers,
-            json={"code": "tmd1", "label": "Whatever"},
+            json={
+                "code": "tmd1",
+                "label": "Whatever",
+                "email": "ops@uidai.example",
+                "phoneNumber": "+91 80 0000 0000",
+            },
         )
         assert resp.status_code == 409, resp.text
 
@@ -183,6 +200,7 @@ class TestMasterDivisionsUpdate:
         db_session.add(DivisionModel(
             code="engineering", label="Engineering",
             is_builtin=False, requires_other=False, active=True,
+            email="eng@uidai.example", phone_number="+91 80 1234 5678",
         ))
         db_session.commit()
         resp = client.patch(
@@ -223,6 +241,7 @@ class TestMasterDivisionsDelete:
         db_session.add(DivisionModel(
             code="engineering", label="Engineering",
             is_builtin=False, requires_other=False, active=True,
+            email="eng@uidai.example", phone_number="+91 80 1234 5678",
         ))
         db_session.commit()
         resp = client.delete(
@@ -254,6 +273,7 @@ class TestMasterDivisionsDelete:
         db_session.add(DivisionModel(
             code="engineering", label="Engineering",
             is_builtin=False, requires_other=False, active=False,
+            email="eng@uidai.example", phone_number="+91 80 1234 5678",
         ))
         db_session.commit()
         resp = client.post(
@@ -265,19 +285,19 @@ class TestMasterDivisionsDelete:
 
 
 class TestMasterDivisionsContactDetails:
-    """Email + phoneNumber on divisions (mirrors the vendors pattern)."""
+    """Email + phoneNumber on divisions — REQUIRED post-doc-36."""
 
     def test_response_carries_email_and_phone_keys(
         self, client, admin_headers, seed_builtin_divisions,
     ):
-        # Even on rows that never had contact details set, the response
-        # exposes both keys (with null values) so the FE doesn't have to
-        # branch on key-presence.
         resp = client.get("/api/v3/master/divisions", headers=admin_headers)
         assert resp.status_code == 200
         for row in resp.json()["data"]["_embedded"]["elements"]:
             assert "email" in row
             assert "phoneNumber" in row
+            # Doc 36: never null on freshly seeded rows.
+            assert row["email"] is not None
+            assert row["phoneNumber"] is not None
 
     def test_create_with_email_and_phone(
         self, client, admin_headers, seed_builtin_divisions,
@@ -307,22 +327,40 @@ class TestMasterDivisionsContactDetails:
                 "code": "bogus",
                 "label": "Bogus",
                 "email": "not-an-email",
+                "phoneNumber": "+91 80 1234 5678",
             },
         )
         assert resp.status_code == 422, resp.text
 
-    def test_create_without_contact_details_leaves_nulls(
+    def test_create_without_email_returns_422(
         self, client, admin_headers, seed_builtin_divisions,
     ):
+        # Doc 36: email is required at the wire. Empty / missing -> 422.
         resp = client.post(
             "/api/v3/master/divisions/create",
             headers=admin_headers,
-            json={"code": "qa", "label": "QA"},
+            json={
+                "code": "qa",
+                "label": "QA",
+                "phoneNumber": "+91 80 1234 5678",
+            },
         )
-        assert resp.status_code == 201
-        d = resp.json()["data"]
-        assert d["email"] is None
-        assert d["phoneNumber"] is None
+        assert resp.status_code == 422, resp.text
+
+    def test_create_without_phone_returns_422(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        # Doc 36: phoneNumber is required at the wire. Missing -> 422.
+        resp = client.post(
+            "/api/v3/master/divisions/create",
+            headers=admin_headers,
+            json={
+                "code": "qa",
+                "label": "QA",
+                "email": "qa@uidai.example",
+            },
+        )
+        assert resp.status_code == 422, resp.text
 
     def test_patch_email_and_phone_on_user_added_row(
         self, client, admin_headers, seed_builtin_divisions, db_session,
@@ -330,6 +368,7 @@ class TestMasterDivisionsContactDetails:
         db_session.add(DivisionModel(
             code="qa", label="QA",
             is_builtin=False, requires_other=False, active=True,
+            email="qa-default@uidai.example", phone_number="+91 80 0000 1111",
         ))
         db_session.commit()
         resp = client.patch(
@@ -372,9 +411,12 @@ class TestMasterDivisionsContactDetails:
         # row is rejected and the whole patch fails atomically.
         assert resp.status_code == 403, resp.text
 
-    def test_patch_empty_string_clears_stored_contact(
+    def test_patch_empty_string_email_returns_422(
         self, client, admin_headers, seed_builtin_divisions, db_session,
     ):
+        # Doc 36: column is NOT NULL, so empty-string-as-clear is gone.
+        # Pydantic's min_length=1 on the patch schema rejects empty
+        # before we even reach the repo.
         db_session.add(DivisionModel(
             code="qa", label="QA",
             is_builtin=False, requires_other=False, active=True,
@@ -386,10 +428,7 @@ class TestMasterDivisionsContactDetails:
             headers=admin_headers,
             json={"email": "", "phoneNumber": ""},
         )
-        assert resp.status_code == 200, resp.text
-        d = resp.json()["data"]
-        assert d["email"] is None
-        assert d["phoneNumber"] is None
+        assert resp.status_code == 422, resp.text
 
     def test_patch_omitting_contact_keys_leaves_them_alone(
         self, client, admin_headers, seed_builtin_divisions, db_session,

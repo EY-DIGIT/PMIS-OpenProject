@@ -4,9 +4,10 @@ Each catalog has its own create + update body. Responses reuse the
 existing per-catalog projection helpers in routes.py to keep the wire
 format identical to the legacy endpoints.
 """
-from typing import Optional
+import re
+from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -21,11 +22,11 @@ class DivisionCreateRequest(BaseModel):
     code explicitly when you want a stable wire identifier independent
     of the human label.
 
-    ``email`` / ``phoneNumber`` are optional contact details for the
-    division — typically a shared mailbox alias and a hotline. Mirrors
-    the same fields on vendors (doc 18). Both default to None and the
-    seeded built-in rows (``tmd1`` / ``tmd2`` / ``others``) leave them
-    NULL on first boot.
+    ``email`` and ``phoneNumber`` are REQUIRED (doc 36). Divisions own
+    projects and need a routable contact channel. The seeded built-in
+    rows (``tmd1`` / ``tmd2`` / ``others``) get default values backfilled
+    from ``DIVISION_DEFAULT_EMAIL`` / ``DIVISION_DEFAULT_PHONE`` env
+    vars at first boot.
 
     Built-in rows (``tmd1`` / ``tmd2`` / ``others``) cannot be created
     via this endpoint; the unique constraint on ``code`` rejects the
@@ -48,21 +49,21 @@ class DivisionCreateRequest(BaseModel):
             "follow-up input (the 'others' row uses this)."
         ),
     )
-    email: Optional[EmailStr] = Field(
-        None,
+    email: EmailStr = Field(
+        ...,
         description=(
-            "Optional contact email for the division (e.g. a shared "
-            "mailbox alias). RFC-5322-validated. Empty / null leaves the "
-            "column NULL."
+            "Contact email for the division (e.g. a shared mailbox "
+            "alias). RFC-5322-validated. **Required (doc 36).**"
         ),
     )
-    phoneNumber: Optional[str] = Field(
-        None,
+    phoneNumber: str = Field(
+        ...,
         alias="phone_number",
+        min_length=1,
         max_length=50,
         description=(
-            "Optional contact phone for the division. Free-form (no "
-            "regex) — same convention as vendors.phone_number."
+            "Contact phone for the division. Free-form (no regex) — "
+            "same convention as vendors.phone_number. **Required (doc 36).**"
         ),
     )
 
@@ -74,47 +75,36 @@ class DivisionUpdateRequest(BaseModel):
     every project's ``owner`` column points at. Renaming would break
     every existing reference. Only ``label`` / ``requiresOther`` /
     ``email`` / ``phoneNumber`` are editable. Built-in rows accept patches
-    only on ``email`` + ``phoneNumber`` (admins can still add contact
-    details to the seeded rows); the route layer rejects label /
+    only on ``email`` + ``phoneNumber`` (admins can still update contact
+    details on the seeded rows); the route layer rejects label /
     requiresOther changes on built-ins with 403.
 
-    Pass an empty string for ``email`` or ``phoneNumber`` to explicitly
-    clear a stored contact (the repo normalizes empty → NULL). Omit the
+    Doc 36: ``email`` and ``phoneNumber`` are NOT NULL on the column,
+    so empty-string-as-clear is no longer accepted on PATCH. Omit the
     field entirely to leave the existing value alone — standard PATCH
-    semantics.
+    semantics. Sending an empty string returns 422.
     """
     model_config = ConfigDict(populate_by_name=True)
 
     label: Optional[str] = Field(None, min_length=1, max_length=255)
     requires_other: Optional[bool] = Field(None, alias="requiresOther")
-    email: Optional[str] = Field(
+    email: Optional[EmailStr] = Field(
         None,
         description=(
-            "Optional contact email. RFC-5322-validated when non-empty; "
-            "empty string clears the stored value."
+            "New contact email. RFC-5322-validated. Cannot be cleared "
+            "(column is NOT NULL post-doc-36)."
         ),
     )
     phoneNumber: Optional[str] = Field(
         None,
         alias="phone_number",
+        min_length=1,
         max_length=50,
         description=(
-            "Optional contact phone. Empty string clears the stored value."
+            "New contact phone. Cannot be cleared (column is NOT NULL "
+            "post-doc-36)."
         ),
     )
-
-    @field_validator("email")
-    @classmethod
-    def _email_loose(cls, v: Optional[str]) -> Optional[str]:
-        # On PATCH we accept empty string (sentinel for "clear"). When
-        # non-empty we still want RFC-5322-ish validation, but we can't
-        # apply EmailStr directly because it rejects empty. Apply the
-        # check manually here.
-        if v is None or v == "":
-            return v
-        # Defer to email-validator via Pydantic's EmailStr internals.
-        from pydantic import TypeAdapter
-        return TypeAdapter(EmailStr).validate_python(v)
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +169,191 @@ class ResourceTypeUpdateRequest(BaseModel):
     """
     model_config = ConfigDict(populate_by_name=True)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
+
+
+# ---------------------------------------------------------------------------
+# Notification templates (doc 36)
+# ---------------------------------------------------------------------------
+
+# Channel constants — match app/shared/notifications.py.
+_CHANNEL_EMAIL = "email"
+_CHANNEL_SMS = "sms"
+_NOTIFICATION_CHANNELS = (_CHANNEL_EMAIL, _CHANNEL_SMS)
+
+# Allowed placeholders per (template_kind, channel). PATCH/POST reject
+# bodies / subjects that reference unknown placeholders for the row's
+# kind+channel, so a typo lands at write time instead of crashing the
+# next dispatch. The set is keyed by (kind, channel); kinds without a
+# channel-specific entry fall back to the kind-level default.
+#
+# Renderer-side: the dispatch path computes ``ttl_minutes`` from
+# ``ttl_seconds`` and ``reset_url`` from FRONTEND_BASE_URL+token before
+# substitution, so the stored template only sees the post-computation
+# values.
+_ALLOWED_PLACEHOLDERS = {
+    ("otp_login", _CHANNEL_EMAIL): {"code", "ttl_minutes"},
+    ("otp_login", _CHANNEL_SMS): {"code", "ttl_minutes"},
+    ("password_reset_link", _CHANNEL_EMAIL): {
+        "reset_url", "token", "ttl_minutes",
+    },
+    ("password_reset_link", _CHANNEL_SMS): {"token", "ttl_minutes"},
+    ("password_reset_otp", _CHANNEL_EMAIL): {"code", "ttl_minutes"},
+    ("password_reset_otp", _CHANNEL_SMS): {"code", "ttl_minutes"},
+}
+
+# Free-form template_kind values are allowed (see model docstring) for
+# new dispatch sites added at runtime; placeholder validation only
+# fires for the well-known kinds above. Unknown kinds are admitted
+# without placeholder checks — it's the caller's responsibility to keep
+# the stored copy and the dispatch payload in sync.
+
+_PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+def _extract_placeholders(text: Optional[str]) -> List[str]:
+    if not text:
+        return []
+    # ``str.format`` accepts ``{0}`` / ``{name}`` / ``{name!r}`` /
+    # ``{name:fmt}``; we only validate name-style placeholders. Numeric
+    # / format-spec usage is uncommon in copy and would slip through —
+    # acceptable trade-off for keeping the validator simple.
+    return _PLACEHOLDER_RE.findall(text)
+
+
+def _validate_placeholder_set(
+    *,
+    template_kind: str,
+    channel: str,
+    subject: Optional[str],
+    body: Optional[str],
+) -> None:
+    """Raise ``ValueError`` listing the offending names when ``subject``
+    / ``body`` reference placeholders not allowed for this (kind, channel).
+
+    No-op on unknown kinds (free-form support — see module docstring).
+    """
+    allowed = _ALLOWED_PLACEHOLDERS.get((template_kind, channel))
+    if allowed is None:
+        return  # unknown kind: caller-owned, skip placeholder check
+    used = set(_extract_placeholders(subject)) | set(_extract_placeholders(body))
+    bad = sorted(used - allowed)
+    if bad:
+        raise ValueError(
+            f"Unknown placeholder(s) for kind '{template_kind}' on "
+            f"channel '{channel}': {', '.join(bad)}. "
+            f"Allowed: {sorted(allowed)}."
+        )
+
+
+class NotificationTemplateCreateRequest(BaseModel):
+    """POST /api/v3/master/notification_templates/create body.
+
+    ``templateKind`` is free-form so admins can register a kind for a
+    new dispatch site added in code (e.g. a future
+    ``project_publish_notice`` template). The well-known seeded kinds
+    (``otp_login``, ``password_reset_link``, ``password_reset_otp``)
+    additionally validate that ``subject`` / ``body`` only reference
+    placeholders allowed for that kind+channel — see
+    ``_ALLOWED_PLACEHOLDERS`` above.
+
+    The route layer rejects with 409 when an active row already covers
+    the (templateKind, channel) pair — at most one active template per
+    (kind, channel) is the lookup invariant the renderer relies on.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    templateKind: str = Field(
+        ...,
+        alias="template_kind",
+        min_length=1,
+        max_length=64,
+        description=(
+            "Discriminator. Built-in: 'otp_login' / 'password_reset_link' "
+            "/ 'password_reset_otp'. Custom kinds are accepted; ensure the "
+            "dispatch site uses the same string."
+        ),
+    )
+    channel: str = Field(
+        ...,
+        description=(
+            "'email' or 'sms'. Email rows must supply 'subject'; SMS rows "
+            "may leave it null."
+        ),
+    )
+    subject: Optional[str] = Field(
+        None,
+        max_length=500,
+        description=(
+            "Email subject. Required for channel='email'; null/omitted "
+            "for channel='sms'."
+        ),
+    )
+    body: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Email HTML body or SMS plaintext. ``str.format(**placeholders)`` "
+            "at render time. See module docstring for the placeholder spec."
+        ),
+    )
+    isHtml: Optional[bool] = Field(
+        None,
+        alias="is_html",
+        description=(
+            "Email rows default to True; SMS rows default to False. Override "
+            "explicitly only if you're sending plaintext email."
+        ),
+    )
+    description: Optional[str] = Field(None, max_length=1024)
+    active: bool = Field(True)
+
+    @field_validator("channel")
+    @classmethod
+    def _channel_is_known(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if v not in _NOTIFICATION_CHANNELS:
+            raise ValueError(
+                f"channel must be one of {list(_NOTIFICATION_CHANNELS)}, got {v!r}"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _check_subject_and_placeholders(self):
+        # Email rows must carry a subject; SMS rows shouldn't.
+        if self.channel == _CHANNEL_EMAIL and not (self.subject or "").strip():
+            raise ValueError("subject is required for email templates")
+        if self.channel == _CHANNEL_SMS and (self.subject or "").strip():
+            raise ValueError("subject must be omitted for sms templates")
+        try:
+            _validate_placeholder_set(
+                template_kind=self.templateKind,
+                channel=self.channel,
+                subject=self.subject,
+                body=self.body,
+            )
+        except ValueError as e:
+            raise ValueError(str(e))
+        return self
+
+
+class NotificationTemplateUpdateRequest(BaseModel):
+    """PATCH /api/v3/master/notification_templates/{id} body.
+
+    ``templateKind`` and ``channel`` are immutable — they're the row's
+    identity. To change the kind/channel, soft-deactivate the row and
+    create a new one.
+
+    ``subject`` and ``body`` are editable on built-ins (the whole point
+    of moving templates to DB). Placeholder validation runs against the
+    row's existing kind+channel.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    subject: Optional[str] = Field(None, max_length=500)
+    body: Optional[str] = Field(None, min_length=1)
+    isHtml: Optional[bool] = Field(None, alias="is_html")
+    description: Optional[str] = Field(None, max_length=1024)
+    active: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------

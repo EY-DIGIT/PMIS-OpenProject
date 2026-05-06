@@ -102,8 +102,8 @@ class DivisionRepository:
         code: Optional[str],
         label: str,
         requires_other: bool = False,
-        email: Optional[str] = None,
-        phone_number: Optional[str] = None,
+        email: str,
+        phone_number: str,
     ) -> DivisionModel:
         """Insert a new admin-managed (non-built-in) division.
 
@@ -116,22 +116,28 @@ class DivisionRepository:
         created by the ``init_db`` seed and cannot be re-created via the
         API even if their code is reused (the unique constraint stops it).
 
-        ``email`` / ``phone_number`` are optional contact details. Empty
-        strings are normalized to None so the column stays NULL rather
-        than holding an empty string (cleaner read semantics).
+        Doc 36: ``email`` and ``phone_number`` are now REQUIRED. The
+        Pydantic schema rejects missing values at the wire; this method
+        rejects empty strings as a belt-and-braces guard.
         """
         wire_code = (code or "").strip().lower() or slugify(label)
         if not wire_code:
             # Defensive — caller's schema should prevent empty labels.
             raise ValueError("division code/label produces an empty wire code")
+        clean_email = (email or "").strip()
+        clean_phone = (phone_number or "").strip()
+        if not clean_email:
+            raise ValueError("division email is required (doc 36)")
+        if not clean_phone:
+            raise ValueError("division phone_number is required (doc 36)")
         row = DivisionModel(
             code=wire_code,
             label=(label or "").strip(),
             is_builtin=False,
             requires_other=requires_other,
             active=True,
-            email=(email or "").strip() or None,
-            phone_number=(phone_number or "").strip() or None,
+            email=clean_email,
+            phone_number=clean_phone,
         )
         self.db.add(row)
         self.db.flush()
@@ -154,11 +160,10 @@ class DivisionRepository:
         every existing reference. The route layer enforces this by
         omitting ``code`` from the patch schema.
 
-        For ``email`` / ``phone_number``: ``None`` means "leave the
-        existing value alone" (matches the ``label`` / ``requires_other``
-        semantics on this method). To explicitly clear a stored contact,
-        pass an empty string — the repo normalizes it to NULL so the
-        column reads back consistent with a never-set row.
+        Doc 36: ``email`` / ``phone_number`` are NOT NULL on the column,
+        so empty-string-as-clear is no longer accepted; passing an empty
+        string raises ``ValueError``. ``None`` still means "leave the
+        existing value alone" (omitted from PATCH).
 
         Returns the updated row or None if not found. Caller commits.
         """
@@ -170,9 +175,15 @@ class DivisionRepository:
         if requires_other is not None:
             row.requires_other = bool(requires_other)
         if email is not None:
-            row.email = email.strip() or None
+            clean = email.strip()
+            if not clean:
+                raise ValueError("division email cannot be empty (doc 36)")
+            row.email = clean
         if phone_number is not None:
-            row.phone_number = phone_number.strip() or None
+            clean = phone_number.strip()
+            if not clean:
+                raise ValueError("division phone_number cannot be empty (doc 36)")
+            row.phone_number = clean
         self.db.flush()
         return row
 

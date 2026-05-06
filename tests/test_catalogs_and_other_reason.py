@@ -623,10 +623,15 @@ class TestOwnerOtherDoesNotPolluteDivisions:
         admin endpoint POST /api/v3/master/divisions/create. Once added,
         future projects can pick that code as their owner directly."""
         self._seed(db_session)
-        # Admin curates the catalog explicitly.
+        # Admin curates the catalog explicitly. Doc 36 makes email +
+        # phoneNumber required at the wire.
         resp = client.post(
             "/api/v3/master/divisions/create",
-            json={"label": "Engineering"},
+            json={
+                "label": "Engineering",
+                "email": "eng@uidai.example",
+                "phoneNumber": "+91 80 1234 5678",
+            },
             headers=admin_headers,
         )
         assert resp.status_code == 201, resp.text

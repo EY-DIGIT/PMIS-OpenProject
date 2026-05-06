@@ -31,7 +31,7 @@ gunicorn -w 4 -b 0.0.0.0:8000 \
 
 ### Environment Variables
 ```bash
-# Required for production
+# ---- Core ----
 SECRET_KEY=<32+ character secure key>
 DATABASE_URL=postgresql://user:password@host:5432/pmis
 DEBUG=False
@@ -43,6 +43,35 @@ SUBTASK_MAX_NESTING_DEPTH=               # doc 24 part 2 — None / unset = unli
 BOOTSTRAP_ADMIN_LOGIN=admin
 BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 BOOTSTRAP_ADMIN_PASSWORD=admin123
+
+# ---- 2FA + forgot-password + notifications (doc 33 change 3) ----
+REQUIRE_2FA=true                         # global toggle; per-user override via users.two_factor_enabled
+OTP_TTL_SECONDS=300                      # OTP validity
+OTP_RESEND_COOLDOWN_SECONDS=60           # min seconds between /login/send-otp resends per ephemeral session
+OTP_MAX_ATTEMPTS=5                       # wrong codes before invalidation
+OTP_CODE_LENGTH=6
+OTP_HASH_PEPPER=                         # falls back to SECRET_KEY when blank — set per-deployment in prod
+PASSWORD_RESET_TTL_SECONDS=3600          # forgot-password URL token / SMS OTP TTL
+NOTIFICATION_CLIENT=mock                 # mock | http
+NOTIFICATION_SERVICE_URL=                # required when NOTIFICATION_CLIENT=http (e.g. http://notif:8002/api/v1)
+
+# ---- Migration controls (doc 33 hotfix) ----
+DATABASE_URL_MIGRATIONS=                 # optional elevated URL ONLY for `alembic upgrade head` at boot;
+                                         # falls back to DATABASE_URL when blank
+MIGRATIONS_AUTORUN=true                  # set false to skip alembic at boot (DBA runs it out-of-band)
+MIGRATIONS_REQUIRED=true                 # set false to log alembic failures and continue boot anyway
+
+# ---- File storage ----
+ATTACHMENTS_STORAGE_BASE_PATH=./local_uploads   # NFS mount point in prod
+FILE_SERVER_PUBLIC_BASE_URL=             # public base URL for the external file server;
+                                         # blank → comments carry storage-key-only URLs served by the local
+                                         # /files/{key} fallback route added in doc 35
+
+# ---- Division contact backfill defaults (doc 36) ----
+DIVISION_DEFAULT_EMAIL=ops@pmis.example  # backfilled into divisions.email NULLs during the doc-36 migration
+DIVISION_DEFAULT_PHONE=+910000000000     # backfilled into divisions.phone_number NULLs;
+                                         # also used by init_db when seeding fresh built-in rows.
+                                         # Production deploys override both.
 ```
 
 ### Default Settings (app/core/config.py)
@@ -52,6 +81,8 @@ BOOTSTRAP_ADMIN_PASSWORD=admin123
 - MAX_PAGE_SIZE: 100
 - REFRESH_TOKEN_GRACE_SECONDS: 120
 - SUBTASK_MAX_NESTING_DEPTH: None (unlimited)
+- REQUIRE_2FA: True (per-user override via `users.two_factor_enabled`; bootstrap admin is forced `false` on every boot to avoid lockout)
+- NOTIFICATION_CLIENT: "mock" (writes to `notification_log` as terminal sink in dev/tests)
 
 ### Default Admin Credentials
 ```
@@ -74,12 +105,12 @@ DATABASE_URL=postgresql://user:password@host:5432/pmis
 
 ### Initialization
 The database is initialized automatically on startup:
-- **PostgreSQL**: `alembic upgrade head` runs as a subprocess on boot (idempotent — already-applied migrations are no-ops). The full migration chain is in [alembic/versions/](../alembic/versions/) — single head as of doc 24.
+- **PostgreSQL**: `alembic upgrade head` runs as a subprocess on boot (idempotent — already-applied migrations are no-ops). Gated by `MIGRATIONS_AUTORUN` / `MIGRATIONS_REQUIRED` flags (doc 33 hotfix) so a DBA can run alembic out-of-band when the runtime DB role lacks DDL ownership; `DATABASE_URL_MIGRATIONS` lets the boot path use an elevated URL just for the upgrade. The full migration chain is in [alembic/versions/](../alembic/versions/) — multiple heads exist; merge revisions are added when chains diverge.
 - **SQLite**: `Base.metadata.create_all` rebuilds missing tables; the SQLite drift healer adds any column that was added to the model after the on-disk file was created.
-- RBAC seed (doc 21B): every permission code in [app/core/permissions.py](../app/core/permissions.py) is upserted into the `permissions` table; the seeded `admin` / `member` / `viewer` roles are created if missing; the `admin` role is auto-synced to hold every registered code.
-- Bootstrap user `admin/admin123` is created if missing and assigned to the `admin` role.
-- Built-in master data is seeded: divisions (`tmd1`, `tmd2`, `others`), resource types (RFP/ASG/CCN), project_status_transitions catalog.
-- Built-in work package types are seeded if missing (legacy work-package module — not part of the doc-19+ M/A/T/S flow).
+- RBAC seed (doc 21B + doc 33 change 1): every permission code in [app/core/permissions.py](../app/core/permissions.py) is upserted into the `permissions` table; the seeded `admin` / `member` / `viewer` / **`vendor`** roles are created if missing; the `admin` role is auto-synced to hold every registered code.
+- Bootstrap user `admin/admin123` is created if missing, assigned to the `admin` role, and forced `two_factor_enabled=false` on every boot so the always-reachable break-glass account never gets locked out by an unconfigured notification channel.
+- Built-in master data is seeded: divisions (`tmd1`, `tmd2`, `others` — with `email` + `phone_number` populated from `DIVISION_DEFAULT_EMAIL` / `DIVISION_DEFAULT_PHONE` post-doc-36), resource types (RFP/ASG/CCN), project_status_transitions catalog (status set: `new` / `draft` / `published` / `closed` post-doc-33), notification_templates (six rows: `otp_login` / `password_reset_link` / `password_reset_otp` × email/sms — doc 36).
+- Built-in work package types are seeded if missing (Task, Bug, Feature, Story, Milestone, Activity).
 
 ## Pre-Deployment Checklist
 
@@ -91,6 +122,10 @@ The database is initialized automatically on startup:
 - [ ] Enable HTTPS for all API endpoints
 - [ ] Configure rate limiting
 - [ ] Consider disabling Swagger UI (openapi_url=None)
+- [ ] Set `OTP_HASH_PEPPER` to a deployment-unique value (don't fall back to `SECRET_KEY` in prod — doc 33 change 3)
+- [ ] Configure `NOTIFICATION_CLIENT=http` + `NOTIFICATION_SERVICE_URL` (otherwise OTP / password-reset only land in `notification_log`)
+- [ ] Set `FILE_SERVER_PUBLIC_BASE_URL` if a dedicated file server is in use (doc 35 — comments carry attachment URLs directly; blank → fallback `/files/{key}` route serves bytes from `ATTACHMENTS_STORAGE_BASE_PATH`)
+- [ ] Decide per-environment whether `REQUIRE_2FA=true` is acceptable (service accounts may need per-user opt-out via `PATCH /users/{id}` with `twoFactorEnabled=false`)
 
 ### Database
 - [ ] Migrate from SQLite to PostgreSQL
@@ -224,13 +259,14 @@ async function handleApiCall(endpoint, options = {}) {
 - Database: PostgreSQL replication for HA
 - Caching: Add Redis for session/data caching
 
-## User Service (Alternative Reference Implementation)
+## Microservice extraction (parallel codebases)
 
-The `user_service/` folder contains an alternative, richer User implementation based on OpenProject's stable/16 branch. It includes:
-- User statuses: ACTIVE, REGISTERED, INVITED, LOCKED, DELETED
-- Special user types: AnonymousUser, SystemUser, DeletedUser, PlaceholderUser
-- Password history tracking and reuse prevention
-- Failed login tracking with automatic account locking
-- User preferences (timezone, theme, notifications)
+Three sister repos run as standalone services alongside the monolith. They share the same SECRET_KEY and PostgreSQL instance:
 
-This is a reference implementation and is NOT integrated with the main app. See `user_service/README.md` for details.
+| Port | Repo | Notes |
+|------|------|-------|
+| 8001 | `PMIS-user-management` | Slim user/auth slice. Lacks 2FA, forgot/reset, RBAC user-side endpoints (those still live only in the monolith). |
+| 8002 | `PMIS-notification-service` | Stateless. `POST /api/v1/notifications/{email,sms,otp}/send` + `/otp/verify`. Mock + real provider backends. |
+| 8003 | `PMIS-project-management` | Slim project slice. Still carries `/projects/{id}/suspend` and `/projects/{id}/versions/create` from before doc 33 — divergence will need to be reconciled when versioning-removal is migrated to microservices. |
+
+The monolith (port 8000) is the source of truth and ships features first; microservices are migrated case-by-case. See `C:\Users\CL725CJ\.claude\projects\c--Programming\memory\project_pmis_architecture.md` for the cross-service route inventory.

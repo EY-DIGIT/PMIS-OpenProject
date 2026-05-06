@@ -40,6 +40,8 @@ from .division import DivisionModel
 from .notification_log import NotificationLogModel
 from .otp_code import OtpCodeModel
 from .password_reset_token import PasswordResetTokenModel
+# Doc 36: DB-backed email + SMS template content.
+from .notification_template import NotificationTemplateModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -58,4 +60,5 @@ __all__ = [
     "CommentModel",
     "DivisionModel",
     "NotificationLogModel", "OtpCodeModel", "PasswordResetTokenModel",
+    "NotificationTemplateModel",
 ]

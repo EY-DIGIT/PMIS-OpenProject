@@ -1,7 +1,12 @@
 # PMIS API — Flow Map & Validations Reference
 
-Scope: Users (incl. RBAC user-side), Projects (incl. versions, audit, baseline-version sync), Master data (`/api/v3/master/*` — divisions, project_status_transitions, resource_types, vendors, roles, permissions), Milestones (incl. dep edges), Activities, Tasks, Subtasks (incl. nested), Project Tree.
-Excluded: project_members, work_packages, work_package_types, meetings, comments, attachments. (See [ARCHITECTURE_AND_API_REFERENCE.md](./ARCHITECTURE_AND_API_REFERENCE.md) for the complete endpoint catalog.)
+**Last refresh**: 2026-05-06 (post-doc 35)
+
+Scope: Users (incl. 2FA login + forgot-password + RBAC user-side), Projects (single-tier — versioning was removed in doc 33 change 1), Master data (`/api/v3/master/*` — divisions, project_status_transitions, resource_types, vendors, roles, permissions), Milestones (incl. dep edges), Activities, Tasks, Subtasks (incl. nested), Project Tree.
+Excluded: project_members, work_packages, work_package_types, meetings, comments. (See [ARCHITECTURE_AND_API_REFERENCE.md](./ARCHITECTURE_AND_API_REFERENCE.md) for the complete endpoint catalog.)
+
+> **Doc 33 change 1 — versioning removed.** The baseline / version split is gone. Tasks and subtasks now live directly under the project; the entire `baseline_version_sync` propagation module, `/projects/{id}/versions/create`, `/projects/{id}/suspend`, the `suspended` status, and the `isVersion`/`versionOf`/`baselineId`/`versionNo` response fields are all gone. Wherever this doc still mentioned "baseline only" / "version only" rules, those rules no longer apply.
+> **Doc 35 — comments and attachments unified.** A single `comments` row carries body, attachments JSON, or both. The standalone `attachments` table was dropped.
 
 ---
 
@@ -72,10 +77,12 @@ Every request — except `POST /users/login` and `POST /users/introspect` — tr
                         ▼
      ┌────────────────────────────────────────────────┐
      │ Cascades (when applicable)                     │
-     │   soft-delete cascade (cascade.py)             │
-     │   baseline → active-version propagation        │
-     │     (baseline_version_sync.py)                 │
-     │   audit rows (project_audit_logs)              │
+     │   soft-delete cascade — M/A/T/S subtree +      │
+     │     comments (cascade.py + comments_           │
+     │     attachments_cascade.py)                    │
+     │   external-dep block (dep_block.py)            │
+     │   audit rows (project_audit_logs;              │
+     │     actor_role recorded — doc 33)              │
      └────────────────────────────────────────────────┘
                         │
                         ▼
@@ -163,7 +170,7 @@ Every cascade path is a soft-delete: stamps `deleted_at` (+ `deleted_by` where t
 
 1. **Pre-flight refusal** — if anything in the about-to-be-deleted subtree is the target of a live dep edge whose source lives outside the subtree, the request is refused with **422 `dependency_block`** before any cascade work runs (`app/shared/dep_block.py`). The error response carries `_embedded.details.blockers: [{source, sourceKind, target, targetKind}, …]` so the FE can render "remove these deps first". Project delete is exempt because deps are project-scoped — nothing can be external.
 2. **Uniform-timestamp cascade** — every row stamped by a single cascade shares one `deleted_at` instant (microsecond-precise). This lets the matching restore-cascade identify exactly which rows belong to the delete.
-3. **Comments + attachments cascade with the subtree** — polymorphic on `(target_kind, target_id)` so SQL cascades aren't available; `app/shared/comments_attachments_cascade.cascade_soft_delete_comments_and_attachments` is called from each repo's `soft_delete_with_cascade`. Comment-bound attachments (via `attachments.comment_id`) follow the comment they're attached to.
+3. **Comments cascade with the subtree** — polymorphic on `(target_kind, target_id)` so SQL cascades aren't available; `app/shared/comments_attachments_cascade.cascade_soft_delete_comments_and_attachments` is called from each repo's `soft_delete_with_cascade`. Post-doc-35 the `attachments` table is gone — attachment metadata lives on `comments.attachments` JSON, so soft-deleting a comment also "deletes" its attachments by hiding the row.
 
 Cascade scopes:
 
@@ -179,7 +186,7 @@ Dependency edges in `activity_dependencies` / `task_dependencies` / `subtask_dep
 
 Mirror of 2.5. Restoring an M/A/T/S also restores every descendant + comment + attachment whose `deleted_at` exactly matches the cascade timestamp:
 
-- `MilestoneRepository.restore` → M + A/T/S subtree + resources + comments + attachments
+- `MilestoneRepository.restore` → M + A/T/S subtree + resources + comments (attachments JSON travels with the comment row post-doc-35)
 - `ActivityRepository.restore`  → A + T/S subtree
 - `TaskRepository.restore`      → T + S subtree
 - `SubtaskRepository.restore`   → S + nested-descendant subtask subtree (BFS over `parent_subtask_id`)
@@ -266,6 +273,45 @@ Settings: `PASSWORD_RESET_TTL_SECONDS` (default 3600s / 1 hour), shared `OTP_HAS
 
 Service layer: [`app/api/v3/users/services/password_reset.py`](app/api/v3/users/services/password_reset.py). Table: `password_reset_tokens` (column `token_hash` unique).
 
+### 2.5d Notification template rendering (doc 36)
+
+The email + SMS body that gets dispatched is no longer hardcoded in `app/shared/notifications.py`. Both renderers (`_render_email`, `_render_sms`) now look up the active row in `notification_templates` by `(template_kind, channel)` and run `str.format(**placeholders)` over the stored copy.
+
+```
+   ┌──────────────────────────────────────────────────┐
+   │ HttpNotificationClient.send(channel, kind, payload) │
+   │   → _render_email/_sms(db, kind, payload)         │
+   │     1. lookup active row in notification_templates │
+   │        WHERE template_kind=kind AND channel=ch     │
+   │     2. _compute_placeholders(kind, payload)        │
+   │        - {code}, {ttl_minutes} (otp / reset_otp)   │
+   │        - {reset_url}, {token}, {ttl_minutes} (link)│
+   │     3. row.body.format_map(_SafeDict(placeholders))│
+   │        - missing keys → empty string (defensive)   │
+   │     4. fallback to generic body when no row found  │
+   └──────────────────────────────────────────────────┘
+```
+
+**Placeholder validation** runs at write time (`POST` / `PATCH /master/notification_templates`) against the (kind, channel) allow-list — a body referencing `{nonsense}` for `(otp_login, email)` returns 422 immediately. Custom kinds (templateKind values not in the well-known set) skip the check; the dispatch site is responsible for keeping its payload and the stored copy in sync.
+
+**Active-uniqueness invariant**: at most one active row per `(template_kind, channel)` pair. Postgres carries a partial unique index; SQLite uses a service-layer guard in the route handlers. Editing an existing row is the recommended path; create-then-deactivate-old is supported but produces history.
+
+**Fallback safety**: when no active row matches (catalog mis-edited, seeds haven't run, kind never registered), the renderer logs a warning and dispatches a generic "you have a notification" body. Notifications must NEVER crash the auth flow.
+
+Service layer: renderer in [`app/shared/notifications.py`](app/shared/notifications.py). CRUD in [`app/api/v3/master_data/routes.py`](app/api/v3/master_data/routes.py). Table: `notification_templates`. Seed loop: `init_db` in `app/infrastructure/db/session.py` (idempotent — only inserts missing rows; subsequent edits via PATCH are preserved).
+
+### 2.5c Comments + attachments unified shape (doc 35)
+
+A single `comments` row replaces the old comment-with-FK-to-attachments split. Each row is a "send event":
+- `body TEXT NULL` — the comment text. Nullable since doc 35.
+- `attachments JSON NULL` — list of `{url, filename, mimeType, sizeBytes, uploadedAt}`.
+- Service rule: at least one of `body` or `attachments` must be present (attachment-only and comment-only are both legal; combined is also legal).
+- The URL points at the external file server (`FILE_SERVER_PUBLIC_BASE_URL`); the local fallback `GET /files/{storage_key}` serves bytes for legacy keys when the public base isn't set.
+
+The `attachments` table was DROPPED in doc 35's migration. Live rows were folded onto their parent comment's `attachments` array; standalone attachments became attachment-only comments. Soft-deleted attachments were not migrated (effectively hidden under "deleted is gone").
+
+The polymorphic comments cascade (doc 34) walks `(target_kind, target_id)` and soft-deletes / restores comment rows alongside the M/A/T/S subtree. Files are referenced by URL so no comment-bound attachment table walk is needed any more.
+
 ### 2.6 Dependency system (milestones / activities / tasks / subtasks)
 
 Four association tables — [`milestone_dependencies`](app/infrastructure/db/models/milestone_dependency.py), [`activity_dependencies`](app/infrastructure/db/models/activity_dependency.py), [`task_dependencies`](app/infrastructure/db/models/task_dependency.py), [`subtask_dependencies`](app/infrastructure/db/models/subtask_dependency.py) — model `source → target` edges. Each table has:
@@ -302,11 +348,11 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 
 **Inputs accept UUIDs OR display labels** (`M1`, `A1.2`, `T1.2.3`, `S1.2.3.4`, and `S1.2.3.4.5…` for nested subtasks). The service resolves labels at write time via `resolve_labels_to_ids` (doc 22 + doc 24).
 
-**Status-completion gate (activities only).** Because activities carry a `status` field, flipping it to `completed` is blocked when any dependency target is not yet `completed`. The gate fires on update only (create doesn't expose completed-from-zero as a user flow — the default is `not_completed`). Returns 403 with `"Cannot mark this activity as completed — the following dependency target(s) are not yet completed: 'A', 'B' (+N more)."`. When the patch also replaces `dependsOn`, the gate evaluates the **new** (live-only) target set.
-
-**Version clone.** When `/projects/{u}/versions/create` clones the M/A tree, `DependencyRepository.clone_milestone_dependencies_for_version` and `clone_activity_dependencies_for_version` copy only the baseline's **live** edges, with both source and target ids rewritten to the version's new ids. Historical (soft-deleted) baseline edges are not carried forward. Activity dep edges are **version-local** — each version's graph evolves independently after the clone. Milestone dep edges, however, **propagate from baseline to active versions** on later edits (doc 21A): when a baseline milestone's `dependsOn` set is modified, `propagate_milestone_dependency_change` mirrors the new edge set onto each active version twin via the `cloned_from_id` lookup.
+**Status-completion gate (activities only).** Because activities carry a `status` field, flipping it to `completed` is blocked when any dependency target is not yet `completed`. The gate fires on update only (create doesn't expose completed-from-zero as a user flow — the default is `not_completed`). Returns 403 with `"Cannot mark this activity as completed — the following dependency target(s) are not yet completed: 'A', 'B' (+N more)."`. When the patch also replaces `dependsOn`, the gate evaluates the **new** (live-only) target set. Milestones carry an analogous gate per doc 31.
 
 **Cascade cleanup.** See Section 2.5 — every M/A/T/S soft-delete soft-deletes the dep edges in the subtree through the dedicated repository methods (`cascade_remove_for_deleted_*_subtree`). Source and target directions are both covered so no dead edges dangle after the parent is gone.
+
+> **Doc 33 change 1 cleanup**: the baseline → version dependency-clone path (`clone_milestone_dependencies_for_version`, `clone_activity_dependencies_for_version`) and the milestone-edge propagation (`propagate_milestone_dependency_change`) were deleted along with the versioning feature. There's now exactly one project per dependency graph; edits stay scoped.
 
 ---
 
@@ -356,16 +402,16 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `PATCH /projects/{uuid}` | JWT | `PROJECTS_UPDATE` | `ProjectUpdateRequest` | `assert_project_editable` + `editable_fields_for(project)` whitelist per state. Dates must be in future (schema). `vendorIds: []` clears list; omit to leave alone. |
 | `DELETE /projects/{uuid}` | JWT | `PROJECTS_DELETE_ALL` | — | Soft-delete + cascade to M/A/T/S. If baseline: also soft-delete every live version. |
 | `POST /projects/{uuid}/save` | JWT | `PROJECTS_UPDATE` | — | `new → draft` iff ≥ 1 live milestone. 422 on zero milestones. Idempotent past `draft`. |
-| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. **Doc 30**: rejects publish (422 `invalid_publish`) if the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity` — names every empty milestone). Locks out PATCH of non-whitelisted fields but published baselines remain editable on the whitelisted set. |
+| `POST /projects/{uuid}/publish` | JWT | `PROJECTS_PUBLISH` (admin) | — | Transition `{new,draft} → published`. 409 if already published. **Doc 30**: rejects publish (422 `invalid_publish`) if the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity` — names every empty milestone). Published is a sign-off checkpoint; `published → draft` is also a legal transition (doc 33). |
 | `POST /projects/{uuid}/close` | JWT | `PROJECTS_CLOSE` (admin) | `ProjectCloseRequest` (optional) | Transition `{new,draft,published} → closed`. `reason` ≤ 5000 chars. |
-| `POST /projects/{uuid}/suspend` | JWT | `PROJECTS_UPDATE` | — | **Version only** (state-machine guard). |
-| `POST /projects/{uuid}/versions/create` | JWT | `PROJECTS_CREATE` | — | Source must be `is_version=False AND status='published'`. Only **one active version per baseline**; returns 409 if one already exists. Enforced by partial unique index `ux_projects_active_version_per_baseline` + service check. Cloned tree stamps `cloned_from_id` on every M/A. |
+
+> **Doc 33 change 1**: `POST /projects/{uuid}/suspend` and `POST /projects/{uuid}/versions/create` were REMOVED along with the versioning feature. Calling them returns 404. The `suspended` status, `is_version` / `version_of` / `baseline_id` / `version_no` columns, and the `ux_projects_active_version_per_baseline` partial unique index are all gone.
 
 **`ProjectCreateRequest` validations** (schema-level):
 - `name` 1-255 chars
 - `description` ≤ 5000 chars
 - **`startDate` may be in the past** (doc 24); `endDate` must be in the future; `endDate >= startDate` (equal allowed)
-- `status` ∈ `{new, draft, published, closed, suspended}` (default `new`)
+- `status` ∈ `{new, draft, published, closed}` (default `new`) — `suspended` removed in doc 33 change 1
 - `category` ∈ `{MSAP, MSIP, BSP, others}` if supplied
 - `categoryOther` required (non-empty ≤ 255 chars) **iff** `category='others'`; rejected otherwise
 - `categoryOtherReason` required (non-empty ≤ 1000 chars) **iff** `category='others'`; rejected otherwise (added in doc 15 — captures *why* "others" was chosen)
@@ -389,8 +435,8 @@ All catalog CRUD lives under the consolidated `/api/v3/master/` router and is ga
 | Endpoint | Permission | Notes |
 |---|---|---|
 | `GET /master/divisions` | `master_data:view` | `?include_inactive=true` for admin view |
-| `POST /master/divisions/create` | `master_data:manage` | New custom division; built-ins protected from delete/patch |
-| `PATCH /master/divisions/{code}` | `master_data:manage` | |
+| `POST /master/divisions/create` | `master_data:manage` | New custom division; built-ins protected from delete/patch. **Doc 36**: `email` + `phoneNumber` are required at the wire (422 when missing). |
+| `PATCH /master/divisions/{code}` | `master_data:manage` | **Doc 36**: empty-string-as-clear is gone — column is NOT NULL. |
 | `DELETE /master/divisions/{code}` | `master_data:manage` | Soft-deactivate (`active=false`) |
 | `POST /master/divisions/{code}/restore` | `master_data:manage` | |
 | `GET /master/project_status_transitions` | `master_data:view` | Drives the FE next-step dropdown. Each row carries `requiresAdmin`, `versionOnly`. |
@@ -405,6 +451,12 @@ All catalog CRUD lives under the consolidated `/api/v3/master/` router and is ga
 | `POST/DELETE /master/roles/{id}/permissions/{code}` | `master_data:manage` | Grant / revoke a single code on a role |
 | `GET /master/permissions` | `master_data:view` | Permission catalog (built-ins + custom) |
 | `POST/PATCH/DELETE /master/permissions[/{code}]` | `master_data:manage` | Custom permissions; built-ins protected from delete |
+| `GET /master/notification_templates` | `master_data:view` | **Doc 36** — list email + SMS templates. `?include_inactive=true` for admin view |
+| `GET /master/notification_templates/{id}` | `master_data:view` | **Doc 36** — single read |
+| `POST /master/notification_templates/create` | `master_data:manage` | **Doc 36** — 409 on duplicate active `(templateKind, channel)` pair; placeholder validation against the (kind, channel) allow-list |
+| `PATCH /master/notification_templates/{id}` | `master_data:manage` | **Doc 36** — edit subject/body/active/description. `templateKind` + `channel` immutable. Built-ins editable on copy. |
+| `DELETE /master/notification_templates/{id}` | `master_data:manage` | **Doc 36** — soft-deactivate; built-ins protected from hard delete |
+| `POST /master/notification_templates/{id}/restore` | `master_data:manage` | **Doc 36** — 409 if another active row covers the pair |
 
 **Validator wiring on project create:** the service consults the project_status_transitions catalog for `status` (`invalid_status` on a value not in the catalog). The legacy per-user `project_owners` whitelist was removed in doc 20 — `owner` is now a strict division code.
 
@@ -420,12 +472,12 @@ Same deprecation pattern. Built-ins (RFP, ASG, CCN) are protected from delete.
 
 | Endpoint | Auth | Permission | Body | Guards |
 |---|---|---|---|---|
-| `POST /projects/{uuid}/milestones/create` | JWT | `MILESTONES_CREATE` | `MilestoneCreateRequest` (JSON or multipart) | `assert_milestone_activity_writable` (baseline only). **Doc 32**: accepts multipart with optional `body` (comment) + `files` (uploads); same URL/auth/permission. |
+| `POST /projects/{uuid}/milestones/create` | JWT | `MILESTONES_CREATE` | `MilestoneCreateRequest` (JSON or multipart) | `assert_milestone_activity_writable` (live-project-only check post-doc-33). **Doc 32**: accepts multipart with optional `body` (comment) + `files` (uploads); same URL/auth/permission. |
 | `GET /projects/{uuid}/milestones` | JWT | `MILESTONES_READ` | — | Paginated list. |
 | `GET /milestones/{id}` | JWT | `MILESTONES_READ` | — | Single read. |
-| `PATCH /milestones/{id}` | JWT | `MILESTONES_UPDATE` | `MilestoneUpdateRequest` | `assert_milestone_activity_writable` + propagation cascade. |
-| `DELETE /milestones/{id}` | JWT | `MILESTONES_DELETE` | — | `assert_milestone_activity_writable` + subtree cascade + version cascade. |
-| `POST /milestones/{id}/restore` | JWT | `MILESTONES_RESTORE` (admin) | — | `assert_project_editable` (permissive — no baseline/version rule). |
+| `PATCH /milestones/{id}` | JWT | `MILESTONES_UPDATE` | `MilestoneUpdateRequest` | `assert_milestone_activity_writable` (live-project guard). |
+| `DELETE /milestones/{id}` | JWT | `MILESTONES_DELETE` | — | `assert_milestone_activity_writable` + subtree cascade (doc 34: `dependency_block` if external dep edges target the subtree). |
+| `POST /milestones/{id}/restore` | JWT | `MILESTONES_RESTORE` (admin) | — | `assert_project_editable`. Cascade-restores descendants + comments via uniform-timestamp match (doc 34 part 3). |
 
 **Schema validations:** `name` 1-255, `startDate < endDate`, `status ∈ MILESTONE_STATUS_CHOICES` (`not_completed`, `completed`), `dependsOn: List[str]` (UUIDs or labels — doc 21A + doc 22; replaces the legacy JSON `depends` column dropped in doc 22), `vendors` list (renamed from `vendorIds` in doc 15; the legacy `vendorIds` and `vendor_ids` aliases are still accepted on the input side via Pydantic `AliasChoices`).
 
@@ -433,7 +485,7 @@ Same deprecation pattern. Built-ins (RFP, ASG, CCN) are protected from delete.
 - `body` — free-text comment to attach to the just-created milestone.
 - `files` — one or more file uploads to attach. Pre-validated (count, size, mime) BEFORE the milestone insert so a rejected file doesn't leave behind an orphan milestone.
 
-If `body` is set with no `files`, a comment is created. If `files` are set with no `body`, standalone attachments are created. Both can be present. JSON contract is unchanged. Same shape applies to all 7 M/A/T/S create endpoints (4 activity variants, task, top-level subtask, nested subtask).
+If `body` is set with no `files`, a comment-only row is created. If `files` are set with no `body`, an attachment-only `comments` row is created (body NULL — doc 35 unified shape). Both can be present in one row. JSON contract is unchanged. Same shape applies to all 7 M/A/T/S create endpoints (4 activity variants, task, top-level subtask, nested subtask).
 
 **Doc 32 followup — position auto-bump:** caller-supplied `position` colliding with an existing live row no longer 500s on the unique-index. Service auto-bumps to the next free slot (Swagger UI auto-fills `position=0` on multipart, which used to crash the second create).
 
@@ -444,7 +496,9 @@ If `body` is set with no `files`, a comment is created. If `files` are set with 
 - `vendorIds` must be a **subset** of the project's vendor list (each vendor must also exist + be active). Each entry can be a vendor UUID **or** `VN-XXXX-YYMMDDHHMMSS` code (doc 25).
 - `dependsOn` targets must be live milestones in the same project; no self-edge; cycle detection via `would_create_cycle_milestone`.
 
-**Cascade:** create / update / delete each propagate to active-version twins with their own audit entries. Milestone dep-edge changes also propagate via `propagate_milestone_dependency_change` (doc 21A).
+**Audit:** create / update / delete each emit a row on `project_audit_logs` with the new `actor_role` column (doc 33 change 1) recording the role bucket (admin / member / vendor / viewer) the actor occupied. Milestone dep-edge changes get their own `*.dep_change` action row.
+
+> **Doc 33 change 1**: the baseline → version propagation cascade was removed; there's now exactly one milestone per slot, no twin to propagate to.
 
 ### 3.7 Activities — [`app/api/v3/activities/routes.py`](app/api/v3/activities/routes.py)
 
@@ -474,28 +528,32 @@ If `body` is set with no `files`, a comment is created. If `files` are set with 
 
 **Update type-transition behavior:** Flipping `type` from standard to non-standard clears `status`. `dependsOn` edges persist across type flips — nothing type-specific about a dependency edge. Flipping mode from `count` to `details` requires a resource block. Flipping from resource to non-resource soft-deletes any live resource row.
 
-**Cascade:** create/update/delete propagate to version twins. Shape columns only (`name`, `description`, `type`, dates, `position`, `resource_mode`, `resource_count`); `status` and `dependsOn` edges are version-local. Dep edges on the baseline side are never retroactively copied to versions — they're cloned once at version creation time, then each side evolves independently.
+**Audit:** activity create / update / delete emit `activity.*` rows on `project_audit_logs`; dep-edge changes get their own `*.dep_change` action row.
+
+> **Doc 33 change 1**: the baseline → version propagation that previously copied shape columns to active-version twins was removed. There's now exactly one activity per slot, no twin to propagate to.
 
 ### 3.8 Tasks — [`app/api/v3/tasks/routes.py`](app/api/v3/tasks/routes.py)
 
 | Endpoint | Auth | Permission | Body | Guards |
 |---|---|---|---|---|
-| `POST /activities/{id}/tasks/create` | JWT | `TASKS_CREATE` | `TaskCreateRequest` | `assert_task_subtask_writable` (version only). |
+| `POST /activities/{id}/tasks/create` | JWT | `TASKS_CREATE` | `TaskCreateRequest` | `assert_task_subtask_writable` (live-project guard post-doc-33). |
 | `GET /activities/{id}/tasks` | JWT | `TASKS_READ` | — | Paginated. |
 | `GET /tasks/{id}` | JWT | `TASKS_READ` | — | |
 | `PATCH /tasks/{id}` | JWT | `TASKS_UPDATE` | `TaskUpdateRequest` | `assert_task_subtask_writable`. |
-| `DELETE /tasks/{id}` | JWT | `TASKS_DELETE` | — | Cascade to subtasks + resources. |
-| `POST /tasks/{id}/restore` | JWT | `TASKS_RESTORE` (admin) | — | `assert_project_editable`. |
+| `DELETE /tasks/{id}` | JWT | `TASKS_DELETE` | — | Cascade to subtasks + resources + comments (doc 34); external-dep block fires if any subtree entity is targeted by an outside dep edge. |
+| `POST /tasks/{id}/restore` | JWT | `TASKS_RESTORE` (admin) | — | `assert_project_editable`. Cascade-restores descendants via uniform-timestamp match (doc 34 part 3). |
 
 **Shape rules:** same `type / resourceMode / resource` matrix as activities, **minus** `status` (tasks don't carry that). Date floor is `activity.start_date`. **Doc 24 part 3:** `dependsOn` follows the same rules as activities — same project, no self-edge, no cycle. The legacy parent-activity hierarchy rule was dropped; tasks may depend on any task in the same project regardless of parent activity linkage. See §2.6.
 
 **Type field removed from create body (doc 15).** `TaskCreateRequest` no longer accepts a `type` field — the service derives the type from the parent activity (`activity.type`). The resource-mode shape (`resourceMode` / `resourceCount` / `resource`) is still validated against the inherited type: a task under a non-resource activity must omit them; a task under a resource activity must include `resourceMode` and the matching count/details body. The `type` column on the model is preserved, and `PATCH /tasks/{id}` still accepts an explicit `type` so a future cross-type-mapping endpoint can override the inheritance.
 
-**Tasks do NOT propagate** — they live only in versions. Task dependency edges live on the version alongside them.
+> **Doc 33 change 1**: tasks are **no longer version-only.** Tasks live directly on whatever live project owns the activity — there's no clone-and-twin step.
+
+**Audit (doc 33 change 1):** task create + delete + dep-edge changes are now recorded on `project_audit_logs` with `actor_role`. Pre-doc-33, only project/M/A writes were audited.
 
 ### 3.9 Subtasks — [`app/api/v3/subtasks/routes.py`](app/api/v3/subtasks/routes.py)
 
-**Doc 24 part 2: subtasks can nest under other subtasks (unlimited depth).**
+**Doc 24 part 2: subtasks can nest under other subtasks (unlimited depth).** **Doc 33 change 1**: subtasks are no longer version-only — writable on any live project.
 
 | Endpoint | Auth | Permission | Body | Guards |
 |---|---|---|---|---|
@@ -519,25 +577,28 @@ If `body` is set with no `files`, a comment is created. If `files` are set with 
 
 ---
 
-## 4. Situational restriction matrix
+## 4. Situational restriction matrix (post-doc-33)
 
-The common questions expressed as a decision table:
+The common questions expressed as a decision table. There is one project tier (versioning was removed in doc 33 change 1):
 
-| Action | Baseline `new/draft` | Baseline `published` | Baseline `closed` | Version `new/draft/published` | Version `suspended` | Soft-deleted any |
-|---|---|---|---|---|---|---|
-| `PATCH /projects/{uuid}` | ✅ full whitelist | ✅ full whitelist (cascades nothing; project-level edits stay scoped) | ✅ full whitelist | ✅ version whitelist | ✅ version whitelist | ❌ 404 |
-| `POST /projects/{uuid}/save` | ✅ if ≥ 1 milestone | ✅ no-op | ❌ (no transition) | ❌ | ❌ | ❌ 404 |
-| `POST /projects/{uuid}/publish` | ✅ admin | ❌ 409 already published | ❌ 400 illegal | ✅ admin | ❌ | ❌ 404 |
-| `POST /projects/{uuid}/close` | ✅ admin | ✅ admin | ❌ | ✅ admin | ❌ | ❌ 404 |
-| `POST /projects/{uuid}/suspend` | ❌ 400 version-only | ❌ 400 | ❌ | ✅ | ❌ already suspended | ❌ 404 |
-| `POST /projects/{uuid}/versions/create` | ❌ 409 (not published) | ✅ iff no active version exists; 409 otherwise | ❌ 409 | ❌ 409 | ❌ 409 | ❌ 404 |
-| `DELETE /projects/{uuid}` | ✅ admin — cascades M/A/T/S + active versions | ✅ admin | ✅ admin | ✅ admin — version-only | ✅ admin | ❌ 404 |
-| Milestone / Activity write | ✅ | ✅ (propagates to versions) | ✅ (propagates) | ❌ 403 | ❌ 403 | ❌ 404 |
-| Task / Subtask write | ❌ 403 | ❌ 403 | ❌ 403 | ✅ (no parent-hierarchy rule on deps — doc 24) | ❌ 403 (project-lock still fires) | ❌ 404 |
-| Subtask nesting (doc 24) | n/a | n/a | n/a | ✅ unlimited depth (cap via `SUBTASK_MAX_NESTING_DEPTH` env) | ❌ 403 | ❌ 404 |
-| Milestone / Activity restore | ✅ admin | ✅ admin | ✅ admin | ✅ admin | ✅ admin | ✅ admin (only way in) |
+| Action | `new` | `draft` | `published` | `closed` | Soft-deleted |
+|---|---|---|---|---|---|
+| `PATCH /projects/{uuid}` | ✅ full whitelist | ✅ full whitelist | ✅ full whitelist (post-publish edits allowed on whitelisted fields) | ✅ full whitelist | ❌ 404 |
+| `POST /projects/{uuid}/save` | ✅ if ≥ 1 live milestone (`new → draft`) | ✅ no-op | ❌ (no transition) | ❌ | ❌ 404 |
+| `POST /projects/{uuid}/publish` (admin) | ✅ if doc-30 publish gate passes | ✅ if doc-30 publish gate passes | ❌ 409 already published | ❌ 400 illegal | ❌ 404 |
+| Revert `published → draft` (admin) | n/a | n/a | ✅ via patching status (doc 33 — published is a checkpoint, not a one-way door) | ❌ | ❌ 404 |
+| `POST /projects/{uuid}/close` (admin) | ✅ | ✅ | ✅ | ❌ already closed | ❌ 404 |
+| `DELETE /projects/{uuid}` (admin) | ✅ — cascades M/A/T/S + comments (doc 34) | ✅ | ✅ | ✅ | ❌ 404 |
+| Milestone / Activity / Task / Subtask write | ✅ | ✅ | ✅ | ✅ | ❌ 404 |
+| M/A/T/S delete | ✅ — cascade soft-deletes subtree + comments + dep edges; refused 422 `dependency_block` if external dep edges target the subtree (doc 34) | ✅ | ✅ | ✅ | ❌ 404 |
+| M/A/T/S restore (admin) | ✅ — cascade-restores subtree + comments via uniform-timestamp match (doc 34 part 3) | ✅ | ✅ | ✅ | ✅ (the only way back in) |
+| Subtask nesting (doc 24) | ✅ unlimited (cap via `SUBTASK_MAX_NESTING_DEPTH` env) | ✅ | ✅ | ✅ | ❌ 404 |
+
+> **Doc 33 change 1**: `POST /projects/{uuid}/suspend` and `POST /projects/{uuid}/versions/create` no longer exist. The `suspended` status is gone. There's no longer a "version" project tier.
+>
+> **Doc 33 change 1**: tasks and subtasks are writable on any live project (no version-only rule). M/A/T/S permission gates remain — the **vendor** role added by doc 33 holds CRUD on M/A/T/S + comments + attachments + `projects:read`, and is rejected by `projects:create/publish/close/delete_all`, `rbac:*`, `master_data:*`, `users:*`.
 
 Notes:
-- "Propagates to versions" fires only for **active** versions (`is_version=True AND status NOT IN ('suspended','closed') AND deleted_at IS NULL`).
-- The "one active version per baseline" invariant is enforced at both the service layer and the database (partial unique index). A new version can be minted once the previous one is suspended, closed, or deleted.
-- Schemas still run Pydantic validation before any of the above, so shape errors (missing required fields, out-of-range values, bad enum) fail at 422 without reaching the service layer.
+- All M/A/T/S guards (`assert_project_editable`, `assert_milestone_activity_writable`, `assert_task_subtask_writable`) now only check that the project is live — the baseline-only / version-only branches were deleted.
+- Pydantic validation runs before any of the above; shape errors (missing required fields, out-of-range values, bad enum) fail at 422 without reaching the service layer.
+- The publish gate (doc 30) is independent of state-machine legality: even if the transition is allowed, publish fails with 422 `invalid_publish` when the project has zero milestones (`no_milestones`) or any milestone has zero live activities (`milestone_without_activity`).

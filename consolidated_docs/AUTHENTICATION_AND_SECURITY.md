@@ -187,10 +187,12 @@ Single-token response (flat):
   "expiresAt": "2026-04-28T18:15:00+00:00",
   "issuedAt":  "2026-04-28T18:00:00+00:00",
   "jti": "...", "sub": "admin", "username": "admin",
-  "userId": 1, "email": "admin@example.com",
+  "userId": "8bd99f06-5f2a-424c-aaff-10ab163c3e42", "email": "admin@example.com",
   "role": null, "isAdmin": true
 }
 ```
+
+> **Doc 26**: `userId` is a UUID string (not an integer). Pre-doc-26 tokens carrying an integer `user_id` introspect to `{active: false}` (200, not 401) — same response shape, no special-casing needed by the FE.
 
 > Doc 21B: `role` is no longer a JWT claim and is returned as `null` for back-compat. `isAdmin` is resolved from the DB (membership in the `admin` role) at introspect time. Use `GET /api/v3/users/me/permissions` for the authoritative effective permission set.
 

@@ -3,7 +3,7 @@
 **Project**: PMIS (Project Management Information System) — FastAPI backend
 **Version**: 3.0.0
 **Status**: Production-ready
-**Last refresh**: 2026-05-06 (after doc 34)
+**Last refresh**: 2026-05-06 (after doc 35)
 
 ---
 
@@ -89,15 +89,14 @@ app/
 │       ├── catalogs/                  # Legacy GETs (deprecated → /master)
 │       ├── vendors/                   # Legacy CRUD (deprecated → /master/vendors)
 │       ├── resource_types/            # Legacy GETs (deprecated → /master/resource_types)
-│       ├── work_packages/             # Reserved; not part of doc-19+ flow
-│       ├── work_package_types/        # Reserved; not part of doc-19+ flow
+│       ├── work_packages/             # OpenProject-style WPs — live, not in M/A/T/S graph
+│       ├── work_package_types/        # WP catalog
 │       ├── meetings/
-│       ├── comments/                  # Polymorphic comments on M/A/T/S
-│       └── attachments/               # File uploads tied to M/A/T/S
+│       └── comments/                  # Polymorphic comments on M/A/T/S; doc 35 — attachments folded in
 ├── domain/                            # Pure business entities
 ├── infrastructure/db/
 │   ├── session.py                     # Engine, sessionmaker, init_db, drift healers
-│   ├── models/                        # 34 SQLAlchemy models
+│   ├── models/                        # 36 SQLAlchemy models (doc 33 +3, doc 35 −1)
 │   └── repositories/                  # Per-aggregate data access
 └── shared/
     ├── service_result.py              # ServiceResult<T>
@@ -142,7 +141,7 @@ app/
 - **HAL+JSON envelope** — every response is `{ "data": { _type, _links, _embedded?, … }, "status": <int> }` or `{ "error": { errorIdentifier, message, … }, "status": <int> }`.
 - **String-coded RBAC** — routes call `require_permission("projects:create")`. The string is the canonical code (see [app/core/permissions.py](../app/core/permissions.py)). Codes are upserted into the DB at boot.
 - **Soft-delete everywhere** — `deleted_at` + (where present) `deleted_by`. Reads filter by `deleted_at IS NULL` unless `include_deleted=True`. Restore endpoints (`POST /…/restore`) clear `deleted_at`.
-- **Version-only entities** — tasks and subtasks live exclusively on version projects (`is_version=true`). Milestones and activities live on baselines and propagate to active versions.
+- **Single-tier projects (post-doc-33)** — versioning was removed; M/A/T/S all live directly on whichever live project owns the activity. Permission gates remain (admin / member / vendor / viewer).
 
 ---
 
@@ -152,17 +151,25 @@ The full schema (every table, column, index, constraint, FK relationship) is doc
 
 Auto-generated DDL for both dialects lives in [scripts/ddl/](../scripts/ddl/) — regenerate with `python scripts/generate_ddl.py` whenever a model changes.
 
-Total tables on `Base.metadata`: **34**.
+Total tables on `Base.metadata`: **37** (doc 33 change 3 added `notification_log` / `otp_codes` / `password_reset_tokens`; doc 35 dropped `attachments`, folding it into `comments.attachments` JSON; doc 36 added `notification_templates`).
 
 Schema highlights to be aware of:
 
-- **`users.id` is `VARCHAR(36)` UUID** as of doc 26 (was `INTEGER` autoincrement). Every FK column referencing `users.id` (~30 across the schema) was retyped to `String(36)` in the same migration. JWT `user_id` claim now carries a UUID string — pre-doc-26 tokens become invalid.
-- **`vendors.vendor_code` + `users.user_code`** (doc 25) — human-readable display IDs `VN-XXXX-YYMMDDHHMMSS` / `US-XXXX-YYMMDDHHMMSS`. Lookup endpoints accept either the canonical UUID OR the code; cross-entity vendor inputs accept either form.
+- **`users.id` is `VARCHAR(36)` UUID** as of doc 26 (was `INTEGER` autoincrement). Every FK column referencing `users.id` (~30 across the schema) was retyped to `String(36)`. JWT `user_id` claim now carries a UUID string — pre-doc-26 tokens become invalid.
+- **`users.two_factor_enabled`** (doc 33 change 3) — per-user 2FA opt-in, defaults `true`. Bootstrap admin is forced `false` on every boot.
+- **Versioning is REMOVED** (doc 33 change 1). `projects.is_version` / `version_of` / `baseline_id` / `version_no`, `milestones.cloned_from_id`, `activities.cloned_from_id`, `project_status_transitions.version_only`, the `suspended` status, and the `ux_projects_active_version_per_baseline` partial unique index are all gone.
+- **`project_audit_logs.actor_role`** (doc 33 change 1) — records the role bucket (admin / member / vendor / viewer) the actor occupied at write time. Audit coverage expanded to T/S create+delete and dep-edge changes.
+- **`comments.attachments` JSON** (doc 35) — the standalone `attachments` table was dropped. A comment row now carries body, attachments JSON list, or both. `body` is nullable (attachment-only rows are valid). Service rule: at least one of body/attachments must be present.
+- **`vendors.vendor_code` + `users.user_code`** (doc 25) — human-readable display IDs `VN-XXXX-YYMMDDHHMMSS` / `US-XXXX-YYMMDDHHMMSS`. Lookup endpoints accept either the canonical UUID OR the code.
 - **`users`** has no `admin` boolean column — superuser status comes from membership in the seeded `admin` role (doc 21B).
-- **`milestones.depends`** JSON column was dropped (doc 22). Milestone deps now live in the `milestone_dependencies` edge table (doc 21A).
-- **`subtasks.parent_subtask_id`** (nullable self-FK) supports nested subtasks (doc 24). Top-level subtasks have it NULL; the column always carries the immediate parent.
-- **Position uniqueness** for live siblings is enforced by partial-unique indexes on every M/A/T/S level (doc 22, plus doc 24's split for nested subtasks). The label-resolution layer relies on this.
-- **`permissions`, `role_permissions`, `user_roles`, `user_permissions`** drive DB-RBAC (doc 21B). The legacy `roles.permissions` JSON column was dropped.
+- **`milestones.depends`** JSON column was dropped (doc 22). Milestone deps live in `milestone_dependencies` (doc 21A).
+- **`subtasks.parent_subtask_id`** (nullable self-FK) supports nested subtasks (doc 24).
+- **Position uniqueness** for live siblings is enforced by partial-unique indexes on every M/A/T/S level (doc 22 + doc 24's nested-subtask split).
+- **DB-RBAC** (doc 21B): `permissions`, `role_permissions`, `user_roles`, `user_permissions`. The legacy `roles.permissions` JSON column was dropped.
+- **Notification log + OTP / password-reset tables** (doc 33 change 3) — `notification_log` records every dispatch (mock or http backend); `otp_codes` and `password_reset_tokens` store hashed single-use tokens.
+- **DB-backed notification templates** (doc 36) — `notification_templates` table holds the email subject/body and SMS body for each `(template_kind, channel)` pair, with `{placeholder}` substitution at render time. Replaces the hardcoded if/elif/else in `app/shared/notifications.py`. Ops can edit copy via `/api/v3/master/notification_templates/*` without a release.
+- **Required division contact** (doc 36) — `divisions.email` + `phone_number` are NOT NULL. Seed rows backfilled from `DIVISION_DEFAULT_EMAIL` / `DIVISION_DEFAULT_PHONE` env vars.
+- **`UtcDateTime` column type** (doc 27) — every datetime column uses the project-internal type so IST/UTC values compare correctly across submission formats.
 
 ---
 
@@ -211,7 +218,7 @@ Schema highlights to be aware of:
 | POST | `/api/v3/users/{id}/roles/{role_id}` | `rbac:assign` | Assign role |
 | DELETE | `/api/v3/users/{id}/roles/{role_id}` | `rbac:assign` | Unassign role (last-admin lockout protected) |
 
-### Projects + versions
+### Projects (single-tier post-doc-33)
 
 | Method | Path | Permission | Description |
 |--------|------|-----------|-------------|
@@ -221,11 +228,19 @@ Schema highlights to be aware of:
 | GET | `/api/v3/projects/all` | `projects:read_all` | Admin view incl. soft-deleted |
 | GET | `/api/v3/projects/{id}` | `projects:read` | Get project |
 | PATCH | `/api/v3/projects/{id}` | `projects:update_all` | Update project |
-| DELETE | `/api/v3/projects/{id}` | `projects:delete_all` | Soft-delete (cascades to active versions) |
+| DELETE | `/api/v3/projects/{id}` | `projects:delete_all` | Soft-delete (cascades M/A/T/S + comments) |
 | POST | `/api/v3/projects/{id}/save` | `projects:update_all` | Move `new` → `draft` |
-| POST | `/api/v3/projects/{id}/publish` | `projects:publish` | Move `draft` → `published`; **doc 27**: rejects (422 `invalid_publish`) projects with zero milestones or any milestone with zero live activities |
+| POST | `/api/v3/projects/{id}/publish` | `projects:publish` | Move `{new,draft} → published`. **Doc 30**: rejects (422 `invalid_publish`) projects with zero milestones (`no_milestones`) or any milestone with zero live activities (`milestone_without_activity`). **Doc 33**: `published → draft` revert is a legal transition. |
 | POST | `/api/v3/projects/{id}/close` | `projects:close` | Move to `closed` |
 | GET | `/api/v3/projects/{id}/tree` | `projects:read` | Full nested tree (M/A/T/S, recursive subtask nesting) |
+| GET / POST | `/api/v3/projects/{id}/memberships[/create]` | `projects:read` / `projects:update_all` | List + add project members |
+| PATCH / DELETE | `/api/v3/memberships/{id}` | `projects:update_all` | Edit / remove a membership |
+| GET / POST | `/api/v3/projects/{id}/work_packages[/create]` | `projects:read` / `projects:update_all` | List + create OpenProject-style WPs (separate from M/A/T/S graph) |
+| GET / PATCH / DELETE | `/api/v3/work_packages/{id}` | `projects:read` / `projects:update_all` | WP CRUD |
+| GET | `/api/v3/work_packages/{id}/children` | `projects:read` | Child WPs |
+| GET / POST / PATCH / DELETE | `/api/v3/work_package_types[/{id}]` | `master_data:view` / `master_data:manage` | WP-type catalog |
+
+> **Doc 33 change 1**: `POST /api/v3/projects/{id}/suspend` and `POST /api/v3/projects/{id}/versions/create` were REMOVED. The `suspended` status is gone. Project response shape no longer includes `isVersion` / `versionOf` / `baselineId` / `versionNo`.
 
 ### Master data (`/api/v3/master/*` — doc 20 + 21B follow-up)
 
@@ -252,6 +267,12 @@ Schema highlights to be aware of:
 | GET | `/api/v3/master/permissions/by-module` | `master_data:view` | **Doc 33 change 2** — same catalog grouped by module prefix; modules sorted alphabetically; permissions per module sorted by code |
 | POST | `/api/v3/master/permissions/create` | `master_data:manage` | Create custom permission |
 | PATCH/DELETE | `/api/v3/master/permissions/{code}` | `master_data:manage` | Edit / delete (built-ins protected) |
+| GET | `/api/v3/master/notification_templates` | `master_data:view` | **Doc 36** — list email + SMS templates. `?include_inactive=true` for admin view |
+| GET | `/api/v3/master/notification_templates/{id}` | `master_data:view` | Single read |
+| POST | `/api/v3/master/notification_templates/create` | `master_data:manage` | Create template (409 when an active row already covers the `(templateKind, channel)` pair) |
+| PATCH | `/api/v3/master/notification_templates/{id}` | `master_data:manage` | Edit subject/body/active/description (built-ins editable on copy; templateKind + channel immutable). Placeholder validation runs against the row's pinned kind+channel. |
+| DELETE | `/api/v3/master/notification_templates/{id}` | `master_data:manage` | Soft-deactivate (`active=false`); built-ins protected from hard delete |
+| POST | `/api/v3/master/notification_templates/{id}/restore` | `master_data:manage` | Re-activate (409 if another active row already covers the pair) |
 
 The legacy paths (`/api/v3/divisions`, `/api/v3/resource_types`, `/api/v3/vendors/*`, `/api/v3/roles/*`, `/api/v3/permissions/*`) keep responding but stamp `Deprecation: true` + `Link: <successor>; rel="successor-version"`.
 
@@ -415,17 +436,23 @@ Per-request flow: auth middleware loads the user's effective permission set into
 - Deleting / renaming / mutating the `admin` role → 403.
 - Self-delete / self-demote on a sole admin → 422.
 
-### JWT contents (doc 21B)
+### JWT contents (doc 21B + doc 26)
 
 ```json
-{ "sub": "admin", "user_id": 1, "email": "admin@…", "jti": "…", "iat": …, "exp": … }
+{ "sub": "admin", "user_id": "8bd99f06-5f2a-424c-aaff-10ab163c3e42", "email": "admin@…", "jti": "…", "iat": …, "exp": … }
 ```
+
+> **Doc 26**: `user_id` is a UUID string, not an integer. Tokens minted before the migration carry an integer that no longer matches any `users.id` row — those users have to log in once to mint a fresh UUID-bearing token. The auth middleware returns 401 (not 500) on stale integer-id tokens (doc 27 hotfix).
 
 No `role` / `is_admin` claims — they're resolved from the DB on every request. Tokens issued before doc 21B that still carry those claims keep working; the middleware ignores them.
 
 ---
 
 ## 7. Configuration
+
+### Settings source
+
+All env-var bindings live in **[`app/core/config.py`](../app/core/config.py)** — a Pydantic `BaseSettings` class (`Settings`) with `model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")`. The deployment loads values from process env first, then falls back to a `.env` file colocated with the entry point. The single global `settings = Settings()` instance is what every module imports — no other reader of OS env exists. To add a new env var, declare a typed field on `Settings` (with `Field(default=…, description="…")`) and reference `settings.YOUR_VAR` from the call site; do not call `os.environ.get` in feature code.
 
 ### Environment variables
 
@@ -459,6 +486,10 @@ NOTIFICATION_SERVICE_URL=                           # required when NOTIFICATION
 DATABASE_URL_MIGRATIONS=                            # optional elevated URL ONLY for `alembic upgrade head` at startup; falls back to DATABASE_URL
 MIGRATIONS_AUTORUN=true                             # set false to skip alembic at boot (DBA runs it out-of-band)
 MIGRATIONS_REQUIRED=true                            # set false to log alembic failures and continue boot anyway
+
+# ---- Doc 36: division contact backfill defaults ----
+DIVISION_DEFAULT_EMAIL=ops@pmis.example             # backfilled into divisions.email NULLs during migration + new seed rows
+DIVISION_DEFAULT_PHONE=+910000000000                # backfilled into divisions.phone_number NULLs (production deploys override both)
 ```
 
 ### Bootstrap admin
@@ -512,3 +543,5 @@ Numbered docs in [planned_changes/](../planned_changes/) describe every BE shape
 | 34 (1/3) | Cascade soft-delete of comments + attachments under M/A/T/S delete (was previously orphaning polymorphic rows); shared helper at `app/shared/comments_attachments_cascade.py`; uniform cascade timestamp lets the restore-cascade identify exactly which rows belong to a delete event |
 | 34 (2/3) | External-dependency block on M/A/T/S delete: refuse with 422 + `errorIdentifier="dependency_block"` when anything in the subtree is the target of a live dep edge whose source lives outside the subtree. Self-contained edges don't block. Helper at `app/shared/dep_block.py`. Project delete is unchanged (deps are project-scoped). |
 | 34 (3/3) | Cascade-restore: when an M/A/T/S is restored, every row whose `deleted_at` exactly matches the cascade timestamp is revived (M/A/T/S subtree + resources + comments + attachments). Rows soft-deleted independently before the parent cascade stay dead. Dep edges are NOT auto-restored — re-establish via PATCH `dependsOn`. |
+| 35 | **Comments + attachments unified.** The standalone `attachments` table was DROPPED. `comments.attachments` (JSON) carries a list of `{url, filename, mimeType, sizeBytes, uploadedAt}` directly on the comment row. `comments.body` relaxed to nullable so attachment-only rows are legal. URL points at external file server (`FILE_SERVER_PUBLIC_BASE_URL`); local fallback `GET /files/{storage_key}` route serves bytes for legacy keys. Live attachment rows were folded onto parent comments during migration; standalone attachments became attachment-only comments. Soft-deleted attachments were not migrated. |
+| 36 | **DB-backed notification templates** — new `notification_templates` master table seeded with 6 built-in rows (3 kinds × 2 channels); `/api/v3/master/notification_templates/*` CRUD with placeholder validation; renderers `_render_email` / `_render_sms` in `app/shared/notifications.py` now look up by `(template_kind, channel)` and `str.format(**placeholders)` over stored copy. Active-uniqueness enforced (Postgres partial unique index + service-layer guard). **Division contact required** — `divisions.email` + `phone_number` flipped NOT NULL with env-driven seed backfill (`DIVISION_DEFAULT_EMAIL` / `DIVISION_DEFAULT_PHONE`). Alembic head `c2d4e7f9a1b3`. |

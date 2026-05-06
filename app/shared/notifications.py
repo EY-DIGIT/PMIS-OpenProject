@@ -1,4 +1,4 @@
-"""Notification client (doc 33 change 3 + doc 33 follow-up integration).
+"""Notification client (doc 33 change 3 + doc 33 follow-up + doc 36).
 
 Two backends behind one ``NotificationClient`` interface:
 
@@ -26,6 +26,16 @@ The audit row is the source of truth for "did the system attempt to
 notify?" — both backends write one before any external call. If the
 HTTP call fails, the row is updated to ``status="failed"`` with the
 error message so investigations can see exactly what was tried.
+
+Doc 36 — DB-backed templates: ``_render_email`` and ``_render_sms``
+look up the active row in ``notification_templates`` by
+``(template_kind, channel)`` and ``str.format(**placeholders)`` over
+the stored copy. Computed placeholders (``ttl_minutes`` from
+``ttl_seconds``, ``reset_url`` from ``FRONTEND_BASE_URL`` + ``token``)
+are derived in this module before substitution. When no active row
+matches, the renderer falls back to a generic body and logs a warning
+— notifications must not crash the auth flow even when the catalog
+has been mis-edited.
 """
 from __future__ import annotations
 
@@ -38,6 +48,9 @@ from sqlalchemy.orm import Session
 
 from ..core.config import settings
 from ..infrastructure.db.models.notification_log import NotificationLogModel
+from ..infrastructure.db.models.notification_template import (
+    NotificationTemplateModel,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +64,17 @@ CHANNEL_SMS = "sms"
 TEMPLATE_OTP_LOGIN = "otp_login"
 TEMPLATE_PASSWORD_RESET_LINK = "password_reset_link"
 TEMPLATE_PASSWORD_RESET_OTP = "password_reset_otp"
+
+
+# Generic fallback strings used when the DB lookup misses (no active row
+# for the requested kind+channel). Logs a warning so ops sees that
+# templates need attention; never crashes the dispatch path.
+_FALLBACK_EMAIL_SUBJECT = "PMIS notification"
+_FALLBACK_EMAIL_BODY = (
+    "<p>You have a notification from PMIS. Sign in to your account "
+    "for details.</p>"
+)
+_FALLBACK_SMS_BODY = "You have a PMIS notification. Sign in for details."
 
 
 # HTTP timeouts when calling the live notification microservice. Short
@@ -114,150 +138,143 @@ class MockNotificationClient(NotificationClient):
 
 
 # ---------------------------------------------------------------------------
-# Email + SMS template renderers — turn (template_kind, payload, recipient)
-# into the body the live notification service expects.
+# Email + SMS template renderers (doc 36 — DB-backed)
 #
-# Kept dead-simple. No Jinja, no on-disk templates. Three template kinds,
-# three branches. Email bodies are minimal HTML for readability in modern
-# clients while still rendering plain in old ones.
+# ``_render_email`` and ``_render_sms`` look up the active template row
+# from ``notification_templates`` by ``(template_kind, channel)`` and
+# ``str.format(**placeholders)`` over the stored copy. Computed
+# placeholders (``ttl_minutes``, ``reset_url``) are derived from the
+# raw ``payload`` before substitution. The stored template only sees
+# already-computed values.
+#
+# When no active row matches, returns the generic fallback (plus a
+# warning log). Notifications must NOT crash the auth flow even when
+# the catalog has been mis-edited or seeds haven't run.
 # ---------------------------------------------------------------------------
 
 
-def _render_email(
+def _compute_placeholders(
     template_kind: str, payload: Dict[str, Any]
-) -> Tuple[str, str]:
-    """Return ``(subject, html_body)`` for the email channel."""
-    if template_kind == TEMPLATE_OTP_LOGIN:
-        code = payload.get("code", "")
-        ttl_seconds = int(payload.get("ttl_seconds", 300))
-        ttl_minutes = max(1, ttl_seconds // 60)
-        subject = "Your PMIS login verification code"
-        body = (
-            "<p>Your PMIS login verification code is:</p>"
-            f"<p style='font-size:22px;font-weight:600;letter-spacing:3px'>{code}</p>"
-            f"<p>This code expires in {ttl_minutes} minutes. If you didn't try "
-            "to log in, you can ignore this email.</p>"
-        )
-        return subject, body
+) -> Dict[str, Any]:
+    """Build the dict passed to ``str.format`` from the raw dispatch payload.
 
-    if template_kind == TEMPLATE_PASSWORD_RESET_LINK:
-        # The password_reset service writes the token under the
-        # ``reset_token`` key. ``token`` is accepted as a fallback so
-        # earlier callers don't break, but the canonical key is
-        # ``reset_token``.
-        token = (
-            payload.get("reset_token")
+    Each well-known kind contributes the placeholders documented in
+    ``app/api/v3/master_data/schemas.py::_ALLOWED_PLACEHOLDERS``. Any
+    extra keys in the dict are harmless — ``str.format`` ignores
+    unreferenced names. Missing keys substitute as empty strings via the
+    ``_SafeDict`` fallback in ``_safe_format``.
+    """
+    p: Dict[str, Any] = {}
+    if template_kind in (TEMPLATE_OTP_LOGIN, TEMPLATE_PASSWORD_RESET_OTP):
+        p["code"] = (
+            payload.get("code")
+            or payload.get("reset_token")
             or payload.get("token", "")
         )
-        ttl_seconds = int(payload.get("ttl_seconds", 3600))
-        ttl_minutes = max(1, ttl_seconds // 60)
-
-        # When FRONTEND_BASE_URL is set, build a clickable reset link
-        # the user can click straight from the email. Otherwise fall
-        # back to the bare-token rendering (still functional — the user
-        # copies the token and pastes it into the FE's reset-password
-        # form, or hits POST /reset-password directly).
+        ttl_seconds = int(
+            payload.get("ttl_seconds")
+            or (300 if template_kind == TEMPLATE_OTP_LOGIN else 3600)
+        )
+        p["ttl_minutes"] = max(1, ttl_seconds // 60)
+    elif template_kind == TEMPLATE_PASSWORD_RESET_LINK:
+        token = payload.get("reset_token") or payload.get("token", "")
+        p["token"] = token
+        ttl_seconds = int(payload.get("ttl_seconds") or 3600)
+        p["ttl_minutes"] = max(1, ttl_seconds // 60)
         fe_base = (settings.FRONTEND_BASE_URL or "").rstrip("/")
-        subject = "PMIS password reset"
-        if fe_base and token:
-            reset_url = f"{fe_base}/reset-password?token={token}"
-            body = (
-                "<p>You (or someone) requested a password reset for your "
-                "PMIS account. Click the link below to set a new "
-                "password:</p>"
-                f"<p><a href='{reset_url}'>Reset your PMIS password</a></p>"
-                "<p>If the link doesn't work, paste this URL into your "
-                "browser:</p>"
-                f"<p style='font-family:monospace;word-break:break-all'>{reset_url}</p>"
-                f"<p>The link expires in {ttl_minutes} minutes. If you "
-                "didn't request a reset, you can ignore this email.</p>"
-            )
-        else:
-            body = (
-                "<p>You (or someone) requested a password reset for your "
-                "PMIS account. Use this single-use token to reset your "
-                "password:</p>"
-                f"<p style='font-family:monospace;word-break:break-all'>{token}</p>"
-                f"<p>This token expires in {ttl_minutes} minutes. If you "
-                "didn't request a reset, you can ignore this email.</p>"
-            )
-        return subject, body
-
-    if template_kind == TEMPLATE_PASSWORD_RESET_OTP:
-        # Email channel sending the OTP form (rare — usually OTP is SMS,
-        # link is email — but supported for completeness).
-        # password_reset service writes the SMS-channel value under
-        # ``code``; ``token`` / ``reset_token`` are accepted as
-        # fallbacks for caller variability.
-        code = (
-            payload.get("code")
-            or payload.get("reset_token")
-            or payload.get("token", "")
+        p["reset_url"] = (
+            f"{fe_base}/reset-password?token={token}" if (fe_base and token) else ""
         )
-        ttl_seconds = int(payload.get("ttl_seconds", 3600))
-        ttl_minutes = max(1, ttl_seconds // 60)
-        subject = "PMIS password reset code"
-        body = (
-            "<p>Your PMIS password reset code is:</p>"
-            f"<p style='font-size:22px;font-weight:600;letter-spacing:3px'>{code}</p>"
-            f"<p>This code expires in {ttl_minutes} minutes. If you didn't "
-            "request a reset, you can ignore this email.</p>"
-        )
-        return subject, body
+    else:
+        # Unknown kind: pass through the raw payload values. Templates
+        # for custom kinds reference whatever keys their dispatch site
+        # sends, so the renderer just forwards them.
+        # Coerce known time-ish keys for convenience.
+        if "ttl_seconds" in payload:
+            try:
+                p["ttl_minutes"] = max(1, int(payload["ttl_seconds"]) // 60)
+            except (TypeError, ValueError):
+                pass
+        for k, v in payload.items():
+            if k not in p:
+                p[k] = v
+    return p
 
-    # Unknown template kind — defensive fallback. Surfacing an error
-    # to the user is worse than sending a generic notification.
-    logger.warning(
-        "Unknown notification template_kind=%r; sending generic body.",
-        template_kind,
+
+class _SafeDict(dict):
+    """``str.format_map`` substrate that returns ``""`` for missing keys.
+
+    Defensive: a template referencing ``{code}`` shouldn't raise
+    ``KeyError`` and crash the dispatch when the dispatch site forgot
+    to pass it. The placeholder validator at write time (see
+    ``master_data/schemas.py``) catches the well-known kinds; this is
+    the runtime safety net for custom kinds.
+    """
+
+    def __missing__(self, key: str) -> str:  # type: ignore[override]
+        return ""
+
+
+def _safe_format(text: Optional[str], placeholders: Dict[str, Any]) -> str:
+    if not text:
+        return ""
+    try:
+        return text.format_map(_SafeDict(placeholders))
+    except (ValueError, IndexError) as e:
+        # Malformed format spec (e.g. unbalanced braces). Log and fall
+        # back to the raw text so dispatch still goes out — better than
+        # a 500 in the auth flow.
+        logger.warning(
+            "notification template format failed: %s. Using raw text.", e,
+        )
+        return text
+
+
+def _lookup_template(
+    db: Session, *, template_kind: str, channel: str
+) -> Optional[NotificationTemplateModel]:
+    """Latest active template row for the (kind, channel) pair, or None."""
+    return (
+        db.query(NotificationTemplateModel)
+        .filter(NotificationTemplateModel.template_kind == template_kind)
+        .filter(NotificationTemplateModel.channel == channel)
+        .filter(NotificationTemplateModel.active.is_(True))
+        .order_by(NotificationTemplateModel.id.desc())
+        .first()
     )
-    subject = "PMIS notification"
-    body = (
-        "<p>You have a notification from PMIS. Sign in to your account "
-        "for details.</p>"
+
+
+def _render_email(
+    db: Session, template_kind: str, payload: Dict[str, Any]
+) -> Tuple[str, str]:
+    """Return ``(subject, html_body)`` for the email channel — DB-backed."""
+    row = _lookup_template(db, template_kind=template_kind, channel=CHANNEL_EMAIL)
+    if row is None:
+        logger.warning(
+            "No active email notification_template for kind=%r; sending fallback.",
+            template_kind,
+        )
+        return _FALLBACK_EMAIL_SUBJECT, _FALLBACK_EMAIL_BODY
+    placeholders = _compute_placeholders(template_kind, payload)
+    return (
+        _safe_format(row.subject, placeholders) or _FALLBACK_EMAIL_SUBJECT,
+        _safe_format(row.body, placeholders),
     )
-    return subject, body
 
 
-def _render_sms(template_kind: str, payload: Dict[str, Any]) -> str:
-    """Return the SMS body for the sms channel."""
-    if template_kind == TEMPLATE_OTP_LOGIN:
-        code = payload.get("code", "")
-        ttl_seconds = int(payload.get("ttl_seconds", 300))
-        ttl_minutes = max(1, ttl_seconds // 60)
-        return (
-            f"PMIS login code: {code}. Expires in {ttl_minutes} min. "
-            f"Don't share this code."
+def _render_sms(
+    db: Session, template_kind: str, payload: Dict[str, Any]
+) -> str:
+    """Return the SMS body — DB-backed."""
+    row = _lookup_template(db, template_kind=template_kind, channel=CHANNEL_SMS)
+    if row is None:
+        logger.warning(
+            "No active sms notification_template for kind=%r; sending fallback.",
+            template_kind,
         )
-
-    if template_kind == TEMPLATE_PASSWORD_RESET_OTP:
-        code = (
-            payload.get("code")
-            or payload.get("reset_token")
-            or payload.get("token", "")
-        )
-        ttl_seconds = int(payload.get("ttl_seconds", 3600))
-        ttl_minutes = max(1, ttl_seconds // 60)
-        return (
-            f"PMIS password reset code: {code}. Expires in {ttl_minutes} "
-            f"min. Don't share this code."
-        )
-
-    if template_kind == TEMPLATE_PASSWORD_RESET_LINK:
-        # Reset-link via SMS isn't a sensible flow (the link is too
-        # long), but keep a degraded fallback so the dispatch doesn't
-        # crash if mis-configured.
-        token = (
-            payload.get("reset_token")
-            or payload.get("token", "")
-        )
-        return f"PMIS password reset token: {token[:24]}..."
-
-    logger.warning(
-        "Unknown notification template_kind=%r; sending generic SMS.",
-        template_kind,
-    )
-    return "You have a PMIS notification. Sign in for details."
+        return _FALLBACK_SMS_BODY
+    placeholders = _compute_placeholders(template_kind, payload)
+    return _safe_format(row.body, placeholders)
 
 
 class HttpNotificationClient(NotificationClient):
@@ -318,16 +335,22 @@ class HttpNotificationClient(NotificationClient):
 
         try:
             if channel == CHANNEL_EMAIL:
-                subject, body = _render_email(template_kind, payload)
+                subject, body = _render_email(self.db, template_kind, payload)
                 url = f"{base_url}/api/v1/notifications/email/send"
+                # Resolve is_html from the active template row (doc 36).
+                # Default True when the row is missing — preserves the
+                # pre-doc-36 behavior for the fallback body.
+                tmpl = _lookup_template(
+                    self.db, template_kind=template_kind, channel=CHANNEL_EMAIL,
+                )
                 req_body = {
                     "to": [recipient],
                     "subject": subject,
                     "body": body,
-                    "is_html": True,
+                    "is_html": True if tmpl is None else bool(tmpl.is_html),
                 }
             elif channel == CHANNEL_SMS:
-                message = _render_sms(template_kind, payload)
+                message = _render_sms(self.db, template_kind, payload)
                 url = f"{base_url}/api/v1/notifications/sms/send"
                 req_body = {"to": recipient, "message": message}
             else:

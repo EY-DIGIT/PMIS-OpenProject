@@ -384,5 +384,30 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- Doc 36 — division contact backfill defaults ----------------
+    #
+    # Doc 36 made ``divisions.email`` and ``divisions.phone_number``
+    # NOT NULL. The seeded built-in rows (``tmd1`` / ``tmd2`` /
+    # ``others``) and any pre-doc-36 user-added rows that left those
+    # columns NULL get backfilled with these env-driven defaults during
+    # migration + on every init_db pass. Production deploys override
+    # both with their real ops contact details.
+    DIVISION_DEFAULT_EMAIL: str = Field(
+        default="ops@pmis.example",
+        description=(
+            "Backfill / seed default for divisions.email. Used by the "
+            "doc-36 migration to fill NULL rows before flipping the "
+            "column to NOT NULL, and by init_db when seeding fresh "
+            "built-in division rows. Override per environment."
+        ),
+    )
+    DIVISION_DEFAULT_PHONE: str = Field(
+        default="+910000000000",
+        description=(
+            "Backfill / seed default for divisions.phone_number. Same "
+            "semantics as DIVISION_DEFAULT_EMAIL."
+        ),
+    )
+
 
 settings = Settings()

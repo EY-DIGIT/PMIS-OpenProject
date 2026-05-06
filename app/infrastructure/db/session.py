@@ -806,9 +806,17 @@ def init_db() -> None:
     # User-added divisions (created on the fly when a project is saved
     # with owner='others' + a free-text ownerOther) coexist with the
     # built-ins as is_builtin=False rows.
+    #
+    # Doc 36: ``email`` and ``phone_number`` are NOT NULL. New seed rows
+    # are inserted with ``DIVISION_DEFAULT_EMAIL`` / ``DIVISION_DEFAULT_PHONE``;
+    # existing rows that pre-date doc 36 keep their values (the migration
+    # backfills NULLs before flipping the column constraint).
     db = SessionLocal()
     try:
         from .models.division import DivisionModel
+        from ...core.config import settings as _settings
+        _div_email = (_settings.DIVISION_DEFAULT_EMAIL or "ops@pmis.example").strip()
+        _div_phone = (_settings.DIVISION_DEFAULT_PHONE or "+910000000000").strip()
         for code, label, requires_other in (
             ("tmd1",   "TMD1",   False),
             ("tmd2",   "TMD2",   False),
@@ -825,6 +833,8 @@ def init_db() -> None:
                     is_builtin=True,
                     requires_other=requires_other,
                     active=True,
+                    email=_div_email,
+                    phone_number=_div_phone,
                 ))
         db.commit()
     except Exception:
@@ -884,6 +894,133 @@ def init_db() -> None:
         db.commit()
     except Exception:
         # Bootstrap failures should not prevent app start.
+        db.rollback()
+    finally:
+        db.close()
+
+    # Seed notification_templates catalog with the six built-in rows
+    # (three template kinds × two channels). Idempotent: only inserts
+    # rows that aren't already present, matched by (template_kind,
+    # channel). Subsequent edits via PATCH /master/notification_templates
+    # are preserved on every re-seed; this loop only fills missing rows.
+    #
+    # The seed strings mirror what the pre-doc-36 hardcoded renderer in
+    # ``app/shared/notifications.py`` used to produce, so the boot-time
+    # behavior is byte-identical for existing deployments.
+    db = SessionLocal()
+    try:
+        from .models.notification_template import NotificationTemplateModel
+
+        _tmpl_seed = (
+            # ---- otp_login ------------------------------------------
+            {
+                "template_kind": "otp_login",
+                "channel": "email",
+                "subject": "Your PMIS login verification code",
+                "body": (
+                    "<p>Your PMIS login verification code is:</p>"
+                    "<p style='font-size:22px;font-weight:600;letter-spacing:3px'>{code}</p>"
+                    "<p>This code expires in {ttl_minutes} minutes. If you didn't try "
+                    "to log in, you can ignore this email.</p>"
+                ),
+                "is_html": True,
+                "description": "Sent on every successful 2FA login attempt (email channel).",
+            },
+            {
+                "template_kind": "otp_login",
+                "channel": "sms",
+                "subject": None,
+                "body": (
+                    "PMIS login code: {code}. Expires in {ttl_minutes} min. "
+                    "Don't share this code."
+                ),
+                "is_html": False,
+                "description": "Sent on every successful 2FA login attempt (SMS channel).",
+            },
+            # ---- password_reset_link --------------------------------
+            {
+                "template_kind": "password_reset_link",
+                "channel": "email",
+                "subject": "PMIS password reset",
+                "body": (
+                    "<p>You (or someone) requested a password reset for your "
+                    "PMIS account. Click the link below to set a new "
+                    "password:</p>"
+                    "<p><a href='{reset_url}'>Reset your PMIS password</a></p>"
+                    "<p>If the link doesn't work, paste this URL into your "
+                    "browser:</p>"
+                    "<p style='font-family:monospace;word-break:break-all'>{reset_url}</p>"
+                    "<p>Or use this single-use token directly:</p>"
+                    "<p style='font-family:monospace;word-break:break-all'>{token}</p>"
+                    "<p>The link expires in {ttl_minutes} minutes. If you "
+                    "didn't request a reset, you can ignore this email.</p>"
+                ),
+                "is_html": True,
+                "description": (
+                    "Sent on POST /users/forgot-password with channel=email. "
+                    "{reset_url} is computed from FRONTEND_BASE_URL + token; "
+                    "{token} is always available as a fallback when "
+                    "FRONTEND_BASE_URL is unset."
+                ),
+            },
+            {
+                "template_kind": "password_reset_link",
+                "channel": "sms",
+                "subject": None,
+                "body": "PMIS password reset token: {token}. Expires in {ttl_minutes} min.",
+                "is_html": False,
+                "description": (
+                    "Degraded SMS fallback for the link channel — URLs render "
+                    "poorly in SMS, so the token is sent as text. The "
+                    "password_reset_otp template is the preferred SMS flow."
+                ),
+            },
+            # ---- password_reset_otp ---------------------------------
+            {
+                "template_kind": "password_reset_otp",
+                "channel": "email",
+                "subject": "PMIS password reset code",
+                "body": (
+                    "<p>Your PMIS password reset code is:</p>"
+                    "<p style='font-size:22px;font-weight:600;letter-spacing:3px'>{code}</p>"
+                    "<p>This code expires in {ttl_minutes} minutes. If you didn't "
+                    "request a reset, you can ignore this email.</p>"
+                ),
+                "is_html": True,
+                "description": "Email variant of the OTP-style password reset.",
+            },
+            {
+                "template_kind": "password_reset_otp",
+                "channel": "sms",
+                "subject": None,
+                "body": (
+                    "PMIS password reset code: {code}. Expires in {ttl_minutes} "
+                    "min. Don't share this code."
+                ),
+                "is_html": False,
+                "description": "Sent on POST /users/forgot-password with channel=sms.",
+            },
+        )
+        for spec in _tmpl_seed:
+            existing = (
+                db.query(NotificationTemplateModel)
+                .filter(NotificationTemplateModel.template_kind == spec["template_kind"])
+                .filter(NotificationTemplateModel.channel == spec["channel"])
+                .first()
+            )
+            if existing is None:
+                db.add(NotificationTemplateModel(
+                    template_kind=spec["template_kind"],
+                    channel=spec["channel"],
+                    subject=spec["subject"],
+                    body=spec["body"],
+                    is_html=spec["is_html"],
+                    is_builtin=True,
+                    active=True,
+                    description=spec["description"],
+                ))
+        db.commit()
+    except Exception:
         db.rollback()
     finally:
         db.close()

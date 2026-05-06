@@ -16,13 +16,15 @@ Schema:
 - ``requires_other``: True only for the ``others`` row — tells the FE to
                      show the free-text "Specify owner" follow-up input.
 - ``active``       : flips a row off without deleting it (history-safe).
-- ``email``        : optional contact email for the division (e.g. a shared
-                     mailbox alias). Nullable — the seeded rows leave it NULL
-                     and admins can populate per-division as needed. Mirrors
-                     the ``vendors.email`` pattern from doc 18.
-- ``phone_number`` : optional contact phone for the division. Nullable for
-                     the same reason. Free-form (no regex) — same convention
-                     as ``vendors.phone_number``.
+- ``email``        : contact email for the division (e.g. a shared
+                     mailbox alias). **Doc 36: NOT NULL — required at
+                     create time.** The seeded rows are backfilled from
+                     ``DIVISION_DEFAULT_EMAIL`` env var. Mirrors the
+                     ``vendors.email`` pattern from doc 18.
+- ``phone_number`` : contact phone for the division. **Doc 36: NOT
+                     NULL — required at create time.** Backfilled from
+                     ``DIVISION_DEFAULT_PHONE`` env var. Free-form (no
+                     regex) — same convention as ``vendors.phone_number``.
 """
 from datetime import datetime, timezone
 
@@ -46,8 +48,9 @@ class DivisionModel(Base):
     requires_other = Column(Boolean, default=False, nullable=False)
     active = Column(Boolean, default=True, nullable=False, index=True)
 
-    email = Column(String(255), nullable=True, index=True)
-    phone_number = Column(String(50), nullable=True)
+    # Doc 36: contact details are mandatory.
+    email = Column(String(255), nullable=False, index=True)
+    phone_number = Column(String(50), nullable=False)
 
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
