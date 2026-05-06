@@ -898,6 +898,97 @@ def init_db() -> None:
     finally:
         db.close()
 
+    # Seed the four doc-37-part-1 static-data catalogs (project_categories,
+    # activity_types, milestone_statuses, activity_statuses). Idempotent —
+    # only inserts rows that aren't already present, matched by code.
+    # The in-code tuples in domain modules + transitions.py remain the
+    # fallback for tests on fresh DBs that don't run init_db.
+    db = SessionLocal()
+    try:
+        from .models.project_category import ProjectCategoryModel
+        from .models.activity_type import ActivityTypeModel
+        from .models.milestone_status import MilestoneStatusModel
+        from .models.activity_status import ActivityStatusModel
+
+        _category_seed = (
+            ("MSAP",   "MSAP",   False, "Mission-mode Software Application Programme."),
+            ("MSIP",   "MSIP",   False, "Mission-mode Software Integration Programme."),
+            ("BSP",    "BSP",    False, "Baseline Software Programme."),
+            ("others", "Others", True,  "Free-text category — requires categoryOther + categoryOtherReason."),
+        )
+        for code, label, requires_other, description in _category_seed:
+            existing = (
+                db.query(ProjectCategoryModel)
+                .filter(ProjectCategoryModel.code == code)
+                .first()
+            )
+            if existing is None:
+                db.add(ProjectCategoryModel(
+                    code=code, label=label,
+                    is_builtin=True,
+                    requires_other=requires_other,
+                    active=True,
+                    description=description,
+                ))
+
+        _activity_type_seed = (
+            ("standard",      "Standard",      "Standard activity — has a status field; participates in dep-completion gate."),
+            ("resource",      "Resource",      "Resource activity — references resource_types catalog; resourceMode count or details."),
+            ("transactional", "Transactional", "Transactional activity — no status, no resource block."),
+        )
+        for code, label, description in _activity_type_seed:
+            existing = (
+                db.query(ActivityTypeModel)
+                .filter(ActivityTypeModel.code == code)
+                .first()
+            )
+            if existing is None:
+                db.add(ActivityTypeModel(
+                    code=code, label=label,
+                    is_builtin=True, active=True,
+                    description=description,
+                ))
+
+        _ms_status_seed = (
+            ("not_completed", "Not completed", False, "Default state on milestone create."),
+            ("completed",     "Completed",     True,  "Terminal — satisfies the dep-completion gate."),
+        )
+        for code, label, is_terminal, description in _ms_status_seed:
+            existing = (
+                db.query(MilestoneStatusModel)
+                .filter(MilestoneStatusModel.code == code)
+                .first()
+            )
+            if existing is None:
+                db.add(MilestoneStatusModel(
+                    code=code, label=label,
+                    is_builtin=True, is_terminal=is_terminal,
+                    active=True, description=description,
+                ))
+
+        _act_status_seed = (
+            ("not_completed", "Not completed", False, "Default state on activity create."),
+            ("completed",     "Completed",     True,  "Terminal — satisfies the dep-completion gate."),
+        )
+        for code, label, is_terminal, description in _act_status_seed:
+            existing = (
+                db.query(ActivityStatusModel)
+                .filter(ActivityStatusModel.code == code)
+                .first()
+            )
+            if existing is None:
+                db.add(ActivityStatusModel(
+                    code=code, label=label,
+                    is_builtin=True, is_terminal=is_terminal,
+                    active=True, description=description,
+                ))
+
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
     # Seed notification_templates catalog with the six built-in rows
     # (three template kinds × two channels). Idempotent: only inserts
     # rows that aren't already present, matched by (template_kind,

@@ -259,6 +259,8 @@ Failure modes (401):
 
 ## RBAC (DB-driven, doc 21B + doc 33 change 1/2)
 
+> **For the full RBAC story** — flow diagram, the four seeded roles, what's legacy vs current, and the OpenProject-import artifacts — see **[RBAC_GUIDE.md](./RBAC_GUIDE.md)**. The summary below is the short version.
+
 ### Model
 
 - **Permissions** are string codes (`projects:create`, `master_data:manage`, `rbac:assign`, …). The canonical list lives in [app/core/permissions.py](../app/core/permissions.py); each code is upserted into the `permissions` table on every boot. Runtime additions land via `POST /api/v3/master/permissions/create` (doc 21B) and show up in the catalog without a redeploy.

@@ -42,6 +42,12 @@ from .otp_code import OtpCodeModel
 from .password_reset_token import PasswordResetTokenModel
 # Doc 36: DB-backed email + SMS template content.
 from .notification_template import NotificationTemplateModel
+# Doc 37 part 1: static-data master tables (project category, activity
+# type, milestone/activity status). In-code tuples kept as fallback.
+from .project_category import ProjectCategoryModel
+from .activity_type import ActivityTypeModel
+from .milestone_status import MilestoneStatusModel
+from .activity_status import ActivityStatusModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -61,4 +67,6 @@ __all__ = [
     "DivisionModel",
     "NotificationLogModel", "OtpCodeModel", "PasswordResetTokenModel",
     "NotificationTemplateModel",
+    "ProjectCategoryModel", "ActivityTypeModel",
+    "MilestoneStatusModel", "ActivityStatusModel",
 ]

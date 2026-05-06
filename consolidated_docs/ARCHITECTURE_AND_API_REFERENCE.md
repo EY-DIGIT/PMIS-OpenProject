@@ -404,6 +404,8 @@ Polymorphic on M/A/T/S target — see the route files for the full surface.
 
 ## 6. RBAC (DB-driven, doc 21B)
 
+> **Full guide**: [RBAC_GUIDE.md](./RBAC_GUIDE.md) — covers the 4-role model (admin/member/viewer/vendor), legacy paths, OpenProject-import artifacts, the `Permission` enum vs string constants, lockout protections, and how to add new permissions / roles. Read that file if you're disentangling current behavior from the OpenProject upstream.
+
 ### Model
 
 - **Permissions** are string codes (`projects:create`, `master_data:manage`, `rbac:assign`, …). The full registry lives in [app/core/permissions.py](../app/core/permissions.py).
@@ -545,3 +547,5 @@ Numbered docs in [planned_changes/](../planned_changes/) describe every BE shape
 | 34 (3/3) | Cascade-restore: when an M/A/T/S is restored, every row whose `deleted_at` exactly matches the cascade timestamp is revived (M/A/T/S subtree + resources + comments + attachments). Rows soft-deleted independently before the parent cascade stay dead. Dep edges are NOT auto-restored — re-establish via PATCH `dependsOn`. |
 | 35 | **Comments + attachments unified.** The standalone `attachments` table was DROPPED. `comments.attachments` (JSON) carries a list of `{url, filename, mimeType, sizeBytes, uploadedAt}` directly on the comment row. `comments.body` relaxed to nullable so attachment-only rows are legal. URL points at external file server (`FILE_SERVER_PUBLIC_BASE_URL`); local fallback `GET /files/{storage_key}` route serves bytes for legacy keys. Live attachment rows were folded onto parent comments during migration; standalone attachments became attachment-only comments. Soft-deleted attachments were not migrated. |
 | 36 | **DB-backed notification templates** — new `notification_templates` master table seeded with 6 built-in rows (3 kinds × 2 channels); `/api/v3/master/notification_templates/*` CRUD with placeholder validation; renderers `_render_email` / `_render_sms` in `app/shared/notifications.py` now look up by `(template_kind, channel)` and `str.format(**placeholders)` over stored copy. Active-uniqueness enforced (Postgres partial unique index + service-layer guard). **Division contact required** — `divisions.email` + `phone_number` flipped NOT NULL with env-driven seed backfill (`DIVISION_DEFAULT_EMAIL` / `DIVISION_DEFAULT_PHONE`). Alembic head `c2d4e7f9a1b3`. |
+| 37 part 1 | **Static-data master tables** — `project_categories`, `activity_types`, `milestone_statuses`, `activity_statuses`. The four in-code tuples become fallbacks; `app/shared/static_catalog.py` provides DB-first-with-fallback membership check. 24 new master endpoints, all gated by `master_data:view`/`master_data:manage`. Alembic head `d3e5f7a9b1c2`. |
+| 37 part 2 (planned) | User-management microservice extraction — bring PMIS-user-management (port 8001) to parity, add monolith proxy via `USER_SERVICE_PROXY_ENABLED` flag. Same notification-service-style strangler pattern. |
