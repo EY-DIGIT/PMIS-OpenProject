@@ -11,6 +11,11 @@ from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
 )
 from .....infrastructure.db.repositories.task_repository import TaskRepository
+from .....shared.dep_block import (
+    KIND_TASK,
+    collect_external_dep_blockers,
+    raise_if_external_blockers,
+)
 
 
 def delete_task(db: Session, *, task_id: str, current_user_id: Optional[int]) -> None:
@@ -19,6 +24,17 @@ def delete_task(db: Session, *, task_id: str, current_user_id: Optional[int]) ->
     if model is None:
         raise NotFoundError("The task could not be found.")
     assert_task_subtask_writable(db, model.project_id)
+
+    # Doc 34: refuse delete if any external dep targets this subtree.
+    blockers = collect_external_dep_blockers(
+        db,
+        root_kind=KIND_TASK,
+        root_id=task_id,
+        project_id=model.project_id,
+    )
+    raise_if_external_blockers(
+        blockers, root_label=model.name, root_kind=KIND_TASK,
+    )
 
     # Snapshot subtree subtask ids before soft-delete.
     subtask_ids = [

@@ -16,6 +16,11 @@ from .....infrastructure.db.repositories.dependency_repository import (
     DependencyRepository,
 )
 from .....infrastructure.db.repositories.subtask_repository import SubtaskRepository
+from .....shared.dep_block import (
+    KIND_SUBTASK,
+    collect_external_dep_blockers,
+    raise_if_external_blockers,
+)
 
 
 def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[int]) -> None:
@@ -24,6 +29,17 @@ def delete_subtask(db: Session, *, subtask_id: str, current_user_id: Optional[in
     if model is None:
         raise NotFoundError("The subtask could not be found.")
     assert_task_subtask_writable(db, model.project_id)
+
+    # Doc 34: refuse delete if any external dep targets this subtree.
+    blockers = collect_external_dep_blockers(
+        db,
+        root_kind=KIND_SUBTASK,
+        root_id=subtask_id,
+        project_id=model.project_id,
+    )
+    raise_if_external_blockers(
+        blockers, root_label=model.name, root_kind=KIND_SUBTASK,
+    )
 
     dep_repo = DependencyRepository(db)
     # Collect descendants BEFORE we soft-delete (the read filters on

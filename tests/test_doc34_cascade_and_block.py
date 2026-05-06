@@ -51,7 +51,7 @@ def _make_milestone(
     return m
 
 
-def _make_activity(db, *, milestone, name="A") -> ActivityModel:
+def _make_activity(db, *, milestone, name="A", position=1) -> ActivityModel:
     a = ActivityModel(
         id=str(uuid4()),
         project_id=milestone.project_id,
@@ -60,7 +60,7 @@ def _make_activity(db, *, milestone, name="A") -> ActivityModel:
         type="standard",
         start_date=datetime(2026, 2, 1),
         end_date=datetime(2026, 6, 30),
-        position=1,
+        position=position,
         status="not_completed",
     )
     db.add(a)
@@ -474,6 +474,286 @@ class TestProjectDeleteCascadesEverything:
         assert _is_deleted(
             db_session, AttachmentModel,
             cascade_tree["target_comment_bound_attachment"].id,
+        )
+
+
+class TestExternalDepBlock:
+    """Doc 34 (2/3): refuse delete when an external entity depends on
+    something inside the subtree."""
+
+    def _make_milestone_dep(
+        self, db, *, source_milestone, target_milestone,
+    ):
+        from app.infrastructure.db.models.milestone_dependency import (
+            MilestoneDependencyModel,
+        )
+        edge = MilestoneDependencyModel(
+            id=str(uuid4()),
+            source_milestone_id=source_milestone.id,
+            target_milestone_id=target_milestone.id,
+            project_id=source_milestone.project_id,
+        )
+        db.add(edge)
+        db.commit()
+        return edge
+
+    def _make_activity_dep(self, db, *, source_activity, target_activity):
+        from app.infrastructure.db.models.activity_dependency import (
+            ActivityDependencyModel,
+        )
+        edge = ActivityDependencyModel(
+            id=str(uuid4()),
+            source_activity_id=source_activity.id,
+            target_activity_id=target_activity.id,
+            project_id=source_activity.project_id,
+        )
+        db.add(edge)
+        db.commit()
+        return edge
+
+    def _make_task_dep(self, db, *, source_task, target_task):
+        from app.infrastructure.db.models.task_dependency import (
+            TaskDependencyModel,
+        )
+        edge = TaskDependencyModel(
+            id=str(uuid4()),
+            source_task_id=source_task.id,
+            target_task_id=target_task.id,
+            project_id=source_task.project_id,
+        )
+        db.add(edge)
+        db.commit()
+        return edge
+
+    def _make_subtask_dep(self, db, *, source_subtask, target_subtask):
+        from app.infrastructure.db.models.subtask_dependency import (
+            SubtaskDependencyModel,
+        )
+        edge = SubtaskDependencyModel(
+            id=str(uuid4()),
+            source_subtask_id=source_subtask.id,
+            target_subtask_id=target_subtask.id,
+            project_id=source_subtask.project_id,
+        )
+        db.add(edge)
+        db.commit()
+        return edge
+
+    def test_milestone_dep_blocks_milestone_delete(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """sibling_M depends on target_M ⇒ deleting target_M is refused."""
+        from app.api.v3.milestones.services.delete import delete_milestone
+        from app.core.errors import ValidationError
+
+        self._make_milestone_dep(
+            db_session,
+            source_milestone=cascade_tree["sibling_M"],
+            target_milestone=cascade_tree["target_M"],
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            delete_milestone(
+                db_session,
+                milestone_id=cascade_tree["target_M"].id,
+                current_user_id=admin_user.id,
+            )
+        details = exc_info.value.details
+        assert details["errorIdentifier"] == "dependency_block"
+        assert details["rootKind"] == "milestone"
+        # Exactly one blocker, sibling_M → target_M.
+        blockers = details["blockers"]
+        assert len(blockers) == 1
+        assert blockers[0]["sourceKind"] == "milestone"
+        assert blockers[0]["targetKind"] == "milestone"
+        # target_M was not soft-deleted.
+        m = db_session.query(MilestoneModel).filter_by(
+            id=cascade_tree["target_M"].id,
+        ).one()
+        assert m.deleted_at is None
+
+    def test_external_activity_dep_on_child_blocks_milestone_delete(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """sibling_A depends on target_A ⇒ deleting target_M (which
+        contains target_A) is refused. The blocker names target_A's
+        label, not target_M's."""
+        from app.api.v3.milestones.services.delete import delete_milestone
+        from app.core.errors import ValidationError
+
+        self._make_activity_dep(
+            db_session,
+            source_activity=cascade_tree["sibling_A"],
+            target_activity=cascade_tree["target_A"],
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            delete_milestone(
+                db_session,
+                milestone_id=cascade_tree["target_M"].id,
+                current_user_id=admin_user.id,
+            )
+        blockers = exc_info.value.details["blockers"]
+        assert len(blockers) == 1
+        assert blockers[0]["sourceKind"] == "activity"
+        assert blockers[0]["targetKind"] == "activity"
+
+    def test_external_task_dep_blocks_activity_delete(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.api.v3.activities.services.delete import delete_activity
+        from app.core.errors import ValidationError
+
+        self._make_task_dep(
+            db_session,
+            source_task=cascade_tree["sibling_T"],
+            target_task=cascade_tree["target_T"],
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            delete_activity(
+                db_session,
+                activity_id=cascade_tree["target_A"].id,
+                current_user_id=admin_user.id,
+            )
+        blockers = exc_info.value.details["blockers"]
+        assert len(blockers) == 1
+        assert blockers[0]["sourceKind"] == "task"
+
+    def test_external_subtask_dep_blocks_task_delete(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.api.v3.tasks.services.delete import delete_task
+        from app.core.errors import ValidationError
+
+        self._make_subtask_dep(
+            db_session,
+            source_subtask=cascade_tree["sibling_S"],
+            target_subtask=cascade_tree["target_S"],
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            delete_task(
+                db_session,
+                task_id=cascade_tree["target_T"].id,
+                current_user_id=admin_user.id,
+            )
+        blockers = exc_info.value.details["blockers"]
+        assert len(blockers) == 1
+        assert blockers[0]["sourceKind"] == "subtask"
+
+    def test_external_subtask_dep_blocks_subtask_delete(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        from app.api.v3.subtasks.services.delete import delete_subtask
+        from app.core.errors import ValidationError
+
+        self._make_subtask_dep(
+            db_session,
+            source_subtask=cascade_tree["sibling_S"],
+            target_subtask=cascade_tree["target_S"],
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            delete_subtask(
+                db_session,
+                subtask_id=cascade_tree["target_S"].id,
+                current_user_id=admin_user.id,
+            )
+        assert exc_info.value.details["errorIdentifier"] == "dependency_block"
+
+    def test_self_contained_dep_does_not_block(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """target_T → target_S (both inside the about-to-be-deleted M
+        subtree) should NOT block. Cascade soft-deletes both edges +
+        entities consistently."""
+        from app.api.v3.milestones.services.delete import delete_milestone
+
+        # target_S depends on target_T, both in M's subtree
+        # (subtask deps reference subtasks; cross-kind deps don't exist
+        # in this codebase — fake one entirely inside the target M's
+        # subtree by giving the target_T a "self subtree" dep where
+        # source==target on a different test row).
+        # Cleanest: M-level self-contained — make target_M depend on
+        # itself? Self-edges aren't allowed at insert time but we can
+        # bypass by going at the model layer (test-only).
+        # Simpler & more honest: build a SECOND milestone *inside the
+        # same project's target subtree* — but milestones have no
+        # parent — so we use activity-level: target_A2 depends on
+        # target_A. Both inside target_M. Deleting target_M cascades
+        # them together.
+        target_A2 = _make_activity(
+            db_session,
+            milestone=cascade_tree["target_M"],
+            name="target_A2",
+            position=2,
+        )
+        db_session.commit()
+        self._make_activity_dep(
+            db_session,
+            source_activity=target_A2,
+            target_activity=cascade_tree["target_A"],
+        )
+
+        # No exception expected.
+        delete_milestone(
+            db_session,
+            milestone_id=cascade_tree["target_M"].id,
+            current_user_id=admin_user.id,
+        )
+        m = db_session.query(MilestoneModel).filter_by(
+            id=cascade_tree["target_M"].id,
+        ).one()
+        assert m.deleted_at is not None
+
+    def test_soft_deleted_dep_does_not_block(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """A dep edge that's already soft-deleted is ignored — only
+        live edges block."""
+        from datetime import datetime, timezone
+        from app.api.v3.milestones.services.delete import delete_milestone
+
+        edge = self._make_milestone_dep(
+            db_session,
+            source_milestone=cascade_tree["sibling_M"],
+            target_milestone=cascade_tree["target_M"],
+        )
+        edge.deleted_at = datetime.now(timezone.utc)
+        db_session.commit()
+
+        # No exception — dead edges don't block.
+        delete_milestone(
+            db_session,
+            milestone_id=cascade_tree["target_M"].id,
+            current_user_id=admin_user.id,
+        )
+
+    def test_blocker_message_carries_labels(
+        self, db_session, cascade_tree, admin_user,
+    ):
+        """Blocker labels resolve to display codes (M1, M2…) when
+        available, falling back to UUIDs otherwise."""
+        from app.api.v3.milestones.services.delete import delete_milestone
+        from app.core.errors import ValidationError
+
+        self._make_milestone_dep(
+            db_session,
+            source_milestone=cascade_tree["sibling_M"],
+            target_milestone=cascade_tree["target_M"],
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            delete_milestone(
+                db_session,
+                milestone_id=cascade_tree["target_M"].id,
+                current_user_id=admin_user.id,
+            )
+        # Source label should be the display code or name. Either way
+        # it must NOT be the raw UUID (length 36 with dashes).
+        src = exc_info.value.details["blockers"][0]["source"]
+        # Reasonable label — short or matches a known display-code shape.
+        assert len(src) < 36 or src in (
+            cascade_tree["sibling_M"].name,
         )
 
 

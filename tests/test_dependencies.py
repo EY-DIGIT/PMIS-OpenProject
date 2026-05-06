@@ -347,11 +347,14 @@ class TestActivityStatusGate:
 # ===========================================================================
 
 class TestActivityDepsCascadeOnDelete:
-    def test_deleting_target_soft_deletes_edges(
+    def test_deleting_target_with_external_dep_is_blocked(
         self, client, admin_user, admin_headers, db_session,
     ):
-        """Cascade is a SOFT-delete: the edge row stays in the DB with
-        ``deleted_at`` set, but is no longer visible to reads."""
+        """Doc 34: deleting a target that has an EXTERNAL dependent
+        (a source outside the delete subtree) is refused with 422
+        + ``dependency_block``. Previously the dep edge was silently
+        soft-deleted; that behaviour was deemed too easy to footgun
+        users who'd lose their declared dependencies without warning."""
         _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
         ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
         ax_id = ax.json()["data"]["id"]
@@ -361,39 +364,32 @@ class TestActivityDepsCascadeOnDelete:
             ActivityDependencyModel.target_activity_id == a1,
             ActivityDependencyModel.deleted_at.is_(None),
         ).count()
-        total_before = db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1
-        ).count()
         assert live_before == 1
-        assert total_before == 1
 
-        # Delete A1. AX's incoming dep should be silently dropped (soft).
+        # Doc 34: delete refused — AX (in M2) is external to A1's
+        # subtree but depends on A1.
         resp = client.delete(f"/api/v3/activities/{a1}", headers=admin_headers)
-        assert resp.status_code in (200, 204), resp.text
-        db_session.expire_all()
-
-        # Zero live edges remain.
-        live_after = db_session.query(ActivityDependencyModel).filter(
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["error"]["_embedded"]["details"]
+        assert details["errorIdentifier"] == "dependency_block"
+        # A1 still alive.
+        live_a1 = db_session.query(ActivityDependencyModel).filter(
             ActivityDependencyModel.target_activity_id == a1,
             ActivityDependencyModel.deleted_at.is_(None),
         ).count()
-        assert live_after == 0
+        assert live_a1 == 1, "edge must still be live (delete refused)"
 
-        # But the row STILL exists in the table with deleted_at set (soft).
-        total_after = db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1
-        ).count()
-        deleted_after = db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1,
-            ActivityDependencyModel.deleted_at.isnot(None),
-        ).count()
-        assert total_after == 1, "soft-delete must preserve the row"
-        assert deleted_after == 1
-
-        # API view: AX still exists with empty dependsOn.
-        get_ax = client.get(f"/api/v3/activities/{ax_id}", headers=admin_headers)
-        assert get_ax.status_code == 200
-        assert get_ax.json()["data"]["dependsOn"] == []
+        # Removing the dep first unblocks the delete and the edge gets
+        # soft-deleted by the dependsOn=[] PATCH (the existing dep-edge
+        # cascade).
+        resp = client.patch(
+            f"/api/v3/activities/{ax_id}",
+            json={"dependsOn": []},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        resp = client.delete(f"/api/v3/activities/{a1}", headers=admin_headers)
+        assert resp.status_code in (200, 204), resp.text
 
     def test_replace_list_soft_deletes_removed_edges(
         self, client, admin_user, admin_headers, db_session,
@@ -716,11 +712,11 @@ class TestTaskDepsSoftDelete:
         assert sum(1 for r in rows if r.deleted_at is None) == 1
         assert sum(1 for r in rows if r.deleted_at is not None) == 1
 
-    def test_task_delete_cascade_soft_deletes_edges(
+    def test_task_delete_with_external_dep_is_blocked(
         self, client, admin_user, admin_headers, db_session,
     ):
-        """Deleting a target task soft-deletes incoming edges (row persists
-        with deleted_at set)."""
+        """Doc 34: deleting a target task that has an external
+        dependent is refused with 422 + ``dependency_block``."""
         _, t1, t2 = self._setup_two_linked_tasks(client, admin_headers)
 
         # Sanity: one live edge.
@@ -730,20 +726,18 @@ class TestTaskDepsSoftDelete:
         ).count()
         assert live == 1
 
-        # Delete the target task.
         resp = client.delete(f"/api/v3/tasks/{t1}", headers=admin_headers)
-        assert resp.status_code in (200, 204), resp.text
-        db_session.expire_all()
-
-        # Zero live, but the row still exists with deleted_at set.
+        assert resp.status_code == 422, resp.text
+        assert (
+            resp.json()["error"]["_embedded"]["details"]["errorIdentifier"]
+            == "dependency_block"
+        )
+        # Edge still live (delete refused).
         live = db_session.query(TaskDependencyModel).filter(
             TaskDependencyModel.target_task_id == t1,
             TaskDependencyModel.deleted_at.is_(None),
         ).count()
-        total = db_session.query(TaskDependencyModel).filter(
-            TaskDependencyModel.target_task_id == t1,
-        ).count()
-        assert live == 0 and total == 1
+        assert live == 1
 
 
 # ===========================================================================
@@ -813,23 +807,25 @@ class TestSubtaskDepsSoftDelete:
         assert sum(1 for r in rows if r.deleted_at is None) == 1
         assert sum(1 for r in rows if r.deleted_at is not None) == 1
 
-    def test_subtask_delete_cascade_soft_deletes_edges(
+    def test_subtask_delete_with_external_dep_is_blocked(
         self, client, admin_user, admin_headers, db_session,
     ):
+        """Doc 34: deleting a subtask that has an external dependent
+        is refused with 422 + ``dependency_block``."""
         s1, s2 = self._setup_two_linked_subtasks(client, admin_headers)
 
         resp = client.delete(f"/api/v3/subtasks/{s1}", headers=admin_headers)
-        assert resp.status_code in (200, 204), resp.text
-        db_session.expire_all()
-
+        assert resp.status_code == 422, resp.text
+        assert (
+            resp.json()["error"]["_embedded"]["details"]["errorIdentifier"]
+            == "dependency_block"
+        )
+        # Edge still live.
         live = db_session.query(SubtaskDependencyModel).filter(
             SubtaskDependencyModel.target_subtask_id == s1,
             SubtaskDependencyModel.deleted_at.is_(None),
         ).count()
-        total = db_session.query(SubtaskDependencyModel).filter(
-            SubtaskDependencyModel.target_subtask_id == s1,
-        ).count()
-        assert live == 0 and total == 1
+        assert live == 1
 
 
 # ===========================================================================
@@ -837,14 +833,14 @@ class TestSubtaskDepsSoftDelete:
 # ===========================================================================
 
 class TestMilestoneDeleteCascadesDeps:
-    def test_milestone_delete_soft_deletes_activity_edges_in_subtree(
+    def test_milestone_delete_with_external_activity_dep_is_blocked(
         self, client, admin_user, admin_headers, db_session,
     ):
-        """Deleting a milestone soft-deletes every incoming + outgoing
-        activity_dependencies edge that touches its activities."""
+        """Doc 34: deleting M1 is refused when an activity outside M1
+        (here A2 in M2) depends on something inside M1's subtree (A1).
+        Dep edges are no longer auto-orphaned by parent deletes — the
+        user must clear the dep first."""
         _, m1, _, a1, a2 = _build_baseline_with_two_activities(client, admin_headers)
-        # A2 -> A1 (cross-milestone); deleting M1 will soft-delete A1, and
-        # the edge from A2 should go with it.
         client.patch(
             f"/api/v3/activities/{a2}",
             json={"dependsOn": [a1]},
@@ -852,18 +848,17 @@ class TestMilestoneDeleteCascadesDeps:
         )
 
         resp = client.delete(f"/api/v3/milestones/{m1}", headers=admin_headers)
-        assert resp.status_code in (200, 204), resp.text
-        db_session.expire_all()
-
+        assert resp.status_code == 422, resp.text
+        assert (
+            resp.json()["error"]["_embedded"]["details"]["errorIdentifier"]
+            == "dependency_block"
+        )
+        # M1 still alive.
         live = db_session.query(ActivityDependencyModel).filter(
             ActivityDependencyModel.target_activity_id == a1,
             ActivityDependencyModel.deleted_at.is_(None),
         ).count()
-        total = db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1,
-        ).count()
-        assert live == 0, "edge pointing at deleted milestone's activity must be gone from live view"
-        assert total == 1, "row must still exist (soft delete)"
+        assert live == 1, "edge still live, delete refused"
 
     def test_milestone_delete_soft_deletes_task_and_subtask_edges(
         self, client, admin_user, admin_headers, db_session,
@@ -890,37 +885,28 @@ class TestMilestoneDeleteCascadesDeps:
         s1 = _create_subtask(client, admin_headers, t1, name="S1").json()["data"]["id"]
         s2 = _create_subtask(client, admin_headers, t2, name="S2", depends_on=[s1], start_offset=85, end_offset=95).json()["data"]["id"]
 
-        # Doc 33: with versioning removed, ``v_m1_under_a1`` IS the
-        # milestone we want to delete (no baseline twin to walk up to).
-        # Delete that milestone — cascades soft-delete to its A/T/S subtree
-        # and every dep edge that touches it.
+        # Doc 34: with t2 (under v_a2 in a different milestone) depending
+        # on t1 (under v_a1 in the milestone we want to delete), the
+        # delete is refused. Same with s2 → s1. The doc 34 contract is
+        # "remove external deps before deleting".
         resp = client.delete(f"/api/v3/milestones/{v_m1_under_a1}", headers=admin_headers)
-        assert resp.status_code in (200, 204), resp.text
-        db_session.expire_all()
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["error"]["_embedded"]["details"]
+        assert details["errorIdentifier"] == "dependency_block"
+        # At least 2 blockers: the t2→t1 edge and the s2→s1 edge.
+        assert len(details["blockers"]) >= 2
 
-        # The t1-targeting edge (from t2, because t2 deps t1) must be
-        # soft-deleted, because t1 is under the deleted milestone's subtree.
+        # All edges still live.
         live_t = db_session.query(TaskDependencyModel).filter(
             TaskDependencyModel.target_task_id == t1,
             TaskDependencyModel.deleted_at.is_(None),
         ).count()
-        total_t = db_session.query(TaskDependencyModel).filter(
-            TaskDependencyModel.target_task_id == t1,
-        ).count()
-        assert live_t == 0, "task edge under deleted milestone must be soft-deleted"
-        assert total_t == 1, "row preserved"
-
-        # Subtask s1 under t1 (under v_a1 under deleted milestone) — s2's
-        # edge pointing at s1 must be soft-deleted too.
         live_s = db_session.query(SubtaskDependencyModel).filter(
             SubtaskDependencyModel.target_subtask_id == s1,
             SubtaskDependencyModel.deleted_at.is_(None),
         ).count()
-        total_s = db_session.query(SubtaskDependencyModel).filter(
-            SubtaskDependencyModel.target_subtask_id == s1,
-        ).count()
-        assert live_s == 0, "subtask edge under deleted milestone must be soft-deleted"
-        assert total_s == 1
+        assert live_t == 1
+        assert live_s == 1
 
 
 # ===========================================================================
@@ -928,27 +914,17 @@ class TestMilestoneDeleteCascadesDeps:
 # ===========================================================================
 
 class TestActorThreadingOnCascade:
-    def test_deleted_by_set_on_activity_cascade(
-        self, client, admin_user, admin_headers, db_session,
-    ):
-        _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
-        ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
-
-        resp = client.delete(f"/api/v3/activities/{a1}", headers=admin_headers)
-        assert resp.status_code in (200, 204)
-        db_session.expire_all()
-
-        dead_row = db_session.query(ActivityDependencyModel).filter(
-            ActivityDependencyModel.target_activity_id == a1,
-            ActivityDependencyModel.deleted_at.isnot(None),
-        ).one()
-        assert dead_row.deleted_by == admin_user.id, \
-            "cascade must stamp deleted_by with the acting user"
+    """Doc 34: external-dep cascade was replaced by an upfront block,
+    so the only remaining "cascade soft-deletes a dep edge with
+    deleted_by stamped" path is when the user clears the dep via PATCH
+    or when the source's parent (which contains the source) is
+    deleted. Both PATCH-clear and same-subtree cascade still set
+    ``deleted_by`` with the acting user."""
 
     def test_deleted_by_set_on_replace_list(
         self, client, admin_user, admin_headers, db_session,
     ):
-        """PATCH-driven replace that removes an edge must stamp deleted_by
+        """PATCH-driven replace that removes an edge stamps deleted_by
         with the current actor."""
         _, _, m2, a1, _ = _build_baseline_with_two_activities(client, admin_headers)
         ax = _create_activity(client, admin_headers, m2, name="AX", depends_on=[a1])
@@ -965,22 +941,6 @@ class TestActorThreadingOnCascade:
             ActivityDependencyModel.source_activity_id == ax_id,
             ActivityDependencyModel.target_activity_id == a1,
             ActivityDependencyModel.deleted_at.isnot(None),
-        ).one()
-        assert dead_row.deleted_by == admin_user.id
-
-    def test_deleted_by_set_on_task_cascade(
-        self, client, admin_user, admin_headers, db_session,
-    ):
-        setup = TestTaskDepsSoftDelete()
-        _, t1, t2 = setup._setup_two_linked_tasks(client, admin_headers)
-
-        resp = client.delete(f"/api/v3/tasks/{t1}", headers=admin_headers)
-        assert resp.status_code in (200, 204)
-        db_session.expire_all()
-
-        dead_row = db_session.query(TaskDependencyModel).filter(
-            TaskDependencyModel.target_task_id == t1,
-            TaskDependencyModel.deleted_at.isnot(None),
         ).one()
         assert dead_row.deleted_by == admin_user.id
 
@@ -1374,34 +1334,53 @@ class TestMilestoneDeps:
         body = self._get_milestone(client, admin_headers, m2).json()["data"]
         assert body["dependsOn"] == [m1]
 
-    def test_delete_milestone_cascades_dep_edges(
+    def test_delete_milestone_with_external_dependent_is_blocked(
         self, client, admin_user, admin_headers, db_session,
     ):
+        """Doc 34: deleting M2 is refused while M3 still depends on it.
+        Outgoing edges (M2->M1) wouldn't block by themselves — only
+        incoming edges from outside the subtree do."""
         from app.infrastructure.db.models.milestone_dependency import (
             MilestoneDependencyModel,
         )
         _, m1, m2, m3 = self._make_three_milestones(client, admin_headers)
-        # M2 -> M1, M3 -> M2, M3 -> M1 (just to be sure incoming + outgoing
-        # both get wiped when M2 is deleted).
+        # M2 -> M1, M3 -> M2, M3 -> M1.
         self._patch_milestone(client, admin_headers, m2, dependsOn=[m1])
         self._patch_milestone(client, admin_headers, m3, dependsOn=[m2, m1])
-        # Sanity: 3 live edges.
         live_before = (
             db_session.query(MilestoneDependencyModel)
             .filter(MilestoneDependencyModel.deleted_at.is_(None))
             .count()
         )
         assert live_before == 3
-        # Delete M2 — wipes edges where M2 is source OR target (so 2 edges
-        # disappear: M2->M1 and M3->M2). M3->M1 stays live.
+
         resp = client.delete(f"/api/v3/milestones/{m2}", headers=admin_headers)
-        assert resp.status_code == 204
+        assert resp.status_code == 422, resp.text
+        assert (
+            resp.json()["error"]["_embedded"]["details"]["errorIdentifier"]
+            == "dependency_block"
+        )
+        # All 3 edges still live.
         live_after = (
             db_session.query(MilestoneDependencyModel)
             .filter(MilestoneDependencyModel.deleted_at.is_(None))
             .count()
         )
-        assert live_after == 1
+        assert live_after == 3
+
+        # Removing the M3 -> M2 edge unblocks the delete; the M2 -> M1
+        # outgoing edge then cascades soft-delete with M2 (no source
+        # outside the subtree of M2).
+        self._patch_milestone(client, admin_headers, m3, dependsOn=[m1])
+        resp = client.delete(f"/api/v3/milestones/{m2}", headers=admin_headers)
+        assert resp.status_code == 204
+        live_final = (
+            db_session.query(MilestoneDependencyModel)
+            .filter(MilestoneDependencyModel.deleted_at.is_(None))
+            .count()
+        )
+        # Only M3 -> M1 remains live (M2 -> M1 went with M2).
+        assert live_final == 1
 
     def test_propagation_to_active_version(
         self, client, admin_user, admin_headers,
