@@ -703,6 +703,66 @@ class TestHttpNotificationClient:
         assert "legacy-token" in body["body"]
         assert "30 minutes" in body["body"]
 
+    def test_email_password_reset_link_with_frontend_url(
+        self, db_session, monkeypatch
+    ):
+        """When FRONTEND_BASE_URL is set, the email body embeds a
+        clickable reset URL the user can hit directly from their inbox."""
+        from app.core.config import settings as _settings
+        from app.shared.notifications import (
+            CHANNEL_EMAIL,
+            TEMPLATE_PASSWORD_RESET_LINK,
+            HttpNotificationClient,
+        )
+        self._patch_settings(monkeypatch)
+        monkeypatch.setattr(_settings, "FRONTEND_BASE_URL", "http://fe.test:3000")
+        recorder = self._stub_httpx(
+            monkeypatch,
+            response_json={"success": True, "message": "ok", "provider": "smtp"},
+        )
+        client = HttpNotificationClient(db_session)
+        client.send(
+            user_id=None,
+            channel=CHANNEL_EMAIL,
+            recipient="alice@example.com",
+            template_kind=TEMPLATE_PASSWORD_RESET_LINK,
+            payload={"reset_token": "tok-xyz", "ttl_seconds": 3600},
+        )
+        body = recorder["body"]["body"]
+        # Full clickable URL is present.
+        assert "http://fe.test:3000/reset-password?token=tok-xyz" in body
+        # An <a> tag wraps it.
+        assert "<a href='http://fe.test:3000/reset-password?token=tok-xyz'>" in body
+
+    def test_email_password_reset_link_strips_trailing_slash(
+        self, db_session, monkeypatch
+    ):
+        """A FRONTEND_BASE_URL with a trailing slash shouldn't produce
+        a double-slash in the rendered link."""
+        from app.core.config import settings as _settings
+        from app.shared.notifications import (
+            CHANNEL_EMAIL,
+            TEMPLATE_PASSWORD_RESET_LINK,
+            HttpNotificationClient,
+        )
+        self._patch_settings(monkeypatch)
+        monkeypatch.setattr(_settings, "FRONTEND_BASE_URL", "http://fe.test:3000/")
+        recorder = self._stub_httpx(
+            monkeypatch,
+            response_json={"success": True, "message": "ok", "provider": "smtp"},
+        )
+        client = HttpNotificationClient(db_session)
+        client.send(
+            user_id=None,
+            channel=CHANNEL_EMAIL,
+            recipient="alice@example.com",
+            template_kind=TEMPLATE_PASSWORD_RESET_LINK,
+            payload={"reset_token": "tok-1", "ttl_seconds": 3600},
+        )
+        body = recorder["body"]["body"]
+        assert "http://fe.test:3000/reset-password?token=tok-1" in body
+        assert "fe.test:3000//reset-password" not in body
+
     def test_sms_otp_login(self, db_session, monkeypatch):
         from app.shared.notifications import (
             CHANNEL_SMS,

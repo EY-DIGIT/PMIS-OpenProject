@@ -144,26 +144,43 @@ def _render_email(
         # The password_reset service writes the token under the
         # ``reset_token`` key. ``token`` is accepted as a fallback so
         # earlier callers don't break, but the canonical key is
-        # ``reset_token``. Was missing for one release — produced
-        # emails with an empty token block.
+        # ``reset_token``.
         token = (
             payload.get("reset_token")
             or payload.get("token", "")
         )
         ttl_seconds = int(payload.get("ttl_seconds", 3600))
         ttl_minutes = max(1, ttl_seconds // 60)
-        # The reset URL is composed by whichever FE host the deploy is
-        # paired with. We send the raw token; the FE link is built by
-        # the operator's notification template config when one exists.
-        # Until then, embed the token + a plain instruction.
+
+        # When FRONTEND_BASE_URL is set, build a clickable reset link
+        # the user can click straight from the email. Otherwise fall
+        # back to the bare-token rendering (still functional — the user
+        # copies the token and pastes it into the FE's reset-password
+        # form, or hits POST /reset-password directly).
+        fe_base = (settings.FRONTEND_BASE_URL or "").rstrip("/")
         subject = "PMIS password reset"
-        body = (
-            "<p>You (or someone) requested a password reset for your PMIS "
-            "account. Use this single-use token to reset your password:</p>"
-            f"<p style='font-family:monospace;word-break:break-all'>{token}</p>"
-            f"<p>This token expires in {ttl_minutes} minutes. If you didn't "
-            "request a reset, you can ignore this email.</p>"
-        )
+        if fe_base and token:
+            reset_url = f"{fe_base}/reset-password?token={token}"
+            body = (
+                "<p>You (or someone) requested a password reset for your "
+                "PMIS account. Click the link below to set a new "
+                "password:</p>"
+                f"<p><a href='{reset_url}'>Reset your PMIS password</a></p>"
+                "<p>If the link doesn't work, paste this URL into your "
+                "browser:</p>"
+                f"<p style='font-family:monospace;word-break:break-all'>{reset_url}</p>"
+                f"<p>The link expires in {ttl_minutes} minutes. If you "
+                "didn't request a reset, you can ignore this email.</p>"
+            )
+        else:
+            body = (
+                "<p>You (or someone) requested a password reset for your "
+                "PMIS account. Use this single-use token to reset your "
+                "password:</p>"
+                f"<p style='font-family:monospace;word-break:break-all'>{token}</p>"
+                f"<p>This token expires in {ttl_minutes} minutes. If you "
+                "didn't request a reset, you can ignore this email.</p>"
+            )
         return subject, body
 
     if template_kind == TEMPLATE_PASSWORD_RESET_OTP:

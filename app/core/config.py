@@ -197,6 +197,28 @@ class Settings(BaseSettings):
         description="NFS export path (informational; for /health only).",
     )
 
+    # ---- Frontend base URL (used by email templates) ---------------------
+    #
+    # The reset-password email and (future) similar deep-link emails use
+    # this to compose a clickable URL the user can click straight from
+    # their inbox. Set to the FE's public origin, e.g.
+    # ``http://10.1.131.199:3000`` for the dev / demo deploy or
+    # ``https://pmis.example.org`` for prod. Trailing slashes are
+    # stripped at render time so both forms work.
+    #
+    # When unset, the email falls back to embedding the bare reset
+    # token (the older rendering) so the system still works without
+    # FE coupling.
+    FRONTEND_BASE_URL: str = Field(
+        default="",
+        description=(
+            "Public origin of the FE app (e.g. http://host:3000). When "
+            "set, the password-reset email embeds a clickable link "
+            "FRONTEND_BASE_URL/reset-password?token=<token>. When unset, "
+            "the email shows the bare token instead."
+        ),
+    )
+
     # ---- Doc 35: external file server URLs --------------------------------
     #
     # The senior wants attachments addressed by URL (with ip:port) so
