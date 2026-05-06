@@ -14,6 +14,7 @@ Doc 17-18:
                                      endpoint + mapped projects on the
                                      vendor responses
 """
+import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -365,14 +366,21 @@ class TestVendorLifecycleContracts:
     filtering on the embedded `projects` array."""
 
     def test_list_vendors_newest_first(self, client, admin_headers):
+        # Tiny sleep between creates so each row gets a distinct
+        # ``created_at``. Without it, all three POSTs can land within
+        # the same millisecond on a fast machine and the secondary
+        # ordering tiebreaker (UUID id, which is random) makes the
+        # newest-first assertion non-deterministic.
         first  = client.post(
             "/api/v3/vendors/create",
             json={"name": "ZZZ-First-V", "phoneNumber": "9876543210"}, headers=admin_headers,
         ).json()["data"]
+        time.sleep(0.01)
         second = client.post(
             "/api/v3/vendors/create",
             json={"name": "AAA-Second-V", "phoneNumber": "9876543210"}, headers=admin_headers,
         ).json()["data"]
+        time.sleep(0.01)
         third  = client.post(
             "/api/v3/vendors/create",
             json={"name": "MMM-Third-V", "phoneNumber": "9876543210"}, headers=admin_headers,

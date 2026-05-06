@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "4630a57b-05a5-4615-9cc7-7ea18bcb39ce",
+    "_postman_id": "038456ea-e6ef-4ebd-ae10-018e97469740",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -427,41 +427,6 @@
       "name": "Attachments",
       "item": [
         {
-          "name": "Download an attachment's file bytes",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/attachments/{attachment_id}/download",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "attachments",
-                ":attachment_id",
-                "download"
-              ],
-              "variable": [
-                {
-                  "key": "attachment_id",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Streams the file bytes back. Sets Content-Disposition so the browser saves with the original filename."
-          },
-          "response": []
-        },
-        {
           "name": "List standalone attachments under a activity",
           "request": {
             "method": "GET",
@@ -506,7 +471,7 @@
                 }
               ]
             },
-            "description": "List standalone attachments under a activity"
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -555,7 +520,7 @@
                 }
               ]
             },
-            "description": "List standalone attachments under a milestone"
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -604,7 +569,7 @@
                 }
               ]
             },
-            "description": "List standalone attachments under a subtask"
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -653,7 +618,7 @@
                 }
               ]
             },
-            "description": "List standalone attachments under a task"
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -687,7 +652,7 @@
                 }
               ]
             },
-            "description": "Soft-delete an attachment (uploader or admin only)"
+            "description": "Doc 35: aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them."
           },
           "response": []
         },
@@ -722,7 +687,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -757,7 +722,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -792,7 +757,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -827,7 +792,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name `file`). The attachment is attached directly to the target node, not to a comment."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         }
@@ -2159,6 +2124,37 @@
       ]
     },
     {
+      "name": "Files",
+      "item": [
+        {
+          "name": "Doc 35: local fallback that streams attachment file bytes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/{storage_key}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "files",
+                ":storage_key"
+              ],
+              "variable": [
+                {
+                  "key": "storage_key",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fallback route that serves the bytes of an attachment file from local storage. Auth-free \u2014 URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Health & Root",
       "item": [
         {
@@ -2175,7 +2171,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
+            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n  - notification client config + reachability \u2014 diagnostic for the\n    2FA / forgot-password flow. Exposes which backend is selected\n    (``mock`` or ``http``), the configured service URL, and a quick\n    reachability probe so ops can tell at a glance whether the BE\n    will actually dispatch OTP emails or silently sink them in\n    the audit table.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
           },
           "response": []
         }

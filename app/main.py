@@ -150,7 +150,20 @@ if settings.FILE_SERVER_LOCAL_FALLBACK_ENABLED:
         get_storage,
     )
 
-    @app.get("/files/{storage_key:path}", include_in_schema=False, tags=["files"])
+    @app.get(
+        "/files/{storage_key:path}",
+        tags=["files"],
+        summary="Doc 35: local fallback that streams attachment file bytes",
+        description=(
+            "Fallback route that serves the bytes of an attachment file "
+            "from local storage. Auth-free — URLs embed an unguessable "
+            "UUID prefix and the route is mounted only when "
+            "``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In "
+            "production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` "
+            "set to an external file server, the FE fetches bytes "
+            "directly from there and this route is unused."
+        ),
+    )
     def serve_local_file(storage_key: str):
         """Stream bytes for an attachment stored on the local FileStorage.
 
@@ -231,8 +244,16 @@ def custom_openapi():
         }
     }
 
-    # Apply bearer auth to all paths except public endpoints
-    public_paths = ["/health", "/", "/api/v3/users/login", "/api/v3/users/introspect"]
+    # Apply bearer auth to all paths except public endpoints.
+    # Doc 35: the local-fallback /files/{storage_key} route is also
+    # public — it's the URL embedded in attachment rows, fetched
+    # directly by the FE / browser. Auth on it would break the
+    # FE's image / file rendering.
+    public_paths = [
+        "/health", "/",
+        "/api/v3/users/login", "/api/v3/users/introspect",
+        "/files/{storage_key}",
+    ]
 
     for path, path_item in openapi_schema.get("paths", {}).items():
         for method, operation in path_item.items():
