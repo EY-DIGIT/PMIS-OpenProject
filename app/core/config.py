@@ -416,6 +416,29 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- Doc 38: notification-service proxy ---------------------------
+    #
+    # Mirror of the user-service proxy for /api/v3/master/notification_
+    # templates/* paths. Templates are notification-domain data and live
+    # at port 8002 post-doc-38. NOTIFICATION_SERVICE_URL is reused from
+    # the existing notification-dispatch integration above (same
+    # service, different paths).
+    NOTIFICATION_SERVICE_PROXY_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "When true, monolith forwards "
+            "/api/v3/master/notification_templates/* to "
+            "NOTIFICATION_SERVICE_URL instead of running them locally. "
+            "Default off — flip per environment after the notification-"
+            "service is verified live with the templates table + master "
+            "endpoints."
+        ),
+    )
+    NOTIFICATION_SERVICE_TIMEOUT_SECONDS: float = Field(
+        default=10.0,
+        description="Read-timeout for proxied notification-service calls.",
+    )
+
     # ---- Doc 36 — division contact backfill defaults ----------------
     #
     # Doc 36 made ``divisions.email`` and ``divisions.phone_number``

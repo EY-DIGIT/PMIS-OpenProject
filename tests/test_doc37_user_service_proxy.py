@@ -115,10 +115,16 @@ class TestPathMatching:
         assert _should_proxy_path("/api/v3/master/roles") is True
         assert _should_proxy_path("/api/v3/master/permissions") is True
         assert _should_proxy_path("/api/v3/master/permissions/by-module") is True
-        assert _should_proxy_path("/api/v3/master/notification_templates") is True
+
+    def test_notification_templates_NOT_proxied_to_user_service_post_doc38(self):
+        # Doc 38 moved /master/notification_templates ownership to
+        # notification-service. The user-service proxy must NOT
+        # claim those paths.
+        from app.shared.user_service_client import _should_proxy_path
+        assert _should_proxy_path("/api/v3/master/notification_templates") is False
         assert _should_proxy_path(
             "/api/v3/master/notification_templates/1/restore"
-        ) is True
+        ) is False
 
     def test_other_master_paths_not_proxied(self):
         from app.shared.user_service_client import _should_proxy_path

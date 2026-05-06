@@ -112,11 +112,11 @@ def list_(
 @subtasks_router.post(
     "/{parent_subtask_id}/subtasks/create",
     dependencies=[require_permission(SUBTASKS_CREATE)],
-    summary="Create a subtask nested under another subtask (doc 24)",
+    summary="Create a subtask nested under another subtask",
     description=(
         "Create a subtask nested under another subtask. Same body as the "
-        "task-scoped create endpoint. Accepts JSON or multipart (doc 30 — "
-        "same fields plus optional ``body`` (comment text) and "
+        "task-scoped create endpoint. Accepts JSON or multipart "
+        "(same fields plus optional ``body`` (comment text) and "
         "``files`` (uploads))."
     ),
     status_code=201,

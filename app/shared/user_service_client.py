@@ -195,20 +195,15 @@ def maybe_proxy_user_service(
 # Middleware — global path-based proxy interception
 # ---------------------------------------------------------------------------
 
-# Path prefixes that the user-service owns. Requests matching these get
-# forwarded when the proxy flag is on; everything else stays on the
-# monolith.
+# Path prefixes user-service owns. Requests matching these get
+# forwarded to USER_SERVICE_URL when the proxy flag is on.
 #
-# Note on /master/*: the user-service slim slice covers /master/roles,
-# /master/permissions, /master/notification_templates only. Other
-# /master/* paths (divisions, vendors, project_categories, etc.) stay
-# on the monolith, so we list them explicitly rather than blanket-
-# forwarding everything under /master.
+# Doc 38: notification_templates moved to notification-service. It used
+# to be in this list; now it's in _NOTIFICATION_SERVICE_PREFIXES below.
 _PROXIED_PATH_PREFIXES = (
     "/api/v3/users",
     "/api/v3/master/roles",
     "/api/v3/master/permissions",
-    "/api/v3/master/notification_templates",
 )
 
 

@@ -11,6 +11,7 @@ from .core.config import settings
 from .core.errors import DomainError, get_http_status
 from .core.response import format_error_response, api_response
 from .core.middleware import AuthenticationMiddleware, LoggingMiddleware
+from .shared.notification_service_client import NotificationServiceProxyMiddleware
 from .shared.user_service_client import UserServiceProxyMiddleware
 from .infrastructure.db.session import init_db
 from .api import api_v3_router
@@ -78,6 +79,13 @@ app.add_middleware(
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(UserServiceProxyMiddleware)
+# Doc 38: forward /api/v3/master/notification_templates/* to
+# notification-service:8002 when NOTIFICATION_SERVICE_PROXY_ENABLED=true.
+# Mounted after UserServiceProxyMiddleware — last-added runs first
+# (outermost), so notification-template paths are intercepted before
+# the user-service proxy sees them. (Doesn't matter for correctness
+# since their prefix sets are disjoint, but the ordering is explicit.)
+app.add_middleware(NotificationServiceProxyMiddleware)
 
 
 # Exception handlers
@@ -231,11 +239,11 @@ if settings.FILE_SERVER_LOCAL_FALLBACK_ENABLED:
 from fastapi.openapi.utils import get_openapi
 
 def custom_openapi():
-    """
-    Customize OpenAPI schema to include Bearer token authentication.
-
-    This ensures the Swagger UI shows the authentication token requirement
-    for all protected endpoints.
+    """Customize OpenAPI schema:
+       - Add Bearer auth scheme + apply to non-public endpoints.
+       - Annotate proxied paths with the destination service so the
+         Swagger UI shows where each route is actually handled when
+         the proxy is enabled.
     """
     if app.openapi_schema:
         return app.openapi_schema
@@ -243,38 +251,76 @@ def custom_openapi():
     openapi_schema = get_openapi(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
-        description="OpenProject-compatible Project Management API with JWT Authentication",
+        description=(
+            "PMIS API. Some paths are proxied to standalone services "
+            "when the relevant proxy flag is enabled — see the "
+            "per-path description for the delegation target."
+        ),
         routes=app.routes,
     )
 
-    # Add security scheme for Bearer token
     openapi_schema["components"]["securitySchemes"] = {
         "bearer": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "JWT Bearer token. Obtain token via /api/v3/users/login"
+            "description": "JWT Bearer token. Obtain via POST /api/v3/users/login.",
         }
     }
 
-    # Apply bearer auth to all paths except public endpoints.
-    # Doc 35: the local-fallback /files/{storage_key} route is also
-    # public — it's the URL embedded in attachment rows, fetched
-    # directly by the FE / browser. Auth on it would break the
-    # FE's image / file rendering.
     public_paths = [
         "/health", "/",
         "/api/v3/users/login", "/api/v3/users/introspect",
         "/files/{storage_key}",
     ]
 
+    # Path-prefix → (service-name, port, env-flag) mapping for the
+    # delegation annotation. Lazy-imported to avoid a circular import
+    # at module load time.
+    from .shared.user_service_client import (
+        _PROXIED_PATH_PREFIXES as _USER_PREFIXES,
+    )
+    from .shared.notification_service_client import (
+        _PROXIED_PATH_PREFIXES as _NOTIF_PREFIXES,
+    )
+
+    def _delegation_for_path(path: str):
+        for p in _USER_PREFIXES:
+            if path == p or path.startswith(p + "/"):
+                return (
+                    "user-service (port 8001)",
+                    "USER_SERVICE_PROXY_ENABLED",
+                )
+        for p in _NOTIF_PREFIXES:
+            if path == p or path.startswith(p + "/"):
+                return (
+                    "notification-service (port 8002)",
+                    "NOTIFICATION_SERVICE_PROXY_ENABLED",
+                )
+        return None
+
     for path, path_item in openapi_schema.get("paths", {}).items():
+        delegation = _delegation_for_path(path)
         for method, operation in path_item.items():
-            if method in ["get", "post", "put", "patch", "delete", "options", "head", "trace"]:
-                # Add security requirement for non-public endpoints
-                if path not in public_paths:
-                    if "security" not in operation:
-                        operation["security"] = [{"bearer": []}]
+            if method not in [
+                "get", "post", "put", "patch", "delete", "options", "head", "trace",
+            ]:
+                continue
+            # Bearer auth on non-public endpoints.
+            if path not in public_paths and "security" not in operation:
+                operation["security"] = [{"bearer": []}]
+            # Delegation annotation — prepend to description so it
+            # shows at the top of the Swagger UI's per-endpoint detail.
+            if delegation is not None:
+                target, flag = delegation
+                annotation = (
+                    f"**Delegated to {target}** when "
+                    f"`{flag}=true` on this monolith. The path here is "
+                    "kept as the rollback safety net; runs locally "
+                    "when the flag is off.\n\n"
+                )
+                existing = operation.get("description", "") or ""
+                operation["description"] = annotation + existing
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
