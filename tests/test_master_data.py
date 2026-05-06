@@ -264,6 +264,155 @@ class TestMasterDivisionsDelete:
         assert resp.json()["data"]["active"] is True
 
 
+class TestMasterDivisionsContactDetails:
+    """Email + phoneNumber on divisions (mirrors the vendors pattern)."""
+
+    def test_response_carries_email_and_phone_keys(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        # Even on rows that never had contact details set, the response
+        # exposes both keys (with null values) so the FE doesn't have to
+        # branch on key-presence.
+        resp = client.get("/api/v3/master/divisions", headers=admin_headers)
+        assert resp.status_code == 200
+        for row in resp.json()["data"]["_embedded"]["elements"]:
+            assert "email" in row
+            assert "phoneNumber" in row
+
+    def test_create_with_email_and_phone(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        resp = client.post(
+            "/api/v3/master/divisions/create",
+            headers=admin_headers,
+            json={
+                "code": "platform",
+                "label": "Platform Engineering",
+                "email": "platform@uidai.example",
+                "phoneNumber": "+91 80 1234 5678",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        d = resp.json()["data"]
+        assert d["email"] == "platform@uidai.example"
+        assert d["phoneNumber"] == "+91 80 1234 5678"
+
+    def test_create_email_validation(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        resp = client.post(
+            "/api/v3/master/divisions/create",
+            headers=admin_headers,
+            json={
+                "code": "bogus",
+                "label": "Bogus",
+                "email": "not-an-email",
+            },
+        )
+        assert resp.status_code == 422, resp.text
+
+    def test_create_without_contact_details_leaves_nulls(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        resp = client.post(
+            "/api/v3/master/divisions/create",
+            headers=admin_headers,
+            json={"code": "qa", "label": "QA"},
+        )
+        assert resp.status_code == 201
+        d = resp.json()["data"]
+        assert d["email"] is None
+        assert d["phoneNumber"] is None
+
+    def test_patch_email_and_phone_on_user_added_row(
+        self, client, admin_headers, seed_builtin_divisions, db_session,
+    ):
+        db_session.add(DivisionModel(
+            code="qa", label="QA",
+            is_builtin=False, requires_other=False, active=True,
+        ))
+        db_session.commit()
+        resp = client.patch(
+            "/api/v3/master/divisions/qa",
+            headers=admin_headers,
+            json={"email": "qa@uidai.example", "phoneNumber": "+91 80 9999 0000"},
+        )
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["email"] == "qa@uidai.example"
+        assert d["phoneNumber"] == "+91 80 9999 0000"
+
+    def test_patch_email_on_builtin_succeeds(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        # Built-ins accept contact-detail patches but reject label /
+        # requiresOther changes. Admins need to be able to attach a
+        # mailbox / hotline to TMD1, TMD2, etc.
+        resp = client.patch(
+            "/api/v3/master/divisions/tmd1",
+            headers=admin_headers,
+            json={"email": "tmd1@uidai.example", "phoneNumber": "+91 80 1111 1111"},
+        )
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["email"] == "tmd1@uidai.example"
+        assert d["phoneNumber"] == "+91 80 1111 1111"
+        # Built-in flag unchanged.
+        assert d["isBuiltin"] is True
+
+    def test_patch_label_on_builtin_still_403(
+        self, client, admin_headers, seed_builtin_divisions,
+    ):
+        resp = client.patch(
+            "/api/v3/master/divisions/tmd1",
+            headers=admin_headers,
+            json={"label": "Renamed", "email": "x@y.example"},
+        )
+        # Even though email is fine, the label change on a built-in
+        # row is rejected and the whole patch fails atomically.
+        assert resp.status_code == 403, resp.text
+
+    def test_patch_empty_string_clears_stored_contact(
+        self, client, admin_headers, seed_builtin_divisions, db_session,
+    ):
+        db_session.add(DivisionModel(
+            code="qa", label="QA",
+            is_builtin=False, requires_other=False, active=True,
+            email="qa@uidai.example", phone_number="+91 80 9999 0000",
+        ))
+        db_session.commit()
+        resp = client.patch(
+            "/api/v3/master/divisions/qa",
+            headers=admin_headers,
+            json={"email": "", "phoneNumber": ""},
+        )
+        assert resp.status_code == 200, resp.text
+        d = resp.json()["data"]
+        assert d["email"] is None
+        assert d["phoneNumber"] is None
+
+    def test_patch_omitting_contact_keys_leaves_them_alone(
+        self, client, admin_headers, seed_builtin_divisions, db_session,
+    ):
+        db_session.add(DivisionModel(
+            code="qa", label="QA",
+            is_builtin=False, requires_other=False, active=True,
+            email="qa@uidai.example", phone_number="+91 80 9999 0000",
+        ))
+        db_session.commit()
+        resp = client.patch(
+            "/api/v3/master/divisions/qa",
+            headers=admin_headers,
+            json={"label": "QA Renamed"},
+        )
+        assert resp.status_code == 200
+        d = resp.json()["data"]
+        assert d["label"] == "QA Renamed"
+        # Email + phoneNumber unchanged.
+        assert d["email"] == "qa@uidai.example"
+        assert d["phoneNumber"] == "+91 80 9999 0000"
+
+
 # ===========================================================================
 # Project status transitions
 # ===========================================================================

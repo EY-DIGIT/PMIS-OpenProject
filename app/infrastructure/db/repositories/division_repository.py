@@ -102,6 +102,8 @@ class DivisionRepository:
         code: Optional[str],
         label: str,
         requires_other: bool = False,
+        email: Optional[str] = None,
+        phone_number: Optional[str] = None,
     ) -> DivisionModel:
         """Insert a new admin-managed (non-built-in) division.
 
@@ -113,6 +115,10 @@ class DivisionRepository:
         ``is_builtin`` is hard-coded to False here. Built-in rows are only
         created by the ``init_db`` seed and cannot be re-created via the
         API even if their code is reused (the unique constraint stops it).
+
+        ``email`` / ``phone_number`` are optional contact details. Empty
+        strings are normalized to None so the column stays NULL rather
+        than holding an empty string (cleaner read semantics).
         """
         wire_code = (code or "").strip().lower() or slugify(label)
         if not wire_code:
@@ -124,6 +130,8 @@ class DivisionRepository:
             is_builtin=False,
             requires_other=requires_other,
             active=True,
+            email=(email or "").strip() or None,
+            phone_number=(phone_number or "").strip() or None,
         )
         self.db.add(row)
         self.db.flush()
@@ -135,13 +143,22 @@ class DivisionRepository:
         *,
         label: Optional[str] = None,
         requires_other: Optional[bool] = None,
+        email: Optional[str] = None,
+        phone_number: Optional[str] = None,
     ) -> Optional[DivisionModel]:
-        """Patch the label / requires_other on an existing row.
+        """Patch the label / requires_other / email / phone_number on an
+        existing row.
 
         ``code`` itself is NEVER updatable — it's the wire identifier
         every project's ``owner`` column points at; renaming would break
         every existing reference. The route layer enforces this by
         omitting ``code`` from the patch schema.
+
+        For ``email`` / ``phone_number``: ``None`` means "leave the
+        existing value alone" (matches the ``label`` / ``requires_other``
+        semantics on this method). To explicitly clear a stored contact,
+        pass an empty string — the repo normalizes it to NULL so the
+        column reads back consistent with a never-set row.
 
         Returns the updated row or None if not found. Caller commits.
         """
@@ -152,6 +169,10 @@ class DivisionRepository:
             row.label = label.strip()
         if requires_other is not None:
             row.requires_other = bool(requires_other)
+        if email is not None:
+            row.email = email.strip() or None
+        if phone_number is not None:
+            row.phone_number = phone_number.strip() or None
         self.db.flush()
         return row
 

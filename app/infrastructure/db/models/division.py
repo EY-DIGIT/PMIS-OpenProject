@@ -16,6 +16,13 @@ Schema:
 - ``requires_other``: True only for the ``others`` row — tells the FE to
                      show the free-text "Specify owner" follow-up input.
 - ``active``       : flips a row off without deleting it (history-safe).
+- ``email``        : optional contact email for the division (e.g. a shared
+                     mailbox alias). Nullable — the seeded rows leave it NULL
+                     and admins can populate per-division as needed. Mirrors
+                     the ``vendors.email`` pattern from doc 18.
+- ``phone_number`` : optional contact phone for the division. Nullable for
+                     the same reason. Free-form (no regex) — same convention
+                     as ``vendors.phone_number``.
 """
 from datetime import datetime, timezone
 
@@ -39,6 +46,9 @@ class DivisionModel(Base):
     requires_other = Column(Boolean, default=False, nullable=False)
     active = Column(Boolean, default=True, nullable=False, index=True)
 
+    email = Column(String(255), nullable=True, index=True)
+    phone_number = Column(String(50), nullable=True)
+
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
@@ -50,5 +60,6 @@ class DivisionModel(Base):
         return (
             f"<DivisionModel(id={self.id}, code='{self.code}', "
             f"label='{self.label}', builtin={self.is_builtin}, "
-            f"active={self.active})>"
+            f"active={self.active}, email={self.email!r}, "
+            f"phone_number={self.phone_number!r})>"
         )

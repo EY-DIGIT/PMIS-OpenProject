@@ -6,7 +6,7 @@ format identical to the legacy endpoints.
 """
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -20,6 +20,12 @@ class DivisionCreateRequest(BaseModel):
     to derive one ('Engineering R&D' -> 'engineering_r_d'). Supply a
     code explicitly when you want a stable wire identifier independent
     of the human label.
+
+    ``email`` / ``phoneNumber`` are optional contact details for the
+    division — typically a shared mailbox alias and a hotline. Mirrors
+    the same fields on vendors (doc 18). Both default to None and the
+    seeded built-in rows (``tmd1`` / ``tmd2`` / ``others``) leave them
+    NULL on first boot.
 
     Built-in rows (``tmd1`` / ``tmd2`` / ``others``) cannot be created
     via this endpoint; the unique constraint on ``code`` rejects the
@@ -42,6 +48,23 @@ class DivisionCreateRequest(BaseModel):
             "follow-up input (the 'others' row uses this)."
         ),
     )
+    email: Optional[EmailStr] = Field(
+        None,
+        description=(
+            "Optional contact email for the division (e.g. a shared "
+            "mailbox alias). RFC-5322-validated. Empty / null leaves the "
+            "column NULL."
+        ),
+    )
+    phoneNumber: Optional[str] = Field(
+        None,
+        alias="phone_number",
+        max_length=50,
+        description=(
+            "Optional contact phone for the division. Free-form (no "
+            "regex) — same convention as vendors.phone_number."
+        ),
+    )
 
 
 class DivisionUpdateRequest(BaseModel):
@@ -49,13 +72,49 @@ class DivisionUpdateRequest(BaseModel):
 
     ``code`` itself is NOT patchable — it's the wire identifier that
     every project's ``owner`` column points at. Renaming would break
-    every existing reference. Only ``label`` and ``requiresOther`` are
-    editable. Built-in rows reject any patch attempt with 403.
+    every existing reference. Only ``label`` / ``requiresOther`` /
+    ``email`` / ``phoneNumber`` are editable. Built-in rows accept patches
+    only on ``email`` + ``phoneNumber`` (admins can still add contact
+    details to the seeded rows); the route layer rejects label /
+    requiresOther changes on built-ins with 403.
+
+    Pass an empty string for ``email`` or ``phoneNumber`` to explicitly
+    clear a stored contact (the repo normalizes empty → NULL). Omit the
+    field entirely to leave the existing value alone — standard PATCH
+    semantics.
     """
     model_config = ConfigDict(populate_by_name=True)
 
     label: Optional[str] = Field(None, min_length=1, max_length=255)
     requires_other: Optional[bool] = Field(None, alias="requiresOther")
+    email: Optional[str] = Field(
+        None,
+        description=(
+            "Optional contact email. RFC-5322-validated when non-empty; "
+            "empty string clears the stored value."
+        ),
+    )
+    phoneNumber: Optional[str] = Field(
+        None,
+        alias="phone_number",
+        max_length=50,
+        description=(
+            "Optional contact phone. Empty string clears the stored value."
+        ),
+    )
+
+    @field_validator("email")
+    @classmethod
+    def _email_loose(cls, v: Optional[str]) -> Optional[str]:
+        # On PATCH we accept empty string (sentinel for "clear"). When
+        # non-empty we still want RFC-5322-ish validation, but we can't
+        # apply EmailStr directly because it rejects empty. Apply the
+        # check manually here.
+        if v is None or v == "":
+            return v
+        # Defer to email-validator via Pydantic's EmailStr internals.
+        from pydantic import TypeAdapter
+        return TypeAdapter(EmailStr).validate_python(v)
 
 
 # ---------------------------------------------------------------------------

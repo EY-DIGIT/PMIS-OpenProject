@@ -120,6 +120,8 @@ def _division_to_response(row) -> Dict[str, Any]:
         "isBuiltin": bool(row.is_builtin),
         "requiresOther": bool(row.requires_other),
         "active": bool(row.active),
+        "email": row.email,
+        "phoneNumber": row.phone_number,
     }
 
 
@@ -214,6 +216,8 @@ def create_master_division(
         code=wire_code,
         label=data.label,
         requires_other=data.requires_other,
+        email=data.email,
+        phone_number=data.phoneNumber,
     )
     db.commit()
     return BaseController.created(data=_division_to_response(row))
@@ -222,12 +226,15 @@ def create_master_division(
 @router.patch(
     "/divisions/{code}",
     dependencies=[require_permission(Permission.MASTER_DATA_MANAGE)],
-    summary="Update a division's label / requires_other (admin)",
+    summary="Update a division (admin)",
     description=(
-        "Patch ``label`` and/or ``requiresOther``. ``code`` is NOT "
-        "patchable — every project's ``owner`` column references it; "
-        "renaming would break existing rows. Built-in rows (``tmd1`` / "
-        "``tmd2`` / ``others``) reject any patch with 403."
+        "Patch ``label`` / ``requiresOther`` / ``email`` / "
+        "``phoneNumber``. ``code`` is NOT patchable — every project's "
+        "``owner`` column references it; renaming would break existing "
+        "rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept "
+        "``email`` / ``phoneNumber`` updates so admins can attach "
+        "contact details to the seeded divisions, but reject "
+        "``label`` / ``requiresOther`` changes with 403."
     ),
 )
 def update_master_division(
@@ -240,14 +247,24 @@ def update_master_division(
     row = repo.get_by_code_any(code)
     if row is None:
         raise NotFoundError(f"No division with code '{code}'.")
-    if row.is_builtin:
+    # Built-ins are open for contact-detail patches but locked down on
+    # the structural fields. Allowing label / requires_other on a
+    # seeded row would break the strict-division validator that pins
+    # the FE picker to the canonical wire codes.
+    if row.is_builtin and (
+        data.label is not None or data.requires_other is not None
+    ):
         raise AuthorizationError(
-            f"Built-in division '{row.code}' cannot be modified.",
+            f"Built-in division '{row.code}' cannot be renamed or have "
+            f"its requiresOther flag changed. Email / phoneNumber may "
+            f"still be updated.",
         )
     updated = repo.update(
         code,
         label=data.label,
         requires_other=data.requires_other,
+        email=data.email,
+        phone_number=data.phoneNumber,
     )
     db.commit()
     return BaseController.ok(data=_division_to_response(updated))
