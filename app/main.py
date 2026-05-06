@@ -344,6 +344,22 @@ async def health_check():
             "reachable": notif_reachable,
             "reach_error": notif_reach_error,
         },
+        "auth": {
+            # Doc 35: surface the universal-OTP escape hatch state so
+            # ops can see at a glance whether it's enabled. When true,
+            # ``UNIVERSAL_OTP_CODE`` accepts any user's /verify-otp.
+            # MUST be false in production deploys.
+            "universal_otp_enabled": bool(settings.UNIVERSAL_OTP_ENABLED),
+            # Don't expose the code itself — surfacing it via /health
+            # would give an unauthenticated attacker the break-glass
+            # value. We just show whether it's set.
+            "universal_otp_code_set": bool(
+                (settings.UNIVERSAL_OTP_CODE or "").strip()
+            ),
+            # Whether 2FA is required globally. Per-user `twoFactorEnabled`
+            # can override (set false to opt a service account out).
+            "require_2fa": bool(settings.REQUIRE_2FA),
+        },
     }
 
 

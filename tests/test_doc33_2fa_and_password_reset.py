@@ -603,6 +603,7 @@ class TestHttpNotificationClient:
         c = get_notification_client(db_session)
         assert isinstance(c, MockNotificationClient)
 
+
     def test_email_otp_login_renders_subject_and_body(
         self, db_session, monkeypatch
     ):
@@ -815,3 +816,146 @@ class TestHttpNotificationClient:
         # Generic fallback subject + body — defensive, doesn't crash.
         assert row.status == "sent"
         assert "PMIS notification" in recorder["body"]["subject"]
+
+class TestUniversalOtp:
+    """Doc 35: universal OTP escape hatch.
+
+    When UNIVERSAL_OTP_ENABLED is true, /verify-otp accepts
+    UNIVERSAL_OTP_CODE for any user regardless of which OTP was
+    generated. Used as a break-glass for envs where notification
+    dispatch is broken.
+    """
+
+    def _login(self, client, login, password):
+        """Run /login + /send-otp and return the ephemeral_token. The
+        send-otp call creates a verifiable OTP row (the /login sentinel
+        has consumed_at set and is not queryable). Mock notification
+        client is the test default, so no external service is hit."""
+        r = client.post(
+            "/api/v3/users/login",
+            json={"login": login, "password": password},
+        )
+        assert r.status_code == 200, r.text
+        d = r.json()["data"]
+        token = d["ephemeral_token"]
+        r = client.post(
+            "/api/v3/users/login/send-otp",
+            json={"ephemeral_token": token, "channel": "email"},
+        )
+        assert r.status_code == 200, r.text
+        return token
+
+    def _enable_2fa(self, db_session, user_id):
+        from app.infrastructure.db.models.user import UserModel
+        u = db_session.query(UserModel).filter_by(id=user_id).one()
+        u.two_factor_enabled = True
+        db_session.commit()
+
+    def test_universal_otp_accepts_any_user_when_enabled(
+        self, client, admin_user, db_session, monkeypatch,
+    ):
+        from app.core.config import settings as _settings
+        # Force the admin into the 2FA flow + enable universal OTP.
+        self._enable_2fa(db_session, admin_user.id)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_ENABLED", True)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_CODE", "000000")
+
+        token = self._login(client, "admin", "admin123")
+        # /verify-otp with the universal value — without ever calling
+        # /send-otp.
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "000000"},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()["data"]
+        assert body["access_token"]
+        assert body["refresh_token"]
+        assert body["user"]["login"] == "admin"
+
+    def test_universal_otp_rejected_when_disabled(
+        self, client, admin_user, db_session, monkeypatch,
+    ):
+        from app.core.config import settings as _settings
+        self._enable_2fa(db_session, admin_user.id)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_ENABLED", False)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_CODE", "000000")
+
+        token = self._login(client, "admin", "admin123")
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "000000"},
+        )
+        # 401 because 000000 doesn't match the actual generated OTP
+        # AND the universal short-circuit is off.
+        assert r.status_code == 401, r.text
+
+    def test_universal_otp_does_not_match_other_value(
+        self, client, admin_user, db_session, monkeypatch,
+    ):
+        """Submitting a value that's neither the universal nor a real
+        OTP increments the attempt counter normally."""
+        from app.core.config import settings as _settings
+        self._enable_2fa(db_session, admin_user.id)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_ENABLED", True)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_CODE", "000000")
+
+        token = self._login(client, "admin", "admin123")
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "999999"},
+        )
+        assert r.status_code == 401, r.text
+
+    def test_universal_otp_with_custom_code(
+        self, client, admin_user, db_session, monkeypatch,
+    ):
+        """The universal code is configurable, not hardcoded."""
+        from app.core.config import settings as _settings
+        self._enable_2fa(db_session, admin_user.id)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_ENABLED", True)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_CODE", "424242")
+
+        token = self._login(client, "admin", "admin123")
+        # 000000 is the docs-default, but the actual code in this env is 424242.
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "000000"},
+        )
+        assert r.status_code == 401, r.text
+        # The configured value works.
+        token = self._login(client, "admin", "admin123")
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "424242"},
+        )
+        assert r.status_code == 200, r.text
+
+    def test_universal_otp_does_not_burn_attempt_counter(
+        self, client, admin_user, db_session, monkeypatch,
+    ):
+        """Universal-OTP success is a clean win — it consumes the row
+        but doesn't increment attempt_count first."""
+        from app.core.config import settings as _settings
+        from app.infrastructure.db.models.otp_code import OtpCodeModel
+        self._enable_2fa(db_session, admin_user.id)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_ENABLED", True)
+        monkeypatch.setattr(_settings, "UNIVERSAL_OTP_CODE", "000000")
+
+        token = self._login(client, "admin", "admin123")
+        r = client.post(
+            "/api/v3/users/login/verify-otp",
+            json={"ephemeral_token": token, "code": "000000"},
+        )
+        assert r.status_code == 200
+        # The row got consumed; attempt_count stays at 0.
+        from app.shared.otp import hash_secret
+        row = (
+            db_session.query(OtpCodeModel)
+            .filter_by(ephemeral_token_hash=hash_secret(token))
+            .order_by(OtpCodeModel.id.desc())
+            .first()
+        )
+        assert row.consumed_at is not None
+        assert (row.attempt_count or 0) == 0
+

@@ -223,7 +223,17 @@ def verify_otp(
     ephemeral_token: str,
     code: str,
 ) -> ServiceResult[dict]:
-    """Verify a submitted OTP. On success, mint and return real JWTs."""
+    """Verify a submitted OTP. On success, mint and return real JWTs.
+
+    Doc 35 — universal OTP escape hatch: when
+    ``settings.UNIVERSAL_OTP_ENABLED`` is true and the submitted code
+    equals ``settings.UNIVERSAL_OTP_CODE``, the per-row hash check is
+    bypassed and the row is consumed as a normal success. The active
+    OTP session row (created by /login and /login/send-otp) is still
+    required, so the universal OTP can only be used after the user has
+    completed the password step. Used as a break-glass for envs where
+    notification dispatch is broken — NOT for production.
+    """
     token_hash = hash_secret(ephemeral_token)
     now = _utcnow()
 
@@ -248,7 +258,19 @@ def verify_otp(
             error_type="invalid_credentials",
         )
 
-    if not verify_secret(code, row.code_hash):
+    # Universal OTP check runs FIRST so a wrong real code that happens
+    # to equal the universal value isn't burned against the attempt
+    # counter. The user must still have completed /login/send-otp
+    # (creating an unconsumed row) — that's already enforced by the
+    # row lookup above. The break-glass is "the dispatch failed but
+    # the row exists", not "skip the whole flow".
+    universal_ok = bool(
+        settings.UNIVERSAL_OTP_ENABLED
+        and settings.UNIVERSAL_OTP_CODE
+        and code == settings.UNIVERSAL_OTP_CODE
+    )
+
+    if not universal_ok and not verify_secret(code, row.code_hash):
         row.attempt_count = (row.attempt_count or 0) + 1
         if row.attempt_count >= settings.OTP_MAX_ATTEMPTS:
             row.consumed_at = now
@@ -265,7 +287,7 @@ def verify_otp(
             details={"remaining_attempts": remaining},
         )
 
-    # Code matches. Consume the row and mint real tokens.
+    # Code matches (real or universal). Consume the row and mint real tokens.
     row.consumed_at = now
 
     repo = UserRepository(db)
