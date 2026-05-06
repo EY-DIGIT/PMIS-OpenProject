@@ -3,6 +3,7 @@ Main application entry point.
 """
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -186,6 +187,12 @@ async def health_check():
         folder in dev) — surfaced separately so ops can distinguish a
         fully-healthy app from one that's serving but can't accept
         attachment uploads.
+      - notification client config + reachability — diagnostic for the
+        2FA / forgot-password flow. Exposes which backend is selected
+        (``mock`` or ``http``), the configured service URL, and a quick
+        reachability probe so ops can tell at a glance whether the BE
+        will actually dispatch OTP emails or silently sink them in
+        the audit table.
 
     The NFS server / export are reported back from settings (informational
     — the app doesn't connect to them directly; the OS mount does). They
@@ -199,6 +206,24 @@ async def health_check():
     except Exception:  # noqa: BLE001
         storage_healthy = False
 
+    # Notification subsystem diagnostic. NEVER raises — health must
+    # always return 200 even if the notif service is down (otherwise
+    # k8s liveness probes would flap).
+    notif_backend = (settings.NOTIFICATION_CLIENT or "mock").lower()
+    notif_url = settings.NOTIFICATION_SERVICE_URL or ""
+    notif_reachable: bool = False
+    notif_reach_error: Optional[str] = None
+    if notif_backend == "http" and notif_url:
+        try:
+            import httpx
+            with httpx.Client(timeout=httpx.Timeout(connect=2.0, read=3.0, write=3.0, pool=3.0)) as c:
+                r = c.get(f"{notif_url.rstrip('/')}/api/v1/health")
+            notif_reachable = (200 <= r.status_code < 300)
+            if not notif_reachable:
+                notif_reach_error = f"http {r.status_code}"
+        except Exception as e:  # noqa: BLE001
+            notif_reach_error = f"{type(e).__name__}: {e}"
+
     return {
         "_type": "Health",
         "status": "healthy",
@@ -209,6 +234,22 @@ async def health_check():
             "nfs_server": settings.ATTACHMENTS_NFS_SERVER or None,
             "nfs_export": settings.ATTACHMENTS_NFS_EXPORT or None,
             "max_bytes": settings.ATTACHMENTS_MAX_BYTES,
+        },
+        "notification": {
+            # Which backend the factory selects on every dispatch.
+            # ``mock`` writes to notification_log only (no real email);
+            # ``http`` POSTs to NOTIFICATION_SERVICE_URL. If this is
+            # ``mock`` in a deployed env, OTP / reset emails never go
+            # out — set NOTIFICATION_CLIENT=http to fix.
+            "backend": notif_backend,
+            "service_url": notif_url or None,
+            # Live probe (only attempted when backend=http + url set).
+            # ``true`` means the BE process can reach the notif service
+            # right now. ``false`` with an error message means the
+            # network path is broken — fix that before the next OTP
+            # request.
+            "reachable": notif_reachable,
+            "reach_error": notif_reach_error,
         },
     }
 
