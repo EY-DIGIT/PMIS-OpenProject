@@ -234,7 +234,7 @@ Doc 21B + doc 26 settled the claim shape:
 
 ## 11. What's planned (doc 37 + later)
 
-- **Doc 37 part 2** (planned): extract user-management to the standalone microservice running on port 8001, behind the same notification-service-style HTTP proxy pattern. JWT verification stays decentralized (every service uses the same `SECRET_KEY`); the permission catalog and effective-set lookup move to the user-service. Monolith calls in for create/update/delete/login when the proxy flag is on, then is removed when the FE migration completes.
+- **Doc 37 part 2 (SHIPPED)**: user-management is now a standalone microservice on port 8001 (`PMIS-user-management` dev `19a30e5`). JWT verification stays decentralized (every service uses the same `SECRET_KEY`); the permission catalog and effective-set lookup live in the user-service. Monolith proxies `/api/v3/users/*` and `/api/v3/master/{roles,permissions,notification_templates}/*` when `USER_SERVICE_PROXY_ENABLED=true` + `USER_SERVICE_URL` set, via `UserServiceProxyMiddleware` in `app/main.py`. Fail-closed on user-service unavailability (503 with `errorIdentifier="user_service_unavailable"`). See `planned_changes/37` for the cutover runbook.
 - **Future** (no doc yet): drop `app/api/v3/roles/` and `app/api/v3/permissions/` legacy routers once the FE uses the master paths exclusively (§7a). Remove the `Permission` enum bridge once route shims switch to direct string constants (§7b). Remove `app/api/v3/catalogs/routes.py` (§7c).
 - **Future** (no doc yet): make project-scoped role assignment (`project_members.roles`) actually drive permission scoping. Today it's a JSON array that's saved but not consulted by `require_permission`. Effective-permission resolution is purely global.
 

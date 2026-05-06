@@ -11,6 +11,7 @@ from .core.config import settings
 from .core.errors import DomainError, get_http_status
 from .core.response import format_error_response, api_response
 from .core.middleware import AuthenticationMiddleware, LoggingMiddleware
+from .shared.user_service_client import UserServiceProxyMiddleware
 from .infrastructure.db.session import init_db
 from .api import api_v3_router
 
@@ -61,10 +62,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware
-# Run in reverse order of how added, Auth -> Logging
+# Add custom middleware.
+# FastAPI/Starlette wraps LIFO — last added runs FIRST (outermost).
+# Order:
+#   1. UserServiceProxyMiddleware (doc 37 part 2): when
+#      USER_SERVICE_PROXY_ENABLED=true, intercepts /api/v3/users/*
+#      and /api/v3/master/{roles,permissions,notification_templates}/*
+#      and forwards to PMIS-user-management. Runs first so the
+#      monolith's auth + RBAC chain is bypassed for those paths
+#      (user-service is the authoritative gate). When the flag is
+#      off, this is a cheap no-op pass-through.
+#   2. AuthenticationMiddleware: JWT decode + revoked-jti check +
+#      effective-permissions hydration.
+#   3. LoggingMiddleware: X-Request-Id stamping + request/response logs.
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthenticationMiddleware)
+app.add_middleware(UserServiceProxyMiddleware)
 
 
 # Exception handlers

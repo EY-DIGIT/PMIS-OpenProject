@@ -72,6 +72,13 @@ DIVISION_DEFAULT_EMAIL=ops@pmis.example  # backfilled into divisions.email NULLs
 DIVISION_DEFAULT_PHONE=+910000000000     # backfilled into divisions.phone_number NULLs;
                                          # also used by init_db when seeding fresh built-in rows.
                                          # Production deploys override both.
+
+# ---- User-service proxy (doc 37 part 2) ----
+USER_SERVICE_PROXY_ENABLED=false         # when true, monolith forwards user/auth/RBAC/notification_template
+                                         # requests to USER_SERVICE_URL; otherwise handles them locally
+USER_SERVICE_URL=                        # base URL of PMIS-user-management (e.g. http://user-mgmt:8001);
+                                         # required when USER_SERVICE_PROXY_ENABLED=true
+USER_SERVICE_TIMEOUT_SECONDS=10.0        # read-timeout for proxied calls; connect timeout fixed at 5s
 ```
 
 ### Default Settings (app/core/config.py)
@@ -265,7 +272,7 @@ Three sister repos run as standalone services alongside the monolith. They share
 
 | Port | Repo | Notes |
 |------|------|-------|
-| 8001 | `PMIS-user-management` | User/auth slice. **Doc 37 part 2 foundation shipped (commit `f840fde`)** — model layer brought to monolith parity (doc-21B RBAC tables, doc-33 2FA/password-reset, doc-36 notification templates). Routes / services / RBAC repository / monolith proxy plumbing pending — see `planned_changes/37` part 2 status section for the runbook. |
+| 8001 | `PMIS-user-management` | **Doc 37 part 2 SHIPPED end-to-end** — foundation `f840fde` + parity `19a30e5`. Routes / services / RBAC repository / slim master_data router all at monolith parity. Monolith proxies via `UserServiceProxyMiddleware` when `USER_SERVICE_PROXY_ENABLED=true` + `USER_SERVICE_URL` set; intercepts `/api/v3/users/*` and `/api/v3/master/{roles,permissions,notification_templates}/*`. Fail-closed (503) when user-service unreachable. See `planned_changes/37` part 2 status section for the cutover runbook. |
 | 8002 | `PMIS-notification-service` | Stateless. `POST /api/v1/notifications/{email,sms,otp}/send` + `/otp/verify`. Mock + real provider backends. |
 | 8003 | `PMIS-project-management` | Slim project slice. Still carries `/projects/{id}/suspend` and `/projects/{id}/versions/create` from before doc 33 — divergence will need to be reconciled when versioning-removal is migrated to microservices. |
 

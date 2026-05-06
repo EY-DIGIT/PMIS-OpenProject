@@ -384,6 +384,38 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- Doc 37 part 2: user-service proxy ---------------------------
+    #
+    # When ``USER_SERVICE_PROXY_ENABLED=true``, the monolith's user/auth
+    # route handlers forward to the standalone PMIS-user-management
+    # service (port 8001) instead of running locally. Same strangler-
+    # fig pattern as the notification-service integration.
+    #
+    # Default False so existing deploys keep handling auth locally.
+    # Flip to True per environment after parity testing.
+    USER_SERVICE_PROXY_ENABLED: bool = Field(
+        default=False,
+        description=(
+            "When true, monolith forwards /api/v3/users/* and "
+            "/api/v3/master/{roles,permissions,notification_templates}/* "
+            "to USER_SERVICE_URL instead of running them locally."
+        ),
+    )
+    USER_SERVICE_URL: str = Field(
+        default="",
+        description=(
+            "Base URL of PMIS-user-management (e.g. http://user-mgmt:8001). "
+            "Required when USER_SERVICE_PROXY_ENABLED=true."
+        ),
+    )
+    USER_SERVICE_TIMEOUT_SECONDS: float = Field(
+        default=10.0,
+        description=(
+            "Read-timeout for proxied user-service calls. Connect "
+            "timeout is fixed at 5s to fail fast on a stuck DNS."
+        ),
+    )
+
     # ---- Doc 36 — division contact backfill defaults ----------------
     #
     # Doc 36 made ``divisions.email`` and ``divisions.phone_number``
