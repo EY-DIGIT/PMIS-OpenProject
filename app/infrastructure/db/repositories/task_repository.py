@@ -11,6 +11,9 @@ from ..models.subtask import SubtaskModel
 from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.tasks.task import Task
 from ....domain.tasks.task_resource import TaskResource
+from ....shared.comments_attachments_cascade import (
+    cascade_soft_delete_comments_and_attachments,
+)
 
 
 class TaskRepository:
@@ -237,6 +240,21 @@ class TaskRepository:
             TaskModel.id == task_id,
             TaskModel.deleted_at.is_(None),
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
+
+        # Doc 34: cascade comments + attachments under the task subtree.
+        cascade_soft_delete_comments_and_attachments(
+            self.db,
+            targets=[
+                ("task", task_id),
+                ("subtask", select(SubtaskModel.id).where(
+                    SubtaskModel.task_id == task_id,
+                    SubtaskModel.deleted_at == now,
+                )),
+            ],
+            deleted_by=deleted_by,
+            now=now,
+        )
+
         self.db.commit()
 
     def restore(self, task_id: str, restored_by: Optional[int]) -> Task:

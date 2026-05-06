@@ -13,6 +13,9 @@ from ..models.task_resource import TaskResourceModel
 from ..models.subtask import SubtaskModel
 from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.milestones.milestone import Milestone
+from ....shared.comments_attachments_cascade import (
+    cascade_soft_delete_comments_and_attachments,
+)
 
 
 class MilestoneRepository:
@@ -228,6 +231,48 @@ class MilestoneRepository:
             )
             .values(deleted_at=now, updated_at=now, updated_by=deleted_by)
         )
+
+        # Doc 34: cascade comments + attachments under every (kind, id)
+        # we just soft-deleted. The subqueries used above are reused
+        # here so the OR predicate matches the same subtree exactly.
+        # Same ``now`` timestamp lets the matching restore-cascade
+        # identify these rows as "deleted with this milestone".
+        cascade_soft_delete_comments_and_attachments(
+            self.db,
+            targets=[
+                ("milestone", milestone_id),
+                ("activity", select(ActivityModel.id).where(
+                    ActivityModel.milestone_id == milestone_id,
+                    ActivityModel.deleted_at == now,
+                )),
+                ("task", select(TaskModel.id).where(
+                    TaskModel.deleted_at == now,
+                    TaskModel.activity_id.in_(
+                        select(ActivityModel.id).where(
+                            ActivityModel.milestone_id == milestone_id,
+                            ActivityModel.deleted_at == now,
+                        )
+                    ),
+                )),
+                ("subtask", select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at == now,
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.deleted_at == now,
+                            TaskModel.activity_id.in_(
+                                select(ActivityModel.id).where(
+                                    ActivityModel.milestone_id == milestone_id,
+                                    ActivityModel.deleted_at == now,
+                                )
+                            ),
+                        )
+                    ),
+                )),
+            ],
+            deleted_by=deleted_by,
+            now=now,
+        )
+
         self.db.commit()
 
     def restore(self, milestone_id: str, restored_by: Optional[int]) -> Milestone:

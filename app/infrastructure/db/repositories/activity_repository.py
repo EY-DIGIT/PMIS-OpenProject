@@ -13,6 +13,9 @@ from ..models.subtask import SubtaskModel
 from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.activities.activity import Activity
 from ....domain.activities.activity_resource import ActivityResource
+from ....shared.comments_attachments_cascade import (
+    cascade_soft_delete_comments_and_attachments,
+)
 
 
 class ActivityRepository:
@@ -278,6 +281,33 @@ class ActivityRepository:
             ActivityModel.id == activity_id,
             ActivityModel.deleted_at.is_(None),
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
+
+        # Doc 34: cascade comments + attachments under the activity
+        # subtree we just soft-deleted. Re-deriving the subtree by
+        # ``deleted_at == now`` finds exactly the rows this cascade
+        # touched, so the matching restore-cascade can identify them.
+        cascade_soft_delete_comments_and_attachments(
+            self.db,
+            targets=[
+                ("activity", activity_id),
+                ("task", select(TaskModel.id).where(
+                    TaskModel.activity_id == activity_id,
+                    TaskModel.deleted_at == now,
+                )),
+                ("subtask", select(SubtaskModel.id).where(
+                    SubtaskModel.deleted_at == now,
+                    SubtaskModel.task_id.in_(
+                        select(TaskModel.id).where(
+                            TaskModel.activity_id == activity_id,
+                            TaskModel.deleted_at == now,
+                        )
+                    ),
+                )),
+            ],
+            deleted_by=deleted_by,
+            now=now,
+        )
+
         self.db.commit()
 
     def restore(self, activity_id: str, restored_by: Optional[int]) -> Activity:

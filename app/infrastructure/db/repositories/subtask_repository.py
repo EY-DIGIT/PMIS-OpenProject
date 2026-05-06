@@ -10,6 +10,9 @@ from ..models.subtask import SubtaskModel
 from ..models.subtask_resource import SubtaskResourceModel
 from ....domain.subtasks.subtask import Subtask
 from ....domain.subtasks.subtask_resource import SubtaskResource
+from ....shared.comments_attachments_cascade import (
+    cascade_soft_delete_comments_and_attachments,
+)
 
 
 class SubtaskRepository:
@@ -365,6 +368,17 @@ class SubtaskRepository:
             SubtaskModel.id.in_(ids),
             SubtaskModel.deleted_at.is_(None),
         ).values(deleted_at=now, updated_at=now, updated_by=deleted_by))
+
+        # Doc 34: cascade comments + attachments anchored at any of the
+        # subtasks we just soft-deleted (every nested descendant id is
+        # in ``ids`` already, BFS order from descendant_ids).
+        cascade_soft_delete_comments_and_attachments(
+            self.db,
+            targets=[("subtask", ids)],
+            deleted_by=deleted_by,
+            now=now,
+        )
+
         self.db.commit()
         return ids
 
