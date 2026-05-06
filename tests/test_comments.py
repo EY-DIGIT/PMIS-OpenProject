@@ -194,7 +194,12 @@ class TestListComments:
 
     def test_list_newest_first(self, client, admin_user, admin_headers,
                                sample_milestone, temp_storage):
-        # Post 3 comments
+        import time
+        # Post 3 comments. Tiny sleep between creates so each row gets
+        # a distinct ``created_at`` — without it, all three POSTs can
+        # land within the same millisecond on a fast machine and the
+        # secondary tiebreaker (UUID id, random) makes the newest-first
+        # assertion non-deterministic.
         for i in range(3):
             r = client.post(
                 f"/api/v3/milestones/{sample_milestone.id}/comments",
@@ -202,6 +207,7 @@ class TestListComments:
                 data={"body": f"comment {i}"},
             )
             assert r.status_code == 201
+            time.sleep(0.01)
 
         resp = client.get(
             f"/api/v3/milestones/{sample_milestone.id}/comments",

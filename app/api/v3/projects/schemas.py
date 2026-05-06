@@ -136,8 +136,7 @@ class ProjectUpdateRequest(BaseModel):
 
     The server filters supplied fields through the editable-field whitelist
     for the project's current state; fields outside the whitelist produce a
-    422 invalid_field error. ``actualEndDate`` is accepted here because it is
-    a version-only editable field.
+    422 invalid_field error.
     """
     model_config = ConfigDict(populate_by_name=True)
 

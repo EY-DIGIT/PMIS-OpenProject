@@ -156,7 +156,6 @@ STATUS_DRAFT = "draft"
 STATUS_PUBLISHED = "published"
 STATUS_CLOSED = "closed"
 
-# Doc 33: ``suspended`` was version-only and removed with the versioning feature.
 PROJECT_STATUS_CHOICES: Tuple[str, ...] = (
     STATUS_NEW,
     STATUS_DRAFT,
@@ -212,8 +211,7 @@ EDITABLE_FIELDS_PROJECT: Set[str] = {
 def editable_fields_for(project: Project) -> Set[str]:
     """Return the set of field names a PATCH may modify for this project.
 
-    Doc 33: with the baseline/version split removed and ``EDITABLE_FIELDS_VERSION``
-    gone, every live (non-closed) project has the same editable surface.
+    Every live (non-closed) project has the same editable surface.
     """
     return EDITABLE_FIELDS_PROJECT
 
@@ -223,8 +221,7 @@ def editable_fields_for(project: Project) -> Set[str]:
 # ---------------------------------------------------------------------------
 #
 # Legal (from_status, to_status) edges. Admin-only edges are tagged in
-# ``ADMIN_ONLY_TRANSITIONS``. Version-only or baseline-only guards are applied
-# separately, because the edge set is the same for both.
+# ``ADMIN_ONLY_TRANSITIONS``.
 
 _LEGAL_TRANSITIONS: Set[Tuple[str, str]] = {
     (STATUS_NEW, STATUS_DRAFT),

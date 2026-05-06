@@ -358,12 +358,9 @@ def init_db() -> None:
                     # we wipe pmis.db and let create_all() build fresh.
                     #
                     # The list below continues to add columns that predate
-                    # *other* migrations (for teammate's versioning/audit
-                    # work). All NEW additions tied to the UUID migration are
-                    # expressed in the SQLAlchemy models themselves.
-                    # Doc 33: ``is_version`` / ``version_no`` columns + the
-                    # ``ux_projects_active_version_per_baseline`` index were
-                    # removed along with the versioning feature.
+                    # *other* migrations (e.g. the audit-log expansion). All
+                    # NEW additions tied to the UUID migration are expressed
+                    # in the SQLAlchemy models themselves.
                     project_column_ddl = [
                         ("actual_end_date",        "ALTER TABLE projects ADD COLUMN actual_end_date DATETIME"),
                         ("actual_start_date",      "ALTER TABLE projects ADD COLUMN actual_start_date DATETIME"),

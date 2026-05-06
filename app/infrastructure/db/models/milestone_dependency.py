@@ -7,10 +7,6 @@ unique index.
 Service-layer rules: same project, no self-edge, acyclic over live edges.
 Cross-milestone within the same project is the whole point — these edges
 exist only between distinct milestones of the same project.
-
-Lives on the project that owns the source milestone. On version creation
-the baseline's live milestone-edges are propagated to the active version
-(see ``baseline_version_sync.propagate_milestone_dependencies``).
 """
 from datetime import datetime, timezone
 from uuid import uuid4

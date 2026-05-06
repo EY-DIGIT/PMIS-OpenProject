@@ -1,14 +1,12 @@
 """
 Publish a project (new|draft -> published).
 
-Admin-only at the endpoint layer. Works on both baselines and versions —
-the transition rules in ``transitions`` reject anything illegal.
+Admin-only at the endpoint layer. The transition rules in
+``transitions`` reject anything illegal.
 
 Doc 27: structural completeness gate. Before flipping status to
 ``published`` we reject if (a) the project has zero live milestones, or
-(b) any live milestone has zero live activities. The check applies
-uniformly to baselines and versions (a version's milestones may have
-been emptied post-creation by deleting all activities under one).
+(b) any live milestone has zero live activities.
 """
 from typing import List, Optional, Tuple
 
@@ -94,9 +92,8 @@ def publish_project(
             details=e.details,
         )
 
-    # Doc 27: structural-completeness gates. Both apply to baselines and
-    # versions — the queries are scoped to ``project_id``, which is the
-    # version's own id when publishing a version.
+    # Doc 27: structural-completeness gates — must have at least one
+    # milestone, and every milestone must carry at least one activity.
     if _live_milestone_count(db, project_id) == 0:
         return ServiceResult.fail(
             error=(

@@ -204,7 +204,3 @@ def close_project(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return ProjectController.close(request, project_uuid, data, db)
-
-
-# Doc 33: /suspend and /versions/create routes removed — versioning was
-# dropped, suspended is no longer a valid status.

@@ -20,8 +20,6 @@ Schema:
 - ``to_status``         : the destination status the system permits.
 - ``requires_admin``    : if true, the actor must be an admin to take this
                           edge. Mirrors ADMIN_ONLY_TRANSITIONS in code.
-- ``version_only``      : if true, only versions (is_version=True) may take
-                          this edge. Mirrors VERSION_ONLY_TRANSITIONS.
 - ``active``            : flips a row off without deleting it (history-safe).
 - ``description``       : free-text description of the rule for docs/UI.
 

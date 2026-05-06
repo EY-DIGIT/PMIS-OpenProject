@@ -43,13 +43,10 @@ class ProjectModel(Base):
     public = Column(Boolean, default=False, nullable=False)
     status_explanation = Column(Text, nullable=True)
 
-    # Self-FK for project hierarchy (parent project). Doc 33 dropped the
-    # ``version_of`` / ``baseline_id`` / ``version_no`` columns along with
-    # the entire versioning feature.
+    # Self-FK for project hierarchy (parent project).
     parent_id = Column(String(36), ForeignKey("projects.id"), nullable=True, index=True)
 
     # Status: lowercase values. Allowed: new, draft, published, closed.
-    # ``suspended`` was version-only; dropped with versioning in doc 33.
     status = Column(String(50), default="new", nullable=False, index=True)
     # Owner is a division code: 'tmd1' / 'tmd2' / 'others'. Stored
     # lowercase. When `owner == 'others'` the FE captures a free-text
@@ -69,11 +66,9 @@ class ProjectModel(Base):
     category_other_reason = Column(String(1000), nullable=True)
     start_date = Column(UtcDateTime, nullable=True, index=True)
     end_date = Column(UtcDateTime, nullable=True, index=True)
-    # Actual dates — recorded when work actually begins / ends. Doc 33:
-    # editable on the project after the versioning feature was removed
-    # (these used to be version-only). Mirrors the design's "Actual
-    # Start Date" / "Actual End Date" fields on the project details
-    # panel.
+    # Actual dates — recorded when work actually begins / ends. Mirrors
+    # the design's "Actual Start Date" / "Actual End Date" fields on the
+    # project details panel.
     actual_start_date = Column(UtcDateTime, nullable=True)
     actual_end_date = Column(UtcDateTime, nullable=True)
 

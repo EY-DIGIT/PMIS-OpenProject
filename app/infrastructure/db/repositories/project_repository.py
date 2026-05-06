@@ -363,7 +363,3 @@ class ProjectRepository:
             .first()
             is not None
         )
-
-    # Doc 33: ``active_version_exists`` / ``next_version_no`` /
-    # ``list_live_version_ids`` were removed along with the versioning
-    # feature.

@@ -16,10 +16,8 @@ class Project:
       - id (UUID string) — the PK, exposed in URLs and response bodies.
       - project_code     — UIDAI-PRYYMMDDHHMMSS (IST). Human-readable.
 
-    Doc 33: ``is_version`` / ``version_of`` / ``baseline_id`` /
-    ``version_no`` removed along with the entire versioning feature.
-    A project owns its own milestones / activities / tasks / subtasks
-    directly.
+    A project owns its milestones / activities / tasks / subtasks
+    directly — there is no baseline-vs-version split.
     """
 
     id: str

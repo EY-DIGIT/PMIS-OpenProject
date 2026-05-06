@@ -228,10 +228,6 @@ class ProjectController:
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
         return BaseController.ok(data=formatted)
 
-    # Doc 33: ``suspend`` and ``create_version`` handlers removed along
-    # with the versioning feature. The state machine no longer includes
-    # ``suspended``; versions don't exist.
-
     @staticmethod
     def save(request: Request, project_uuid: str, db: Session) -> JSONResponse:
         """Handle the 'Save Project' action: new -> draft if a milestone exists.
