@@ -3,7 +3,7 @@
 **Project**: PMIS (Project Management Information System) — FastAPI backend
 **Version**: 3.0.0
 **Status**: Production-ready
-**Last refresh**: 2026-05-06 (after doc 33)
+**Last refresh**: 2026-05-06 (after doc 34)
 
 ---
 
@@ -508,3 +508,7 @@ Numbered docs in [planned_changes/](../planned_changes/) describe every BE shape
 | 33 change 2 | RBAC extension: `GET /api/v3/master/permissions/by-module` (catalog grouped by module); dead-code cleanup in `app/core/rbac.py` |
 | 33 change 3 | 2FA OTP login (`/login/send-otp`, `/login/verify-otp`); forgot-password (`/forgot-password`, `/reset-password`); per-user `twoFactorEnabled` toggle; `notification_log` / `otp_codes` / `password_reset_tokens` tables; `MockNotificationClient` (DB sink) + `HttpNotificationClient` (stub) |
 | 33 hotfix | `MIGRATIONS_AUTORUN` / `MIGRATIONS_REQUIRED` env vars + `DATABASE_URL_MIGRATIONS` for deploys where the runtime DB role lacks DDL ownership; PG boolean literal fix in `two_factor_enabled` backfill |
+| 33 follow-up | Live `HttpNotificationClient` integrated against PMIS-notification-service (`POST /api/v1/notifications/email/send` + `/sms/send`); audit-row lifecycle (queued → sent / failed) with provider + message_id stashed under `payload._dispatch` |
+| 34 (1/3) | Cascade soft-delete of comments + attachments under M/A/T/S delete (was previously orphaning polymorphic rows); shared helper at `app/shared/comments_attachments_cascade.py`; uniform cascade timestamp lets the restore-cascade identify exactly which rows belong to a delete event |
+| 34 (2/3) | External-dependency block on M/A/T/S delete: refuse with 422 + `errorIdentifier="dependency_block"` when anything in the subtree is the target of a live dep edge whose source lives outside the subtree. Self-contained edges don't block. Helper at `app/shared/dep_block.py`. Project delete is unchanged (deps are project-scoped). |
+| 34 (3/3) | Cascade-restore: when an M/A/T/S is restored, every row whose `deleted_at` exactly matches the cascade timestamp is revived (M/A/T/S subtree + resources + comments + attachments). Rows soft-deleted independently before the parent cascade stay dead. Dep edges are NOT auto-restored — re-establish via PATCH `dependsOn`. |

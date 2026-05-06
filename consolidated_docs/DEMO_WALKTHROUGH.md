@@ -580,6 +580,22 @@ This proves the vendor role gates correctly. Switch back to the admin token befo
 
 ---
 
+## Step 8b — Try to delete a milestone with an external dependent (doc 34)
+
+If you wired any cross-milestone activity dep above (Step 4d's A3 → A1 example), try deleting M1 now:
+
+**`DELETE /api/v3/milestones/{M1_ID}`**.
+
+**Expect 422** with `errorIdentifier="dependency_block"` and `_embedded.details.blockers` listing each external source-target pair (e.g. `A3 (depends on A1)`). Doc 34 refuses the delete because something OUTSIDE the M1 subtree depends on something INSIDE it. Self-contained deps (both source + target inside the subtree) don't block — only externals.
+
+Clear the offending dep first:
+
+**`PATCH /api/v3/activities/{A3_ID}`** with `{ "dependsOn": [] }` → **200**. Now retry the M1 delete → **204**. Comments + attachments under M1 + every A/T/S below it are also soft-deleted in the same cascade.
+
+To bring it back: **`POST /api/v3/milestones/{M1_ID}/restore`**. The full subtree comes back with the same timestamp match — but the dep edges you cleared stay cleared. Re-add them via PATCH if you want them.
+
+---
+
 ## Step 9 — Soft-delete the project
 
 **`DELETE /api/v3/projects/{project_uuid}`** — admin only. **Expect 204.**

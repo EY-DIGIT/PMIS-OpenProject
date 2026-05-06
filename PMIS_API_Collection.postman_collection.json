@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "9311d373-6aa5-40ef-8bf0-ad8d0058f0fc",
+    "_postman_id": "4630a57b-05a5-4615-9cc7-7ea18bcb39ce",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"

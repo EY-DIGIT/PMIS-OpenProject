@@ -159,13 +159,32 @@ Audit-row generation moved into the per-entity write services. The `actor_role` 
 
 Every cascade path is a soft-delete: stamps `deleted_at` (+ `deleted_by` where the column exists) and never physically removes rows. Reads filter `deleted_at IS NULL` everywhere.
 
-- Project delete → every M/A/T/S + resource row under it (`milestones/services/cascade.py::cascade_soft_delete_project`). **Doc 33 change 1**: there's no longer a separate "baseline delete also wipes live versions" step — versioning was removed, so a project delete is one cascade.
-- Milestone delete → descendants A/T/S + their resources, **plus every milestone/A/T/S dependency edge touching the subtree (as source or target) is soft-deleted** via `cascade_remove_for_deleted_milestone_subtree` (doc 21A added milestone-level edge wipe alongside the existing A/T/S sweep).
+**Doc 34 contract** for M/A/T/S delete:
+
+1. **Pre-flight refusal** — if anything in the about-to-be-deleted subtree is the target of a live dep edge whose source lives outside the subtree, the request is refused with **422 `dependency_block`** before any cascade work runs (`app/shared/dep_block.py`). The error response carries `_embedded.details.blockers: [{source, sourceKind, target, targetKind}, …]` so the FE can render "remove these deps first". Project delete is exempt because deps are project-scoped — nothing can be external.
+2. **Uniform-timestamp cascade** — every row stamped by a single cascade shares one `deleted_at` instant (microsecond-precise). This lets the matching restore-cascade identify exactly which rows belong to the delete.
+3. **Comments + attachments cascade with the subtree** — polymorphic on `(target_kind, target_id)` so SQL cascades aren't available; `app/shared/comments_attachments_cascade.cascade_soft_delete_comments_and_attachments` is called from each repo's `soft_delete_with_cascade`. Comment-bound attachments (via `attachments.comment_id`) follow the comment they're attached to.
+
+Cascade scopes:
+
+- Project delete → every M/A/T/S + resource + comment + attachment under it (`milestones/services/cascade.py::cascade_soft_delete_project`). **Doc 33 change 1**: there's no longer a separate "baseline delete also wipes live versions" step — versioning was removed, so a project delete is one cascade.
+- Milestone delete → descendants A/T/S + their resources + every comment/attachment under any of them, **plus every milestone/A/T/S dependency edge touching the subtree (as source or target) is soft-deleted** via `cascade_remove_for_deleted_milestone_subtree` (doc 21A added milestone-level edge wipe alongside the existing A/T/S sweep).
 - Activity delete → descendants T/S + their resources, **plus every activity/task/subtask dependency edge touching the subtree is soft-deleted** via `cascade_remove_for_deleted_activity_subtree`.
 - Task delete → descendant subtasks + their resources, **plus every task/subtask dependency edge touching the subtree is soft-deleted** via `cascade_remove_for_deleted_task_subtree`.
 - Subtask delete → **doc 24: now BFS over `parent_subtask_id` and soft-deletes the entire descendant subtree of subtasks** (top-level subtask delete cascades to all nested children; nested subtask delete cascades to its own descendants). Resource rows under each soft-deleted subtask are wiped, and `cascade_remove_subtask_targets` is called per descendant id so every dependency edge touching any deleted subtask is soft-deleted.
 
 Dependency edges in `activity_dependencies` / `task_dependencies` / `subtask_dependencies` carry their own `deleted_at` / `deleted_by` columns and a surrogate UUID `id` PK so history is preserved. A partial unique index on `(source, target) WHERE deleted_at IS NULL` enforces one live edge per pair while allowing any number of dead rows to coexist for audit.
+
+### 2.5a Restore cascades (doc 34 part 3)
+
+Mirror of 2.5. Restoring an M/A/T/S also restores every descendant + comment + attachment whose `deleted_at` exactly matches the cascade timestamp:
+
+- `MilestoneRepository.restore` → M + A/T/S subtree + resources + comments + attachments
+- `ActivityRepository.restore`  → A + T/S subtree
+- `TaskRepository.restore`      → T + S subtree
+- `SubtaskRepository.restore`   → S + nested-descendant subtask subtree (BFS over `parent_subtask_id`)
+
+Rows soft-deleted independently before the parent cascade keep their original timestamps and stay dead. Dep edges are NOT auto-restored — they were soft-deleted as a side effect of the entity going away; restoring the entity doesn't imply the user wants the old dep contract back. Re-establish via PATCH `dependsOn` explicitly.
 
 ### 2.5b Authentication state machines (doc 33 change 3)
 

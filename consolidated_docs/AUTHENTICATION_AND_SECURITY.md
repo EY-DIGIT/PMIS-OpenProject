@@ -293,6 +293,12 @@ Failure modes (401):
 | `POST/DELETE /api/v3/users/{id}/roles/{role_id}` | Assign / unassign a role |
 | `POST/DELETE /api/v3/users/{id}/permissions/{code}` | Direct grant / revoke |
 
+## Cascade + dependency-block on delete (doc 34)
+
+- **Cascade soft-delete** — deleting a milestone / activity / task / subtask soft-deletes every descendant + every comment + every attachment under the subtree (including comment-bound attachments via `attachments.comment_id`). Project delete cascades the whole project.
+- **External-dependency block** — the M/A/T/S delete is refused with **422 `dependency_block`** when any entity inside the subtree is the target of a live dep edge whose source lives outside the subtree. The error response carries `_embedded.details.blockers: [{source, sourceKind, target, targetKind}, …]` so the FE can list "remove these deps before retrying". Self-contained deps (source + target both in the subtree) don't block. Project delete is exempt — deps are project-scoped.
+- **Cascade restore** — restoring an M/A/T/S also restores every descendant + comment + attachment whose `deleted_at` exactly matches the cascade timestamp. Independently soft-deleted rows stay dead. Dep edges are NOT auto-restored — re-establish via PATCH `dependsOn`.
+
 ## Swagger/OpenAPI Configuration
 
 ### What's Configured
