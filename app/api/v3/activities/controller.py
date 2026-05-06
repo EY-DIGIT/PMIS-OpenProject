@@ -344,21 +344,23 @@ class ActivityController:
         request: Request, activity_id: str, data: ActivityUpdateRequest, db: Session,
     ) -> JSONResponse:
         current_user_id = getattr(request.state, "user_id", None)
-        resource_dict = data.resource.model_dump() if data.resource else None
+        # Doc 38: type / resource_mode / resource_count / resource are no
+        # longer wire fields. Pass None so the underlying service (which
+        # still accepts them as optional kwargs) doesn't try to flip them.
         activity, resource = update_activity(
             db,
             activity_id=activity_id,
             name=data.name,
             description=data.description,
-            type=data.type,
+            type=None,
             start_date=data.start_date,
             end_date=data.end_date,
             actual_start_date=data.actual_start_date,
             actual_end_date=data.actual_end_date,
             position=data.position,
-            resource_mode=data.resource_mode,
-            resource_count=data.resource_count,
-            resource=resource_dict,
+            resource_mode=None,
+            resource_count=None,
+            resource=None,
             current_user_id=current_user_id,
             status=data.status,
             depends_on=data.depends_on,

@@ -281,18 +281,19 @@ class TaskController:
     @staticmethod
     def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
-        rd = data.resource.model_dump() if data.resource else None
+        # Doc 38: type / resource_mode / resource_count / resource dropped
+        # from the wire. Pass None into the underlying service.
         t, r = update_task(
             db,
             task_id=task_id,
-            name=data.name, description=data.description, type=data.type,
+            name=data.name, description=data.description, type=None,
             start_date=data.start_date, end_date=data.end_date,
             actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
             position=data.position,
-            resource_mode=data.resource_mode, resource_count=data.resource_count,
-            resource=rd, current_user_id=cuid,
+            resource_mode=None, resource_count=None,
+            resource=None, current_user_id=cuid,
             depends_on=data.depends_on,
-            status=data.status,  # doc 38: status now editable on PATCH
+            status=data.status,
         )
         idx = build_label_index_for_project(db, t.project_id)
         return BaseController.ok(data=format_task_response(
