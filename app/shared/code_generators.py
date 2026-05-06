@@ -8,11 +8,15 @@ Where:
 
   * ``prefix``         — short literal that names the entity kind:
                           ``"VN"`` for vendors, ``"US"`` for users.
-  * ``slug4``          — 4-character uppercase alphanumeric extracted from
-                          the source string (vendor name / user login).
+  * ``slug``           — uppercase alphanumeric slug extracted from the
+                          source string (vendor name / user full name).
                           Stripped of all non-``[A-Z0-9]`` characters and
-                          right-padded with ``"0"`` if the stripped result
-                          is shorter than 4.
+                          truncated at ``SLUG_LENGTH`` (4) chars; shorter
+                          sources keep their natural length (e.g. a
+                          vendor named "fsv" → ``FSV``, not ``FSV0``).
+                          Falls back to ``"0000"`` only when the source
+                          has zero alphanumeric characters at all
+                          (None / empty / pure punctuation).
   * ``ist_timestamp``  — 12 chars ``YYMMDDHHMMSS`` in IST (UTC+05:30).
                           Matches the convention already used by
                           ``project_code`` (e.g. ``UIDAI-PR260501143927``).
@@ -21,10 +25,12 @@ Examples:
 
   ``VN-ACME-260502143015`` — vendor "Acme Corp" created 2026-05-02 14:30:15 IST
   ``VN-3MIN-260502143015`` — vendor "3M India" created same instant
+  ``VN-FSV-260502143015``  — short vendor name "fsv" → 3-char slug, no padding
   ``US-RAVI-260502143015`` — user "Ravi Kumar" created 2026-05-02 IST
   ``US-PRIY-260502143015`` — user "Priya Sharma" created same instant
   ``US-ADMI-260101000000`` — bootstrap admin (no name → falls back to ``login``)
-  ``US-Z000-260502143015`` — single-char source (e.g. login "z"), padded with zeros
+  ``US-Z-260502143015``    — single-char source (e.g. login "z"), kept as-is
+  ``VN-0000-260502143015`` — fallback when source has zero alphanumeric chars
 
 Stability
 ---------
@@ -82,9 +88,11 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # Strip pattern for the 4-char slug. Anything outside [A-Z0-9] is dropped.
 _SLUG_DROP_RE = re.compile(r"[^A-Z0-9]")
 
-# Length of the slug segment. Decision recorded in
+# Maximum length of the slug segment. Decision recorded in
 # planned_changes/25 — short enough to keep the total code <= 21 chars,
-# long enough to carry recognizable name context.
+# long enough to carry recognizable name context. Sources with fewer
+# alphanumeric chars produce a shorter slug (e.g. "fsv" → "FSV", no
+# padding) — see ``slug4`` for the rationale.
 SLUG_LENGTH = 4
 
 # Maximum collision-suffix attempts before raising. ``-2`` to ``-100``
@@ -98,24 +106,32 @@ _MAX_SUFFIX = 99
 # ---------------------------------------------------------------------------
 
 def slug4(source: str) -> str:
-    """Extract a 4-char uppercase alphanumeric slug from any input string.
+    """Extract an uppercase alphanumeric slug from any input string.
 
-    ``"Acme Corporation"`` → ``"ACME"``
-    ``"3M India"``         → ``"3MIN"``
-    ``"AT&T Inc"``         → ``"ATTI"``
-    ``"z"``                → ``"Z000"`` (padded)
-    ``""`` or ``"...."``   → ``"0000"`` (purely punctuation falls through)
-    ``None``               → ``"0000"``
+    Variable length: up to ``SLUG_LENGTH`` (4) characters when the
+    source has that many alphanumerics; shorter sources keep their
+    natural length so codes don't carry awkward filler digits like
+    ``"FSV0"`` for a 3-char name. The format's ``-`` separator is the
+    only thing the parser cares about — variable slug length is
+    parse-safe (``looks_like_*_code`` only checks the prefix).
+
+    ``"Acme Corporation"``  → ``"ACME"``     (truncated at 4)
+    ``"3M India"``          → ``"3MIN"``
+    ``"AT&T Inc"``          → ``"ATTI"``
+    ``"fsv"``               → ``"FSV"``      (kept at natural length)
+    ``"z"``                 → ``"Z"``        (kept at natural length)
+    ``""`` or ``"...."``    → ``"0000"``     (last-resort filler when
+                                              source has zero alphanumerics)
+    ``None``                → ``"0000"``
     """
     if not source:
         return "0" * SLUG_LENGTH
     stripped = _SLUG_DROP_RE.sub("", source.upper())
     if not stripped:
         return "0" * SLUG_LENGTH
-    # Right-pad with "0" to guarantee constant length. Padding with a
-    # non-hyphen character keeps the format unambiguous (the parser splits
-    # on "-" — pad chars must never be a hyphen).
-    return (stripped + "0" * SLUG_LENGTH)[:SLUG_LENGTH]
+    # Truncate at SLUG_LENGTH; do NOT pad shorter sources — let them
+    # appear at their natural length (e.g. "FSV", not "FSV0").
+    return stripped[:SLUG_LENGTH]
 
 
 def ist_timestamp(when) -> str:

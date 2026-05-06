@@ -97,11 +97,17 @@ class TestVendorCodeOnCreate:
         # First 4 alphanum of "Acme Corporation Pvt Ltd" → "ACME"
         assert body["vendorCode"].startswith("VN-ACME-")
 
-    def test_short_name_padded_with_zeros(
+    def test_short_name_keeps_natural_length(
         self, client, admin_user, admin_headers,
     ):
+        """Doc 25 follow-up: variable-length slug. Sources shorter than
+        SLUG_LENGTH are kept at their natural length instead of being
+        padded with zeros (which produced unattractive codes like
+        ``VN-FSV0-...`` and ``VN-Z000-...``)."""
         body = _create_vendor(client, admin_headers, name="z")
-        assert body["vendorCode"].startswith("VN-Z000-")
+        assert body["vendorCode"].startswith("VN-Z-")
+        body3 = _create_vendor(client, admin_headers, name="fsv")
+        assert body3["vendorCode"].startswith("VN-FSV-")
 
     def test_collision_suffix_via_repo(self, db_session):
         """Vendors with the SAME name are blocked by the

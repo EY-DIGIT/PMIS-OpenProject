@@ -22,30 +22,38 @@ from app.shared.code_generators import (
 
 class TestSlug4:
     @pytest.mark.parametrize("source,expected", [
+        # Long-enough sources are truncated at SLUG_LENGTH (4).
         ("Acme Corp", "ACME"),
         ("Acme Corporation Pvt Ltd", "ACME"),
         ("acme", "ACME"),
         ("3M India", "3MIN"),
         ("AT&T Inc", "ATTI"),
         ("MIDA", "MIDA"),
-        # Padding cases — short or empty stripped output.
-        ("Z", "Z000"),
-        ("xy", "XY00"),
-        ("a-b", "AB00"),
-        # Special-only / empty / None falls back to all zeros.
+        # Variable-length cases: shorter sources keep their natural
+        # length (no filler digits like "Z000"). Resolves the
+        # "VN-FSV0-..." cosmetic bug from doc 25.
+        ("Z", "Z"),
+        ("xy", "XY"),
+        ("a-b", "AB"),
+        ("fsv", "FSV"),
+        # Special-only / empty / None still fall back to all zeros —
+        # the slug must never be the empty string (would produce
+        # ``VN--260502143015`` and break ``-``-based parsing).
         ("....", "0000"),
         ("", "0000"),
         (None, "0000"),
         # Unicode passes through stripping (anything non-[A-Z0-9] is
         # discarded, regardless of script).
         ("àéé Brand", "BRAN"),
-        # Length is always exactly SLUG_LENGTH.
+        # Truncated when longer than SLUG_LENGTH.
         ("AABBCCDDEEFF", "AABB"),
     ])
     def test_slug4(self, source, expected):
         out = slug4(source)
         assert out == expected
-        assert len(out) == SLUG_LENGTH
+        # Length is now variable (1..SLUG_LENGTH for non-empty alphanumeric
+        # sources; SLUG_LENGTH for the all-zero fallback).
+        assert 1 <= len(out) <= SLUG_LENGTH
 
 
 # ===========================================================================
@@ -100,20 +108,33 @@ class TestBuildCode:
         when = datetime(2026, 5, 2, 9, 0, 15, tzinfo=timezone.utc)
         assert build_code("US", "admin", when) == "US-ADMI-260502143015"
 
-    def test_short_source_padded(self):
+    def test_short_source_kept_natural_length(self):
+        """Variable-length slug — shorter sources are NOT padded with
+        zeros (resolves the ``VN-FSV0-...`` cosmetic bug)."""
         when = datetime(2026, 5, 2, 9, 0, 15, tzinfo=timezone.utc)
-        assert build_code("US", "z", when) == "US-Z000-260502143015"
+        assert build_code("US", "z", when) == "US-Z-260502143015"
+        assert build_code("VN", "fsv", when) == "VN-FSV-260502143015"
+        assert build_code("VN", "xy", when) == "VN-XY-260502143015"
 
     def test_empty_source_falls_back_to_zeros(self):
         when = datetime(2026, 5, 2, 9, 0, 15, tzinfo=timezone.utc)
         assert build_code("VN", "....", when) == "VN-0000-260502143015"
         assert build_code("VN", None, when) == "VN-0000-260502143015"
 
-    def test_total_length_is_predictable(self):
+    def test_total_length_for_4char_source(self):
         when = datetime(2026, 5, 2, 9, 0, 15, tzinfo=timezone.utc)
         # "{prefix}-{4}-{12}" with prefix VN/US (2 chars) → 2+1+4+1+12 = 20
         assert len(build_code("VN", "ACME", when)) == 20
         assert len(build_code("US", "JOHN", when)) == 20
+
+    def test_total_length_varies_for_short_sources(self):
+        """Codes are no longer fixed-length now that the slug is
+        variable. Lookups split on ``-``, so shorter codes parse fine."""
+        when = datetime(2026, 5, 2, 9, 0, 15, tzinfo=timezone.utc)
+        # "VN-Z-260502143015" → 2+1+1+1+12 = 17
+        assert len(build_code("VN", "Z", when)) == 17
+        # "VN-FSV-260502143015" → 2+1+3+1+12 = 19
+        assert len(build_code("VN", "FSV", when)) == 19
 
 
 # ===========================================================================
