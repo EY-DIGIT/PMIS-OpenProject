@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "c1be9d79-feb9-45d3-b6d2-b3ed81a88f4f",
+    "_postman_id": "d1dcc4ef-4c33-4e83-ad69-4b37de12ed3a",
     "name": "PMIS API",
     "description": "OpenProject-compatible Project Management API with JWT Authentication\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -48,10 +48,10 @@
                 }
               ]
             },
-            "description": "Create a resource activity (count mode) under milestone",
+            "description": "Create a resource/count activity. Accepts JSON or multipart (doc 30). ``resourceCount`` is required.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resourceCount\": 0\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resourceCount\": 0\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -100,10 +100,10 @@
                 }
               ]
             },
-            "description": "Create a resource activity (details mode, full classification) under milestone",
+            "description": "Create a resource/details activity. Accepts JSON or multipart (doc 30). The ``resource`` block (with typeOfResourceId + division + resource fields) is JSON-encoded as a string in multipart since multipart can't carry typed nested objects.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0,\n    \"typeOfResourceId\": \"\",\n    \"division\": \"\",\n    \"divisionOther\": \"\"\n  }\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"resource\": null\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -151,10 +151,10 @@
                 }
               ]
             },
-            "description": "Create a standard activity under milestone",
+            "description": "Create a standard activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"status\": \"\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -202,10 +202,10 @@
                 }
               ]
             },
-            "description": "Create a transactional activity under milestone",
+            "description": "Create a transactional activity. Accepts JSON or multipart (doc 30).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -837,6 +837,47 @@
       "name": "Authentication & Users",
       "item": [
         {
+          "name": "Assign a role to a user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "roles",
+                ":role_id"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Assign a role to a user"
+          },
+          "response": []
+        },
+        {
           "name": "Authenticate user",
           "request": {
             "method": "POST",
@@ -859,10 +900,51 @@
                 "login"
               ]
             },
-            "description": "Authenticate user and receive JWT token",
+            "description": "Authenticate user and receive a JWT token. Doc 33 change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login\": \"\",\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete a password reset (doc 33 change 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                "reset-password"
+              ]
+            },
+            "description": "Verify the reset token (URL token from email or 6-digit OTP from SMS) and set the new password. Tokens are single-use and expire after ``PASSWORD_RESET_TTL_SECONDS`` (default 1h).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token_or_code\": \"\",\n  \"new_password\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -903,7 +985,7 @@
             "description": "Create a new user",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"login\": \"\",\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"login\": \"\",\n  \"email\": \"user@example.com\",\n  \"password\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"phone_number\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -938,12 +1020,75 @@
               "variable": [
                 {
                   "key": "user_id",
-                  "value": "0",
+                  "value": "",
                   "description": ""
                 }
               ]
             },
-            "description": "Delete user by ID"
+            "description": "Delete user by ID. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+          },
+          "response": []
+        },
+        {
+          "name": "Effective permissions for a user (role-derived \u222a direct)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Effective permissions for a user (role-derived \u222a direct)"
+          },
+          "response": []
+        },
+        {
+          "name": "Effective permissions for the current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/me/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                "me",
+                "permissions"
+              ]
+            },
+            "description": "Returns the caller's effective permission set + admin flag.\n\nUsed by the FE to decide which UI actions to show. Requires only\nauthentication \u2014 no separate permission to read your own grants."
           },
           "response": []
         },
@@ -999,17 +1144,58 @@
               "variable": [
                 {
                   "key": "user_id",
-                  "value": "0",
+                  "value": "",
                   "description": ""
                 }
               ]
             },
-            "description": "Get user by ID"
+            "description": "Get user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` \u2014 see doc 25). The dispatcher auto-detects via the ``US-`` prefix."
           },
           "response": []
         },
         {
-          "name": "Introspect tokens",
+          "name": "Grant a direct permission to a user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Grant a direct permission to a user"
+          },
+          "response": []
+        },
+        {
+          "name": "Introspect tokens (RFC 7662 read-only metadata)",
           "request": {
             "method": "POST",
             "header": [
@@ -1031,7 +1217,7 @@
                 "introspect"
               ]
             },
-            "description": "Public token introspection endpoint",
+            "description": "Public token introspection. Returns metadata (active, exp, iat, jti, sub, userId, role, isAdmin) for the supplied access_token and/or refresh_token. NEVER rotates \u2014 use POST /users/refresh to mint a fresh access + refresh pair from a valid refresh token. When both tokens are supplied, the response shape becomes {access: {...}, refresh: {...}}.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"access_token\": \"\",\n  \"refresh_token\": \"\"\n}",
@@ -1041,6 +1227,41 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "List a user's roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "roles"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List a user's roles"
           },
           "response": []
         },
@@ -1083,6 +1304,12 @@
                   "value": "",
                   "description": "Filter by status",
                   "disabled": true
+                },
+                {
+                  "key": "include_deleted",
+                  "value": "False",
+                  "description": "Admin only. When true, soft-deleted users are also returned. Default false hides them.",
+                  "disabled": true
                 }
               ]
             },
@@ -1118,6 +1345,247 @@
           "response": []
         },
         {
+          "name": "Refresh access token (rotates the refresh token too)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                "refresh"
+              ]
+            },
+            "description": "Validates the supplied refresh token and issues a fresh access + refresh pair. The user row's stored refresh_token_jti is rotated atomically \u2014 concurrent refreshes with the same token can only succeed once. Response includes accessTokenExpiresAt + refreshTokenExpiresAt so the client can schedule the next preemptive refresh.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request a password-reset link or code (doc 33 change 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                "forgot-password"
+              ]
+            },
+            "description": "Self-service password reset. Body: ``{login_or_email, channel}``. ``email`` channel sends a clickable reset link; ``sms`` sends a numeric code. ALWAYS returns 200 with a generic message regardless of whether the account exists (anti-enumeration).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login_or_email\": \"\",\n  \"channel\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-deleted user (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Clears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users \u2014 returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke a direct permission from a user",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Revoke a direct permission from a user"
+          },
+          "response": []
+        },
+        {
+          "name": "Send OTP for 2FA login (doc 33 change 3)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/login/send-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                "login",
+                "send-otp"
+              ]
+            },
+            "description": "Generate + dispatch a 6-digit OTP for an in-progress 2FA login session. Pass the ``ephemeral_token`` returned from ``/login`` plus a chosen channel (``email`` or ``sms``). Resends are rate-limited per ``OTP_RESEND_COOLDOWN_SECONDS`` (default 60s).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ephemeral_token\": \"\",\n  \"channel\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unassign a role from a user (lockout-protected for 'admin')",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "users",
+                ":user_id",
+                "roles",
+                ":role_id"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Unassign a role from a user (lockout-protected for 'admin')"
+          },
+          "response": []
+        },
+        {
           "name": "Update user",
           "request": {
             "method": "PATCH",
@@ -1147,15 +1615,15 @@
               "variable": [
                 {
                   "key": "user_id",
-                  "value": "0",
+                  "value": "",
                   "description": ""
                 }
               ]
             },
-            "description": "Update user details",
+            "description": "Update user details. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\"\n}",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"phone_number\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1196,12 +1664,12 @@
               "variable": [
                 {
                   "key": "user_id",
-                  "value": "0",
+                  "value": "",
                   "description": ""
                 }
               ]
             },
-            "description": "Update user password",
+            "description": "Update user password. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"password\": \"\"\n}",
@@ -1213,14 +1681,9 @@
             }
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Catalogs",
-      "item": [
+        },
         {
-          "name": "Add a user to the project-owner whitelist (admin-curated)",
+          "name": "Verify OTP and complete login (doc 33 change 3)",
           "request": {
             "method": "POST",
             "header": [
@@ -1236,21 +1699,22 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/project_owners/create",
+              "raw": "{{baseUrl}}/api/v3/users/login/verify-otp",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "v3",
-                "project_owners",
-                "create"
+                "users",
+                "login",
+                "verify-otp"
               ]
             },
-            "description": "Add a user to the project-owner whitelist (admin-curated)",
+            "description": "Verify the OTP sent via ``/login/send-otp`` and mint the real access + refresh JWT pair. Same response shape as a non-2FA ``/login`` success. Wrong codes increment a counter; after ``OTP_MAX_ATTEMPTS`` (default 5) the OTP row is invalidated and the user must request a new one.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 0,\n  \"login\": \"\",\n  \"displayName\": \"\"\n}",
+              "raw": "{\n  \"ephemeral_token\": \"\",\n  \"code\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1259,11 +1723,16 @@
             }
           },
           "response": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "Catalogs",
+      "item": [
         {
-          "name": "Deactivate a project owner (soft \u2014 toggles active=False)",
+          "name": "List divisions catalog (DEPRECATED \u2014 use /api/v3/master/divisions)",
           "request": {
-            "method": "DELETE",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
@@ -1272,30 +1741,22 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v3/project_owners/{user_id}",
+              "raw": "{{baseUrl}}/api/v3/divisions",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "v3",
-                "project_owners",
-                ":user_id"
-              ],
-              "variable": [
-                {
-                  "key": "user_id",
-                  "value": "0",
-                  "description": ""
-                }
+                "divisions"
               ]
             },
-            "description": "Deactivate a project owner (soft \u2014 toggles active=False)"
+            "description": "Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` \u2014 tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too."
           },
           "response": []
         },
         {
-          "name": "List the project status transition catalog",
+          "name": "List project status transition catalog (DEPRECATED \u2014 use /api/v3/master/project_status_transitions)",
           "request": {
             "method": "GET",
             "header": [
@@ -1316,33 +1777,7 @@
                 "project_status_transitions"
               ]
             },
-            "description": "Returns every active (from_status, to_status) edge in the project lifecycle, plus the initial-status seed (from_status=null). The frontend can use this to build the next-step dropdown for any project state, and to know which statuses are valid in request bodies. Validation in the create-project service rejects any status not present in this catalog with `invalid_status`."
-          },
-          "response": []
-        },
-        {
-          "name": "List the project-owner whitelist (active rows)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/project_owners",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "project_owners"
-              ]
-            },
-            "description": "Returns active project owners with the backing user info. Only users present in this list are accepted as the ``owner`` of a newly-created project."
+            "description": "Returns every active (from_status, to_status) edge plus the initial-status seed (from_status=null). DEPRECATED: use GET /api/v3/master/project_status_transitions which supports admin CRUD too."
           },
           "response": []
         }
@@ -1741,6 +2176,1464 @@
               ]
             },
             "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Master Data",
+      "item": [
+        {
+          "name": "Add a new (from_status, to_status) edge (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/project_status_transitions/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "project_status_transitions",
+                "create"
+              ]
+            },
+            "description": "Add a new (from_status, to_status) edge (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromStatus\": \"\",\n  \"toStatus\": \"\",\n  \"requiresAdmin\": false,\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a custom permission (delegates)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions",
+                "create"
+              ]
+            },
+            "description": "Create a custom permission (delegates)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a division (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/divisions/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "divisions",
+                "create"
+              ]
+            },
+            "description": "Create a division (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\",\n  \"code\": \"\",\n  \"requiresOther\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a resource type (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/resource_types/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "resource_types",
+                "create"
+              ]
+            },
+            "description": "Create a resource type (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a role (delegates to POST /api/v3/roles/create)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                "create"
+              ]
+            },
+            "description": "Create a role (delegates to POST /api/v3/roles/create)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a vendor (delegates)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                "create"
+              ]
+            },
+            "description": "Create a vendor (delegates)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a permission (built-ins protected)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete a permission (built-ins protected)"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a role (delegates; built-in 'admin' role protected)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete a role (delegates; built-in 'admin' role protected)"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit a permission's name/description (delegates)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Edit a permission's name/description (delegates)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get a permission row (delegates)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get a permission row (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get a role (delegates to GET /api/v3/roles/{id})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get a role (delegates to GET /api/v3/roles/{id})"
+          },
+          "response": []
+        },
+        {
+          "name": "Get vendor detail (delegates to GET /api/v3/vendors/{id})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get vendor detail (delegates to GET /api/v3/vendors/{id})"
+          },
+          "response": []
+        },
+        {
+          "name": "Grant a permission to a role (delegates)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Grant a permission to a role (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "List a role's permissions (delegates)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List a role's permissions (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "List divisions (admin view shows soft-disabled rows too)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/divisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "divisions"
+              ],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns the divisions catalog. By default only active rows are returned (matches the FE picker's filter). Pass ``?include_inactive=true`` to include soft-disabled rows for admin curation views."
+          },
+          "response": []
+        },
+        {
+          "name": "List live vendors (delegates to GET /api/v3/vendors)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors"
+              ]
+            },
+            "description": "List live vendors (delegates to GET /api/v3/vendors)"
+          },
+          "response": []
+        },
+        {
+          "name": "List project status transitions (admin view shows inactive too)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/project_status_transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "project_status_transitions"
+              ],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List project status transitions (admin view shows inactive too)"
+          },
+          "response": []
+        },
+        {
+          "name": "List projects mapped to a vendor (delegates)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/{vendor_id}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                ":vendor_id",
+                "projects"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List projects mapped to a vendor (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "List resource types (admin view shows inactive too)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/resource_types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "resource_types"
+              ],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List resource types (admin view shows inactive too)"
+          },
+          "response": []
+        },
+        {
+          "name": "List roles (delegates to GET /api/v3/roles)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List roles (delegates to GET /api/v3/roles)"
+          },
+          "response": []
+        },
+        {
+          "name": "List the permission catalog (delegates)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "100",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List the permission catalog (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "List the permission catalog grouped by module (doc 33 change 2)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/permissions/by-module",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "permissions",
+                "by-module"
+              ]
+            },
+            "description": "Returns the full permission catalog bucketed by module \u2014 the leading segment of each ``module:action`` code. The FE uses this to render a permission picker tree without parsing codes client-side. Admin-defined modules (created via ``POST /master/permissions/create`` with codes like ``custom_module:my_action``) appear in the same response."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace a role's permission set (delegates)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Replace a role's permission set (delegates)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-deleted vendor (delegates)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/{vendor_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                ":vendor_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Restore a soft-deleted vendor (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-disabled division (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/divisions/{code}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "divisions",
+                ":code",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Restore a soft-disabled division (admin)"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-disabled resource type (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/resource_types/{rt_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "resource_types",
+                ":rt_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "rt_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Restore a soft-disabled resource type (admin)"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore a soft-disabled transition (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "project_status_transitions",
+                ":row_id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "row_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Restore a soft-disabled transition (admin)"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke a permission from a role (delegates)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Revoke a permission from a role (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a division (admin) \u2014 sets active=false",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/divisions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "divisions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft delete: the row stays in the DB so existing projects / users / activity_resources referencing this code keep rendering. The picker hides it for new selections. Restore via PATCH-isn't-quite-right (active isn't on the patch schema); use POST /divisions/{code}/restore."
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a resource type (admin) \u2014 sets active=false",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/resource_types/{rt_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "resource_types",
+                ":rt_id"
+              ],
+              "variable": [
+                {
+                  "key": "rt_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-delete a resource type (admin) \u2014 sets active=false"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a transition (admin) \u2014 sets active=false",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "project_status_transitions",
+                ":row_id"
+              ],
+              "variable": [
+                {
+                  "key": "row_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-delete a transition (admin) \u2014 sets active=false"
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-delete a vendor (delegates)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-delete a vendor (delegates)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update a division's label / requires_other (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/divisions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "divisions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Patch ``label`` and/or ``requiresOther``. ``code`` is NOT patchable \u2014 every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) reject any patch with 403.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\",\n  \"requiresOther\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a resource type's name (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/resource_types/{rt_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "resource_types",
+                ":rt_id"
+              ],
+              "variable": [
+                {
+                  "key": "rt_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a resource type's name (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a role (delegates to PATCH /api/v3/roles/{id})",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/roles/{role_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "roles",
+                ":role_id"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a role (delegates to PATCH /api/v3/roles/{id})",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a transition's policy flags / description (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "project_status_transitions",
+                ":row_id"
+              ],
+              "variable": [
+                {
+                  "key": "row_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a transition's policy flags / description (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requiresAdmin\": false,\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a vendor (delegates)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/vendors/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "vendors",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a vendor (delegates)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         }
@@ -2188,7 +4081,7 @@
                 },
                 {
                   "key": "user_id",
-                  "value": "0",
+                  "value": "",
                   "description": ""
                 }
               ]
@@ -2336,10 +4229,10 @@
                 }
               ]
             },
-            "description": "Create milestone under project",
+            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape \u2014 milestone fields only) OR ``multipart/form-data`` (doc 30 \u2014 milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"not_completed\",\n  \"depends\": [\n    null\n  ],\n  \"vendors\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"not_completed\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"vendors\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2545,13 +4438,214 @@
             "description": "Update milestone",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"depends\": [\n    null\n  ],\n  \"vendors\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"vendors\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "permissions"
+              ]
+            },
+            "description": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})"
+          },
+          "response": []
+        },
+        {
+          "name": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "100",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)"
           },
           "response": []
         }
@@ -2844,42 +4938,6 @@
           "response": []
         },
         {
-          "name": "Create new version of a published project",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{project_uuid}/versions/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "projects",
-                ":project_uuid",
-                "versions",
-                "create"
-              ],
-              "variable": [
-                {
-                  "key": "project_uuid",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Create new version of a published project"
-          },
-          "response": []
-        },
-        {
           "name": "Create or update project by uuid (idempotent)",
           "request": {
             "method": "PUT",
@@ -2917,7 +4975,7 @@
             "description": "Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards \u2014 re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2958,7 +5016,7 @@
             "description": "Create project",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3212,41 +5270,6 @@
           "response": []
         },
         {
-          "name": "Suspend version project",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v3/projects/{project_uuid}/suspend",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "projects",
-                ":project_uuid",
-                "suspend"
-              ],
-              "variable": [
-                {
-                  "key": "project_uuid",
-                  "value": "",
-                  "description": ""
-                }
-              ]
-            },
-            "description": "Suspend version project"
-          },
-          "response": []
-        },
-        {
           "name": "Update project",
           "request": {
             "method": "PATCH",
@@ -3284,7 +5307,7 @@
             "description": "Update project",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"isPublic\": false,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"category\": \"\",\n  \"category_other\": \"\",\n  \"category_other_reason\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3372,7 +5395,7 @@
       "name": "Roles",
       "item": [
         {
-          "name": "Create role",
+          "name": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
           "request": {
             "method": "POST",
             "header": [
@@ -3399,10 +5422,10 @@
                 "create"
               ]
             },
-            "description": "Create a new role",
+            "description": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3413,7 +5436,7 @@
           "response": []
         },
         {
-          "name": "Delete role",
+          "name": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -3442,12 +5465,12 @@
                 }
               ]
             },
-            "description": "Delete a role"
+            "description": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "Get role",
+          "name": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})",
           "request": {
             "method": "GET",
             "header": [
@@ -3476,12 +5499,88 @@
                 }
               ]
             },
-            "description": "Get role by ID"
+            "description": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "List roles",
+          "name": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "roles",
+                ":role_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})"
+          },
+          "response": []
+        },
+        {
+          "name": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/roles/{role_id}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "roles",
+                ":role_id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)"
+          },
+          "response": []
+        },
+        {
+          "name": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)",
           "request": {
             "method": "GET",
             "header": [
@@ -3516,12 +5615,102 @@
                 }
               ]
             },
-            "description": "List all roles with pagination"
+            "description": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)"
           },
           "response": []
         },
         {
-          "name": "Update role",
+          "name": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/roles/{role_id}/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "roles",
+                ":role_id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "roles",
+                ":role_id",
+                "permissions",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "role_id",
+                  "value": "0",
+                  "description": ""
+                },
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})"
+          },
+          "response": []
+        },
+        {
+          "name": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
           "request": {
             "method": "PATCH",
             "header": [
@@ -3555,10 +5744,10 @@
                 }
               ]
             },
-            "description": "Update role details",
+            "description": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3594,6 +5783,56 @@
     {
       "name": "Subtasks",
       "item": [
+        {
+          "name": "Create a subtask nested under another subtask (doc 24)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/subtasks/{parent_subtask_id}/subtasks/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "subtasks",
+                ":parent_subtask_id",
+                "subtasks",
+                "create"
+              ],
+              "variable": [
+                {
+                  "key": "parent_subtask_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Create a subtask nested under another subtask. Same body as the task-scoped create endpoint. Accepts JSON or multipart (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
         {
           "name": "Create subtask under task",
           "request": {
@@ -3631,10 +5870,10 @@
                 }
               ]
             },
-            "description": "Create subtask under task",
+            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0\n  },\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3892,10 +6131,10 @@
                 }
               ]
             },
-            "description": "Create task under activity",
+            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": {\n    \"resourceName\": \"\",\n    \"onboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOnboardDate\": \"2026-01-01T00:00:00Z\",\n    \"offboardDate\": \"2026-01-01T00:00:00Z\",\n    \"actualOffboardDate\": \"2026-01-01T00:00:00Z\",\n    \"position\": \"\",\n    \"designation\": \"\",\n    \"jobRole\": \"\",\n    \"qualification\": \"\",\n    \"experienceYears\": 0.0\n  },\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"resourceMode\": \"\",\n  \"resourceCount\": 0,\n  \"resource\": null,\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4147,13 +6386,47 @@
             "description": "Create a vendor (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Get vendor detail (with mapped projects)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/vendors/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "vendors",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Returns full vendor detail \u2014 name, description, email, contact person, phone number, soft-delete metadata \u2014 plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
           },
           "response": []
         },
@@ -4322,10 +6595,10 @@
                 }
               ]
             },
-            "description": "Update a vendor (admin)",
+            "description": "Path param accepts UUID or ``VN-...`` code (doc 25).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
