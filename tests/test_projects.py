@@ -65,20 +65,21 @@ class TestCreateProject:
         assert "id" in data and data["id"]
         assert "projectCode" in data and data["projectCode"].startswith("UIDAI-PR")
 
-    def test_create_project_with_new_fields(self, client, admin_user, admin_headers):
+    def test_create_project_accepts_optional_owner(self, client, admin_user, admin_headers):
+        # Doc 38: ``category`` / ``isPublic`` were removed from the request
+        # schema (Option B deprecation). Owner is still accepted.
         resp = client.post(
             "/api/v3/projects/create",
             json={
                 "name": "New Fields Project",
                 "status": "new",
-                "category": "MSAP",
                 "owner": "tmd2",
             },
             headers=admin_headers,
         )
         assert resp.status_code == 201
         data = resp.json()["data"]
-        assert data["category"] == "MSAP"
+        assert data["owner"] == "tmd2"
 
 
 class TestSaveProject:

@@ -248,56 +248,9 @@ class TestStatusCatalogs:
 
 
 # ---------------------------------------------------------------------------
-# Validator integration — DB-first with in-code fallback
+# Doc 38: ``category`` is no longer accepted on project create — the
+# project_categories master table stays in place for legacy reads but the
+# create-time validator integration is gone. The two tests in this section
+# previously asserted Pydantic + service-layer category validation behaviour;
+# they're removed because the validation path no longer exists.
 # ---------------------------------------------------------------------------
-
-class TestValidatorIntegration:
-    def test_project_create_rejects_unknown_category_when_catalog_seeded(
-        self, client, admin_headers, seed_doc37_catalogs,
-    ):
-        resp = client.post(
-            "/api/v3/projects/create",
-            headers=admin_headers,
-            json={
-                "name": "P1",
-                "category": "BOGUS_CATEGORY",
-                "owner": "tmd1",
-                "endDate": "2030-12-31",
-            },
-        )
-        # 422 from the schema (Pydantic-level — still uses the in-code
-        # tuple), so even before service-layer DB check, BOGUS rejects.
-        assert resp.status_code == 422, resp.text
-
-    def test_project_create_accepts_runtime_added_category(
-        self, client, admin_headers, seed_doc37_catalogs,
-    ):
-        # Add a custom category at runtime, then use it on project create.
-        # Pydantic schema's in-code tuple doesn't include it, so this
-        # asserts that the DB-first fallback path is the source of truth
-        # — but pydantic-level rejection happens FIRST on the schema.
-        # This test documents that runtime additions need a code change
-        # to the in-code PROJECT_CATEGORY_CHOICES tuple to take effect
-        # on the wire schema (open question — see doc 37 plan).
-        client.post(
-            "/api/v3/master/project_categories/create",
-            headers=admin_headers,
-            json={"code": "PILOT", "label": "Pilot"},
-        )
-        # Pydantic still rejects since 'PILOT' isn't in the in-code tuple.
-        # If we want runtime additions to be wire-acceptable, the
-        # Pydantic validator needs to drop the static membership check
-        # and rely entirely on the service-layer DB lookup. Trade-off
-        # noted in doc 37; not changed in this iteration.
-        resp = client.post(
-            "/api/v3/projects/create",
-            headers=admin_headers,
-            json={
-                "name": "P2",
-                "category": "PILOT",
-                "owner": "tmd1",
-                "endDate": "2030-12-31",
-            },
-        )
-        # Today: 422. Future: 201 once we relax Pydantic to defer to DB.
-        assert resp.status_code == 422

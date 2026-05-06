@@ -215,7 +215,7 @@ class TestEqualDatesCascade:
         msid = ms.json()["data"]["id"]
 
         a = client.post(
-            f"/api/v3/milestones/{msid}/activities/standard/create",
+            f"/api/v3/milestones/{msid}/activities/create",
             json={
                 "name": "Eq A1",
                 "startDate": _iso_ist(2026, 7, 10),

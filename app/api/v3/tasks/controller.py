@@ -119,19 +119,19 @@ class TaskController:
     @staticmethod
     def create(request: Request, activity_id: str, data: TaskCreateRequest, db: Session) -> JSONResponse:
         cuid = getattr(request.state, "user_id", None)
-        rd = data.resource.model_dump() if data.resource else None
+        # Doc 38: TaskCreateRequest is trimmed to name/desc/dates only.
+        # Status / dependsOn / resource* / actual dates / position move
+        # to PATCH.
         t, r = create_task(
             db,
             activity_id=activity_id,
-            # ``type`` is no longer in the request body — the service derives
-            # it from the parent activity. See task create service.
             name=data.name, description=data.description,
             start_date=data.start_date, end_date=data.end_date,
-            actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position,
-            resource_mode=data.resource_mode, resource_count=data.resource_count,
-            resource=rd, current_user_id=cuid,
-            depends_on=data.depends_on,
+            actual_start_date=None, actual_end_date=None,
+            position=None,
+            resource_mode=None, resource_count=None,
+            resource=None, current_user_id=cuid,
+            depends_on=None,
         )
         idx = build_label_index_for_project(db, t.project_id)
         return BaseController.created(data=format_task_response(
@@ -203,17 +203,17 @@ class TaskController:
 
         # ---- 2. Create task --------------------------------------------
         cuid = getattr(request.state, "user_id", None)
-        rd = data.resource.model_dump() if data.resource else None
+        # Doc 38: trimmed to name/desc/dates on create.
         t, r = create_task(
             db,
             activity_id=activity_id,
             name=data.name, description=data.description,
             start_date=data.start_date, end_date=data.end_date,
-            actual_start_date=data.actual_start_date, actual_end_date=data.actual_end_date,
-            position=data.position,
-            resource_mode=data.resource_mode, resource_count=data.resource_count,
-            resource=rd, current_user_id=cuid,
-            depends_on=data.depends_on,
+            actual_start_date=None, actual_end_date=None,
+            position=None,
+            resource_mode=None, resource_count=None,
+            resource=None, current_user_id=cuid,
+            depends_on=None,
         )
 
         # ---- 3. Inline comment / standalone attachments ----------------

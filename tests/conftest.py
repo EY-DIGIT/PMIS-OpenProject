@@ -207,6 +207,20 @@ def _seed_notification_templates(db_session):
     yield
 
 
+@pytest.fixture(scope="function", autouse=True)
+def _disable_universal_otp_by_default(monkeypatch):
+    """Default UNIVERSAL_OTP_ENABLED=False for every test.
+
+    The dev .env may have it enabled for local Swagger ergonomics
+    (skip the notification_log lookup), but the test suite assumes
+    pure-OTP behaviour. Tests that specifically exercise the
+    universal-OTP escape hatch override the flag themselves with
+    their own monkeypatch.
+    """
+    from app.core import config as _config
+    monkeypatch.setattr(_config.settings, "UNIVERSAL_OTP_ENABLED", False)
+
+
 def _assign_role(db: Session, user_id: int, role_name: str):
     from app.infrastructure.db.models.role import RoleModel
     from app.infrastructure.db.models.user_role import UserRoleModel

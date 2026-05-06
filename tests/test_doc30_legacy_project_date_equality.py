@@ -166,7 +166,7 @@ class TestLegacyProjectActivityFloor:
 
         # Activity on the same calendar day as the milestone.
         a = client.post(
-            f"/api/v3/milestones/{mid}/activities/standard/create",
+            f"/api/v3/milestones/{mid}/activities/create",
             headers=admin_headers,
             json={
                 "name": "A1",
