@@ -48,6 +48,8 @@ from .project_category import ProjectCategoryModel
 from .activity_type import ActivityTypeModel
 from .milestone_status import MilestoneStatusModel
 from .activity_status import ActivityStatusModel
+# Doc 41: priorities catalog (referenced from activities.priority).
+from .priority import PriorityModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
@@ -69,4 +71,5 @@ __all__ = [
     "NotificationTemplateModel",
     "ProjectCategoryModel", "ActivityTypeModel",
     "MilestoneStatusModel", "ActivityStatusModel",
+    "PriorityModel",
 ]

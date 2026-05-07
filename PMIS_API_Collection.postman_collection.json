@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "87d1503c-ce41-4caf-b372-86ddd21bdc38",
+    "_postman_id": "ba0b70a2-a597-43e0-8941-802c38707991",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -241,7 +241,7 @@
             "description": "Update activity",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"ownerDivision\": \"\",\n  \"vendorId\": \"\",\n  \"concernedDivision\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"ownerDivision\": \"\",\n  \"vendorId\": \"\",\n  \"concernedDivision\": [\n    \"\"\n  ],\n  \"priority\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2221,6 +2221,48 @@
           "response": []
         },
         {
+          "name": "Create a priority (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities",
+                "create"
+              ]
+            },
+            "description": "Create a priority (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\",\n  \"position\": 0,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Create a project category (admin)",
           "request": {
             "method": "POST",
@@ -2697,6 +2739,41 @@
           "response": []
         },
         {
+          "name": "Get a priority by code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get a priority by code"
+          },
+          "response": []
+        },
+        {
           "name": "Get a project category by code",
           "request": {
             "method": "GET",
@@ -3156,6 +3233,41 @@
               ]
             },
             "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. Doc 36 moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
+          },
+          "response": []
+        },
+        {
+          "name": "List priorities (sorted by position)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities"
+              ],
+              "query": [
+                {
+                  "key": "include_inactive",
+                  "value": "False",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List priorities (sorted by position)"
           },
           "response": []
         },
@@ -3677,6 +3789,42 @@
           "response": []
         },
         {
+          "name": "Restore a soft-disabled priority (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities/{code}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities",
+                ":code",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Restore a soft-disabled priority (admin)"
+          },
+          "response": []
+        },
+        {
           "name": "Restore a soft-disabled project category (admin)",
           "request": {
             "method": "POST",
@@ -3893,6 +4041,41 @@
               ]
             },
             "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=false``. Built-in rows are protected from hard delete but CAN be soft-deactivated \u2014 when no active row covers the (kind, channel) pair, the renderer falls back to a generic body. To bring it back, POST /restore."
+          },
+          "response": []
+        },
+        {
+          "name": "Soft-deactivate a priority (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Soft-deactivate a priority (admin)"
           },
           "response": []
         },
@@ -4279,6 +4462,55 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"subject\": \"\",\n  \"body\": \"\",\n  \"is_html\": false,\n  \"description\": \"\",\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a priority (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/master/priorities/{code}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "master",
+                "priorities",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a priority (admin)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"position\": 0,\n  \"active\": false\n}",
               "options": {
                 "raw": {
                   "language": "json"

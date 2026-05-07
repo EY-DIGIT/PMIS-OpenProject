@@ -231,6 +231,7 @@ class TestEqualDatesCascade:
                 "ownerDivision": "tmd1",
                 "vendorId": vid,
                 "concernedDivision": ["tmd1"],
+                "priority": "p1",
             },
             headers=admin_headers,
         )
