@@ -239,6 +239,30 @@ class TestCorsPreflightBypass:
         assert len(stub_httpx["calls"]) == 1
         assert stub_httpx["calls"][0]["method"] == "GET"
 
+    def test_proxied_get_response_carries_cors_headers(
+        self, client, admin_headers, proxy_on, stub_httpx,
+    ):
+        """Same contract as the user-service proxy: the proxied
+        response must carry Access-Control-Allow-Origin on the way
+        back, otherwise browsers block the body with a CORS error.
+        Pins CORSMiddleware ordering."""
+        stub_httpx["next_response"] = _StubResponse(
+            status_code=200,
+            body=b'{"data":{"_embedded":{"elements":[]}},"status":200}',
+        )
+        h = {**admin_headers, "Origin": "http://localhost:3000"}
+        resp = client.get("/api/v3/master/notification_templates", headers=h)
+        assert resp.status_code == 200
+        assert len(stub_httpx["calls"]) == 1
+        # Header presence is the regression we pin; exact value depends
+        # on CORS_ORIGINS config (default test ["*"] → "*").
+        allow_origin = resp.headers.get("access-control-allow-origin")
+        assert allow_origin is not None, (
+            "no Access-Control-Allow-Origin on proxied response. "
+            "Likely cause: CORSMiddleware is no longer outermost in "
+            "app/main.py — must be added LAST so it wraps the proxy."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Failure handling

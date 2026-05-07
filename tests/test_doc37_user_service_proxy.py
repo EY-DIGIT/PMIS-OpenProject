@@ -353,6 +353,42 @@ class TestCorsPreflightBypass:
         assert len(stub_httpx["calls"]) == 1
         assert stub_httpx["calls"][0]["method"] == "POST"
 
+    def test_proxied_post_response_carries_cors_headers(
+        self, client, proxy_on, stub_httpx,
+    ):
+        """When the proxy intercepts a POST and short-circuits ``send``,
+        the response still has to be wrapped by CORSMiddleware on the
+        way back. CORSMiddleware must be the OUTERMOST middleware
+        (added LAST in app/main.py) — otherwise the browser sees a
+        2xx body without ``Access-Control-Allow-Origin`` and blocks
+        the response with "failed to fetch", even though the request
+        itself succeeded server-side."""
+        stub_httpx["next_response"] = _StubResponse(
+            status_code=200,
+            body=b'{"data":{"_type":"Login","access_token":"t"},"status":200}',
+        )
+        resp = client.post(
+            "/api/v3/users/login",
+            json={"login": "admin", "password": "x"},
+            headers={"Origin": "http://localhost:3000"},
+        )
+        assert resp.status_code == 200
+        # The proxy actually forwarded.
+        assert len(stub_httpx["calls"]) == 1
+        # AND a CORS Allow-Origin header is present on the proxied response.
+        # The exact value depends on CORS_ORIGINS (the default test config
+        # is ["*"] → "*"; a deploy with a specific allowlist echoes the
+        # origin) — the regression we're pinning is "header present at
+        # all," because if CORSMiddleware moves back inside the proxy
+        # the header disappears entirely and browsers break with
+        # "failed to fetch".
+        allow_origin = resp.headers.get("access-control-allow-origin")
+        assert allow_origin is not None, (
+            "no Access-Control-Allow-Origin on proxied response. "
+            "Likely cause: CORSMiddleware is no longer outermost in "
+            "app/main.py — must be added LAST so it wraps the proxy."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Failure handling

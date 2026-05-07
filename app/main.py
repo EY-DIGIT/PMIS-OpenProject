@@ -54,7 +54,32 @@ app = FastAPI(
     swagger_ui_parameters={"persistAuthorization": True}
 )
 
-# Add CORS middleware
+# Custom middleware stack.
+# Starlette wraps LIFO: last add_middleware call is the OUTERMOST wrapper.
+# Final order on requests (outermost → innermost):
+#   1. CORSMiddleware (outermost): handles OPTIONS preflights; on
+#      responses it stamps Access-Control-Allow-* headers as the
+#      message bubbles back. Must be outermost so it sees responses
+#      from the proxy short-circuit path too — when the proxy
+#      forwards to user-mgmt / notification-service it short-circuits
+#      send() without going through self.app, so any CORS middleware
+#      placed *inside* the proxy never gets a chance to add response
+#      headers and the browser blocks the response with "failed to
+#      fetch".
+#   2. NotificationServiceProxyMiddleware (doc 38).
+#   3. UserServiceProxyMiddleware (doc 37 part 2).
+#   4. AuthenticationMiddleware: JWT decode + revoked-jti check +
+#      effective-permissions hydration. Runs only for requests that
+#      reach the local handlers (proxied paths bypass it entirely —
+#      the upstream service is the authoritative gate for those).
+#   5. LoggingMiddleware (innermost): X-Request-Id stamping +
+#      request/response logs.
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(AuthenticationMiddleware)
+app.add_middleware(UserServiceProxyMiddleware)
+app.add_middleware(NotificationServiceProxyMiddleware)
+# CORS is added LAST so it ends up OUTERMOST. Position matters — see
+# the docstring above for why.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -62,30 +87,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Add custom middleware.
-# FastAPI/Starlette wraps LIFO — last added runs FIRST (outermost).
-# Order:
-#   1. UserServiceProxyMiddleware (doc 37 part 2): when
-#      USER_SERVICE_PROXY_ENABLED=true, intercepts /api/v3/users/*
-#      and /api/v3/master/{roles,permissions,notification_templates}/*
-#      and forwards to PMIS-user-management. Runs first so the
-#      monolith's auth + RBAC chain is bypassed for those paths
-#      (user-service is the authoritative gate). When the flag is
-#      off, this is a cheap no-op pass-through.
-#   2. AuthenticationMiddleware: JWT decode + revoked-jti check +
-#      effective-permissions hydration.
-#   3. LoggingMiddleware: X-Request-Id stamping + request/response logs.
-app.add_middleware(LoggingMiddleware)
-app.add_middleware(AuthenticationMiddleware)
-app.add_middleware(UserServiceProxyMiddleware)
-# Doc 38: forward /api/v3/master/notification_templates/* to
-# notification-service:8002 when NOTIFICATION_SERVICE_PROXY_ENABLED=true.
-# Mounted after UserServiceProxyMiddleware — last-added runs first
-# (outermost), so notification-template paths are intercepted before
-# the user-service proxy sees them. (Doesn't matter for correctness
-# since their prefix sets are disjoint, but the ordering is explicit.)
-app.add_middleware(NotificationServiceProxyMiddleware)
 
 
 # Exception handlers
