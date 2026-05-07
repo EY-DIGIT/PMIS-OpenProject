@@ -26,7 +26,7 @@ from ....infrastructure.db.models.task_resource import TaskResourceModel
 from ....infrastructure.db.models.subtask import SubtaskModel
 from ....infrastructure.db.models.subtask_dependency import SubtaskDependencyModel
 from ....infrastructure.db.models.subtask_resource import SubtaskResourceModel
-from ....shared.datetime import IST
+from ....shared.datetime import IST, iso_ist
 from ....shared.labels import (
     KIND_ACTIVITY,
     KIND_MILESTONE,
@@ -37,7 +37,10 @@ from ....shared.labels import (
 
 
 def _iso(v) -> Optional[str]:
-    return v.isoformat() if v else None
+    """Emit datetimes in IST with explicit ``+05:30`` offset, matching
+    the rest of the wire surface. Naive stored values are treated as
+    UTC (per ``UtcDateTime`` storage contract) before conversion."""
+    return iso_ist(v)
 
 
 def _ist_calendar_date(dt: Optional[datetime]) -> Optional[_date_type]:

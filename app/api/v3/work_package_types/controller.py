@@ -5,6 +5,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from ....core.base_controller import BaseController
+from ....shared.datetime import iso_ist
 from .schemas import WorkPackageTypeListQuery
 from . import services
 
@@ -23,9 +24,9 @@ class WorkPackageTypeController:
         created = getattr(t, "created_at", None)
         updated = getattr(t, "updated_at", None)
         if hasattr(created, "isoformat"):
-            created = created.isoformat()
+            created = iso_ist(created)
         if hasattr(updated, "isoformat"):
-            updated = updated.isoformat()
+            updated = iso_ist(updated)
 
         resp = {
             "_type": "WorkPackageType",

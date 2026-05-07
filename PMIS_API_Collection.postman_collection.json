@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "b100d542-a9de-4ba4-8653-fbf3ee65c061",
+    "_postman_id": "c9a4f34d-889e-4870-8e82-fe051be64f13",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"

@@ -87,6 +87,7 @@ from ..permissions.schemas import (
     PermissionCreateRequest,
     PermissionUpdateRequest,
 )
+from ....shared.datetime import iso_ist
 
 from .schemas import (
     ActivityStatusCreateRequest,
@@ -864,8 +865,8 @@ def list_master_permissions_by_module(
             "name": r.name,
             "description": r.description,
             "isBuiltin": bool(r.is_builtin),
-            "createdAt": r.created_at.isoformat() if r.created_at else None,
-            "updatedAt": r.updated_at.isoformat() if r.updated_at else None,
+            "createdAt": iso_ist(r.created_at),
+            "updatedAt": iso_ist(r.updated_at),
         })
     modules_list = [
         {
@@ -960,8 +961,8 @@ def _notification_template_to_response(row) -> Dict[str, Any]:
         "isBuiltin": bool(row.is_builtin),
         "active": bool(row.active),
         "description": row.description,
-        "createdAt": row.created_at.isoformat() if row.created_at else None,
-        "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
+        "createdAt": iso_ist(row.created_at),
+        "updatedAt": iso_ist(row.updated_at),
     }
 
 

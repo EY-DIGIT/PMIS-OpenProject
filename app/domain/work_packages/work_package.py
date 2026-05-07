@@ -4,7 +4,7 @@ Work Package domain model.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from ...shared.datetime import iso_utc
+from ...shared.datetime import iso_ist
 
 
 @dataclass
@@ -49,10 +49,10 @@ class WorkPackage:
             "status": self.status,
             "priority": self.priority,
             "done_ratio": self.done_ratio,
-            "start_date": iso_utc(self.start_date),
-            "end_date": iso_utc(self.end_date),
-            "created_at": iso_utc(self.created_at),
-            "updated_at": iso_utc(self.updated_at),
+            "start_date": iso_ist(self.start_date),
+            "end_date": iso_ist(self.end_date),
+            "created_at": iso_ist(self.created_at),
+            "updated_at": iso_ist(self.updated_at),
         }
 
     def is_subtask(self) -> bool:

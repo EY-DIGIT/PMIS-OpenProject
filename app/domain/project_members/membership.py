@@ -4,7 +4,7 @@ Membership domain model.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
-from ...shared.datetime import iso_utc
+from ...shared.datetime import iso_ist
 
 
 @dataclass
@@ -35,8 +35,8 @@ class Membership:
             "project_id": self.project_id,
             "user_id": self.user_id,
             "roles": self.roles,
-            "created_at": iso_utc(self.created_at),
-            "updated_at": iso_utc(self.updated_at),
+            "created_at": iso_ist(self.created_at),
+            "updated_at": iso_ist(self.updated_at),
         }
 
     def has_role(self, role: str) -> bool:
