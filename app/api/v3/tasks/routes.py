@@ -3,7 +3,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from ....core.middleware.rbac import require_permission
+from ....core.middleware.rbac import (
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.session import get_db
 from .._inline_attachments import dispatch_create
 from .controller import TaskController
@@ -62,7 +65,7 @@ _TASK_MULTIPART_SCHEMA: Dict[str, Any] = {
 
 @tasks_activity_router.post(
     "/{activity_id}/tasks/create",
-    dependencies=[require_permission(TASKS_CREATE)],
+    dependencies=[require_project_permission(TASKS_CREATE)],
     summary="Create task under activity",
     description=(
         "Create a task. Accepts EITHER ``application/json`` (legacy) "
@@ -126,7 +129,7 @@ def get(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[s
 
 @tasks_router.patch(
     "/{task_id}",
-    dependencies=[require_permission(TASKS_UPDATE)],
+    dependencies=[require_project_permission(TASKS_UPDATE)],
     summary="Update task (handles type transitions + resource upsert)",
 )
 def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -135,7 +138,7 @@ def update(request: Request, task_id: str, data: TaskUpdateRequest, db: Session 
 
 @tasks_router.delete(
     "/{task_id}",
-    dependencies=[require_permission(TASKS_DELETE)],
+    dependencies=[require_project_permission(TASKS_DELETE)],
     summary="Soft-delete task (cascades to subtasks)",
 )
 def delete(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -144,7 +147,7 @@ def delete(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dic
 
 @tasks_router.post(
     "/{task_id}/restore",
-    dependencies=[require_permission(TASKS_RESTORE)],
+    dependencies=[require_project_permission(TASKS_RESTORE)],
     summary="Restore a soft-deleted task (admin)",
 )
 def restore(request: Request, task_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:

@@ -9,6 +9,9 @@ from .permission import PermissionModel
 from .role_permission import RolePermissionModel
 from .user_role import UserRoleModel
 from .user_permission import UserPermissionModel
+# Doc 41 — scoped role assignments (org/project scope). Mirror of
+# the canonical model in PMIS-user-management.
+from .user_role_assignment import UserRoleAssignmentModel
 from .work_package import WorkPackageModel
 from .work_package_type import WorkPackageTypeModel
 from .meeting import MeetingModel
@@ -56,6 +59,7 @@ __all__ = [
     "ProjectMemberModel", "ProjectVendorModel",
     "RoleModel", "PermissionModel", "RolePermissionModel",
     "UserRoleModel", "UserPermissionModel",
+    "UserRoleAssignmentModel",
     "WorkPackageModel", "WorkPackageTypeModel", "MeetingModel",
     "MeetingParticipantModel", "MeetingAgendaItemModel",
     "MilestoneModel", "MilestoneDependencyModel", "MilestoneVendorModel",

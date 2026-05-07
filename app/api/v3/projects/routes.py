@@ -9,7 +9,10 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from ....core.middleware.rbac import require_permission
+from ....core.middleware.rbac import (
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.session import get_db
 
 from .controller import ProjectController
@@ -135,7 +138,7 @@ def get_project(
 
 @router.patch(
     "/{project_uuid}",
-    dependencies=[require_permission(PROJECTS_UPDATE)],
+    dependencies=[require_project_permission(PROJECTS_UPDATE)],
     summary="Update project",
 )
 def update_project(
@@ -149,7 +152,7 @@ def update_project(
 
 @router.delete(
     "/{project_uuid}",
-    dependencies=[require_permission(PROJECTS_DELETE_ALL)],
+    dependencies=[require_project_permission(PROJECTS_DELETE_ALL)],
     summary="Soft-delete project",
 )
 def delete_project(
@@ -162,7 +165,7 @@ def delete_project(
 
 @router.post(
     "/{project_uuid}/save",
-    dependencies=[require_permission(PROJECTS_UPDATE)],
+    dependencies=[require_project_permission(PROJECTS_UPDATE)],
     summary="Save project setup (new -> draft if milestones exist)",
     description=(
         "Maps to the 'Save Project' button in the Step-1 wizard. Flips status "
@@ -181,7 +184,7 @@ def save_project(
 
 @router.post(
     "/{project_uuid}/publish",
-    dependencies=[require_permission(PROJECTS_PUBLISH)],
+    dependencies=[require_project_permission(PROJECTS_PUBLISH)],
     summary="Publish project",
 )
 def publish_project(
@@ -194,7 +197,7 @@ def publish_project(
 
 @router.post(
     "/{project_uuid}/close",
-    dependencies=[require_permission(PROJECTS_CLOSE)],
+    dependencies=[require_project_permission(PROJECTS_CLOSE)],
     summary="Close project",
 )
 def close_project(

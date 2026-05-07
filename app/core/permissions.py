@@ -82,6 +82,10 @@ PERMISSIONS_MANAGE = "permissions:manage"
 # RBAC assignment (user-role and user-permission grants)
 RBAC_ASSIGN = "rbac:assign"
 
+# Doc 41: granting the super_admin role is gated by this code (which
+# only super_admin holds itself). Mirrors the user-mgmt copy.
+USERS_GRANT_SUPERADMIN = "users:grant_superadmin"
+
 # Work packages
 WORK_PACKAGES_VIEW = "work_packages:view"
 WORK_PACKAGES_CREATE = "work_packages:create"
@@ -173,6 +177,11 @@ BUILTIN_PERMISSIONS: List[PermissionDef] = [
     PermissionDef(PERMISSIONS_READ, "View permissions", "List the permission catalog."),
     PermissionDef(PERMISSIONS_MANAGE, "Manage permissions", "Create / edit / delete permission rows."),
     PermissionDef(RBAC_ASSIGN, "Assign roles & permissions", "Grant or revoke roles and direct permissions on users."),
+    PermissionDef(
+        USERS_GRANT_SUPERADMIN,
+        "Grant super_admin role",
+        "Required to assign the super_admin role to a user. Held only by super_admin.",
+    ),
 
     PermissionDef(WORK_PACKAGES_VIEW, "View work packages", "Read work packages."),
     PermissionDef(WORK_PACKAGES_CREATE, "Create work package", "Create a work package."),
@@ -231,6 +240,15 @@ VIEWER_ROLE_NAME = "viewer"
 # directly on the project (versioning was removed) but cannot create
 # new projects, change status, or touch RBAC / master data.
 VENDOR_ROLE_NAME = "vendor"
+
+# Doc 41 scoped-RBAC seed roles. Mirrors of the user-mgmt copies; kept
+# in lockstep so monolith's auth middleware can surface the same role
+# names. Permission sets are seeded by user-mgmt (canonical owner).
+SUPER_ADMIN_ROLE_NAME = "super_admin"
+ORG_ADMIN_ROLE_NAME = "org_admin"
+PROJECT_ADMIN_ROLE_NAME = "project_admin"
+PROJECT_MEMBER_ROLE_NAME = "project_member"
+DIVISION_MEMBER_ROLE_NAME = "division_member"
 
 # The admin role holds EVERY permission in BUILTIN_PERMISSIONS — synced on
 # startup. Listed here for clarity / tests.
@@ -291,4 +309,65 @@ VENDOR_ROLE_PERMISSIONS: List[str] = [
     SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_DELETE,
     COMMENTS_CREATE, COMMENTS_READ, COMMENTS_DELETE,
     ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD, ATTACHMENTS_DELETE,
+]
+
+
+# ---------------------------------------------------------------------------
+# Doc 41 — scoped-RBAC seed permission sets.
+#
+# Mirrors of the user-management copies. Both services seed independently
+# at boot (idempotent) so either service can wake up on a fresh DB and
+# get the right state. Keep the lists in lockstep with user-mgmt's
+# permissions.py — same codes, same shape.
+# ---------------------------------------------------------------------------
+
+SUPER_ADMIN_ROLE_PERMISSIONS: List[str] = [p.code for p in BUILTIN_PERMISSIONS]
+
+ADMIN_FULL_ROLE_PERMISSIONS: List[str] = [
+    p.code for p in BUILTIN_PERMISSIONS if p.code != USERS_GRANT_SUPERADMIN
+]
+
+ORG_ADMIN_ROLE_PERMISSIONS: List[str] = [
+    USERS_READ, USERS_READ_ALL, USERS_UPDATE_ALL,
+    PROJECTS_READ, PROJECTS_READ_ALL,
+    PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
+    PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
+    VENDORS_READ, MASTER_DATA_VIEW,
+    RBAC_ASSIGN,
+]
+
+PROJECT_ADMIN_ROLE_PERMISSIONS: List[str] = [
+    USERS_READ, PROJECTS_READ,
+    PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
+    PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
+    MILESTONES_READ, MILESTONES_UPDATE,
+    ACTIVITIES_READ, ACTIVITIES_UPDATE,
+    TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_DELETE,
+    SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_DELETE,
+    COMMENTS_CREATE, COMMENTS_READ, COMMENTS_DELETE,
+    ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD, ATTACHMENTS_DELETE,
+    RBAC_ASSIGN,
+]
+
+PROJECT_MEMBER_ROLE_PERMISSIONS: List[str] = [
+    USERS_READ, PROJECTS_READ,
+    PROJECT_MEMBERS_READ,
+    MILESTONES_READ,
+    ACTIVITIES_READ,
+    TASKS_READ, TASKS_UPDATE,
+    SUBTASKS_READ, SUBTASKS_UPDATE,
+    COMMENTS_CREATE, COMMENTS_READ,
+    ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD,
+]
+
+# Read-only at this stage — see doc 41 §Q4.
+DIVISION_MEMBER_ROLE_PERMISSIONS: List[str] = [
+    USERS_READ, PROJECTS_READ,
+    PROJECT_MEMBERS_READ,
+    MILESTONES_READ,
+    ACTIVITIES_READ,
+    TASKS_READ,
+    SUBTASKS_READ,
+    COMMENTS_READ,
+    ATTACHMENTS_DOWNLOAD,
 ]

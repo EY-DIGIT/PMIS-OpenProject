@@ -17,7 +17,11 @@ from .permissions import (
     PROJECT_MEMBERS_DELETE,
 )
 from ....core.errors import NotFoundError
-from ....core.middleware.rbac import require_permission, require_authenticated
+from ....core.middleware.rbac import (
+    require_authenticated,
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.repositories.project_repository import ProjectRepository
 from ....infrastructure.db.session import get_db
 
@@ -34,7 +38,7 @@ def _resolve_project_id(db: Session, project_uuid: str) -> str:
 
 @projects_router.post(
     "/{project_uuid}/memberships/create",
-    dependencies=[require_permission(PROJECT_MEMBERS_ADD)],
+    dependencies=[require_project_permission(PROJECT_MEMBERS_ADD)],
     summary="Add project member",
     description="Add a user to a project",
     status_code=201
@@ -71,7 +75,7 @@ def list_project_members(
 
 @memberships_router.patch(
     "/{membership_id}",
-    dependencies=[require_permission(PROJECT_MEMBERS_UPDATE)],
+    dependencies=[require_project_permission(PROJECT_MEMBERS_UPDATE)],
     summary="Update project member",
     description="Update member roles"
 )
@@ -91,7 +95,7 @@ def update_project_member(
 
 @memberships_router.delete(
     "/{membership_id}",
-    dependencies=[require_permission(PROJECT_MEMBERS_DELETE)],
+    dependencies=[require_project_permission(PROJECT_MEMBERS_DELETE)],
     summary="Remove project member",
     description="Remove a user from a project",
     status_code=204,

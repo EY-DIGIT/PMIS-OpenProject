@@ -8,7 +8,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from ....core.middleware.rbac import require_permission
+from ....core.middleware.rbac import (
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.session import get_db
 from .._inline_attachments import dispatch_create
 from .controller import MilestoneController
@@ -28,7 +31,7 @@ milestones_router = APIRouter(prefix="/milestones", tags=["milestones"])
 
 @milestones_project_router.post(
     "/{project_uuid}/milestones/create",
-    dependencies=[require_permission(MILESTONES_CREATE)],
+    dependencies=[require_project_permission(MILESTONES_CREATE)],
     summary="Create milestone under project",
     description=(
         "Create a milestone. Accepts EITHER ``application/json`` (legacy "
@@ -176,7 +179,7 @@ def get(
 
 @milestones_router.patch(
     "/{milestone_id}",
-    dependencies=[require_permission(MILESTONES_UPDATE)],
+    dependencies=[require_project_permission(MILESTONES_UPDATE)],
     summary="Update milestone",
 )
 def update(
@@ -190,7 +193,7 @@ def update(
 
 @milestones_router.delete(
     "/{milestone_id}",
-    dependencies=[require_permission(MILESTONES_DELETE)],
+    dependencies=[require_project_permission(MILESTONES_DELETE)],
     summary="Soft-delete milestone (cascades to descendants)",
 )
 def delete(
@@ -203,7 +206,7 @@ def delete(
 
 @milestones_router.post(
     "/{milestone_id}/restore",
-    dependencies=[require_permission(MILESTONES_RESTORE)],
+    dependencies=[require_project_permission(MILESTONES_RESTORE)],
     summary="Restore a soft-deleted milestone (admin)",
 )
 def restore(

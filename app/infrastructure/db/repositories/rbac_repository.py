@@ -1,14 +1,21 @@
-"""Repository for the DB-driven RBAC tables (doc 21 part B).
+"""Repository for the DB-driven RBAC tables (doc 21 part B + doc 41 scope).
 
 Single class managing CRUD on permissions, role-permission grants,
 user-role assignments, and direct user-permission grants. Centralizes
 both the read (effective permissions for a user) and write paths so the
 rest of the codebase doesn't reach into individual model classes.
 
+Doc 41 added scoped role assignments via ``user_role_assignments``
+(org / project scope). The legacy ``user_roles`` rows continue to count
+as global-scope grants. ``effective_permissions_for_user`` returns the
+flat union (used by ``require_permission``); ``effective_permissions_by_scope``
+returns the per-scope view (used by doc-41's
+``require_project_permission`` / ``require_org_permission``).
+
 All writes flush but do NOT commit — caller owns the transaction.
 """
 from datetime import datetime, timezone
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy import and_, delete, exists, func
 from sqlalchemy.orm import Session
@@ -16,6 +23,18 @@ from sqlalchemy.orm import Session
 from ....core.permissions import (
     ADMIN_ROLE_NAME,
     VENDOR_ROLE_NAME,
+    # Doc 41 — scoped role names (seeded as empty rows here; their
+    # permission sets are owned + seeded by user-mgmt's startup sync).
+    SUPER_ADMIN_ROLE_NAME,
+    SUPER_ADMIN_ROLE_PERMISSIONS,
+    ORG_ADMIN_ROLE_NAME,
+    ORG_ADMIN_ROLE_PERMISSIONS,
+    PROJECT_ADMIN_ROLE_NAME,
+    PROJECT_ADMIN_ROLE_PERMISSIONS,
+    PROJECT_MEMBER_ROLE_NAME,
+    PROJECT_MEMBER_ROLE_PERMISSIONS,
+    DIVISION_MEMBER_ROLE_NAME,
+    DIVISION_MEMBER_ROLE_PERMISSIONS,
     VENDOR_ROLE_PERMISSIONS,
     ADMIN_ROLE_PERMISSIONS,
     BUILTIN_PERMISSIONS,
@@ -23,12 +42,15 @@ from ....core.permissions import (
     MEMBER_ROLE_PERMISSIONS,
     VIEWER_ROLE_NAME,
     VIEWER_ROLE_PERMISSIONS,
+    # Doc 41 scoped roles.
+    SUPER_ADMIN_ROLE_NAME,
 )
 from ..models.permission import PermissionModel
 from ..models.role import RoleModel
 from ..models.role_permission import RolePermissionModel
 from ..models.user_permission import UserPermissionModel
 from ..models.user_role import UserRoleModel
+from ..models.user_role_assignment import UserRoleAssignmentModel
 
 
 def _utcnow() -> datetime:
@@ -44,15 +66,28 @@ class RbacRepository:
     # -------------------------------------------------------------------
 
     def effective_permissions_for_user(self, user_id: str) -> Set[str]:
-        """Union of role-derived and direct grants for the user."""
+        """Union of role-derived (legacy + scoped) and direct grants.
+
+        Doc 41: union now includes scoped role assignments
+        (``user_role_assignments``) too — across every scope.
+        """
         if user_id is None:
             return set()
-        # Role-derived
-        role_codes = {
+        legacy_role_codes = {
             r[0]
             for r in self.db.query(RolePermissionModel.permission_code)
             .join(UserRoleModel, UserRoleModel.role_id == RolePermissionModel.role_id)
             .filter(UserRoleModel.user_id == user_id)
+            .all()
+        }
+        scoped_role_codes = {
+            r[0]
+            for r in self.db.query(RolePermissionModel.permission_code)
+            .join(
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.role_id == RolePermissionModel.role_id,
+            )
+            .filter(UserRoleAssignmentModel.user_id == user_id)
             .all()
         }
         direct_codes = {
@@ -61,23 +96,105 @@ class RbacRepository:
             .filter(UserPermissionModel.user_id == user_id)
             .all()
         }
-        return role_codes | direct_codes
+        return legacy_role_codes | scoped_role_codes | direct_codes
+
+    def effective_permissions_by_scope(
+        self, user_id: str,
+    ) -> Dict[Tuple[str, Optional[str]], Set[str]]:
+        """Doc 41 — return permissions grouped by scope key.
+
+        Output shape::
+
+            {
+                ("global", None):           {<perm code>, ...},
+                ("org", "<vendor_id>"):     {<perm code>, ...},
+                ("project", "<project_id>"): {<perm code>, ...},
+            }
+
+        Used by ``require_project_permission`` / ``require_org_permission``.
+        """
+        out: Dict[Tuple[str, Optional[str]], Set[str]] = {}
+        if user_id is None:
+            return out
+
+        legacy = (
+            self.db.query(RolePermissionModel.permission_code)
+            .join(UserRoleModel, UserRoleModel.role_id == RolePermissionModel.role_id)
+            .filter(UserRoleModel.user_id == user_id)
+            .all()
+        )
+        if legacy:
+            out.setdefault(("global", None), set()).update(r[0] for r in legacy)
+
+        directs = (
+            self.db.query(UserPermissionModel.permission_code)
+            .filter(UserPermissionModel.user_id == user_id)
+            .all()
+        )
+        if directs:
+            out.setdefault(("global", None), set()).update(r[0] for r in directs)
+
+        scoped = (
+            self.db.query(
+                RolePermissionModel.permission_code,
+                UserRoleAssignmentModel.organization_id,
+                UserRoleAssignmentModel.project_id,
+            )
+            .join(
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.role_id == RolePermissionModel.role_id,
+            )
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .all()
+        )
+        for code, org_id, project_id in scoped:
+            if project_id is not None:
+                key = ("project", project_id)
+            elif org_id is not None:
+                key = ("org", org_id)
+            else:
+                key = ("global", None)
+            out.setdefault(key, set()).add(code)
+        return out
 
     def user_has_admin_role(self, user_id: str) -> bool:
+        """True iff the user holds admin or super_admin globally.
+
+        Doc 41 widens this to include super_admin (a strict superset of
+        admin) and to honour global rows in ``user_role_assignments``.
+        """
         if user_id is None:
             return False
-        return (
+        admin_names = (ADMIN_ROLE_NAME, SUPER_ADMIN_ROLE_NAME)
+        legacy = (
             self.db.query(
                 exists().where(
                     and_(
                         UserRoleModel.user_id == user_id,
                         UserRoleModel.role_id == RoleModel.id,
-                        RoleModel.name == ADMIN_ROLE_NAME,
+                        RoleModel.name.in_(admin_names),
                     )
                 )
             ).scalar()
             or False
         )
+        if legacy:
+            return True
+        scoped = (
+            self.db.query(
+                exists().where(
+                    and_(
+                        UserRoleAssignmentModel.user_id == user_id,
+                        UserRoleAssignmentModel.role_id == RoleModel.id,
+                        UserRoleAssignmentModel.organization_id.is_(None),
+                        UserRoleAssignmentModel.project_id.is_(None),
+                        RoleModel.name.in_(admin_names),
+                    )
+                )
+            ).scalar()
+            or False
+        )
+        return scoped
 
     # -------------------------------------------------------------------
     # Permission catalog CRUD
@@ -372,12 +489,22 @@ class RbacRepository:
                     row.is_builtin = True
         self.db.flush()
 
-        # Ensure seed roles exist.
+        # Ensure seed roles exist (legacy + doc 41).
         for role_name, role_desc in (
             (ADMIN_ROLE_NAME, "Built-in superadmin role. Holds every permission. Cannot be deleted."),
             (MEMBER_ROLE_NAME, "Default role for project contributors."),
             (VIEWER_ROLE_NAME, "Read-only role."),
             (VENDOR_ROLE_NAME, "Vendor role (doc 33). Edits M/A/T/S on assigned projects, no lifecycle / RBAC / master-data access."),
+            # Doc 41 scoped roles. Monolith only seeds the role NAMES
+            # so the rows exist for FK targets / scoped-permission
+            # joins; the permission grants flow from user-mgmt's
+            # canonical sync (which both services run at boot, both
+            # idempotent — last writer wins).
+            (SUPER_ADMIN_ROLE_NAME, "Doc 41 super_admin (canonical seed in user-mgmt)."),
+            (ORG_ADMIN_ROLE_NAME, "Doc 41 org_admin (canonical seed in user-mgmt)."),
+            (PROJECT_ADMIN_ROLE_NAME, "Doc 41 project_admin (canonical seed in user-mgmt)."),
+            (PROJECT_MEMBER_ROLE_NAME, "Doc 41 project_member (canonical seed in user-mgmt)."),
+            (DIVISION_MEMBER_ROLE_NAME, "Doc 41 division_member (canonical seed in user-mgmt)."),
         ):
             existing = self.get_role_by_name(role_name)
             if existing is None:
@@ -390,16 +517,31 @@ class RbacRepository:
         member_role = self.get_role_by_name(MEMBER_ROLE_NAME)
         viewer_role = self.get_role_by_name(VIEWER_ROLE_NAME)
         vendor_role = self.get_role_by_name(VENDOR_ROLE_NAME)
+        super_admin_role = self.get_role_by_name(SUPER_ADMIN_ROLE_NAME)
+        org_admin_role = self.get_role_by_name(ORG_ADMIN_ROLE_NAME)
+        project_admin_role = self.get_role_by_name(PROJECT_ADMIN_ROLE_NAME)
+        project_member_role = self.get_role_by_name(PROJECT_MEMBER_ROLE_NAME)
+        division_member_role = self.get_role_by_name(DIVISION_MEMBER_ROLE_NAME)
 
         # Admin role holds everything currently registered.
         added = self.grant_permissions_to_role(admin_role.id, ADMIN_ROLE_PERMISSIONS)
-        # Member / viewer / vendor roles get their seed sets if currently empty
-        # (don't overwrite admin edits to these roles).
+        # super_admin holds everything (replaces what 'admin' used to be).
+        self.grant_permissions_to_role(super_admin_role.id, SUPER_ADMIN_ROLE_PERMISSIONS)
+        # Member / viewer / vendor (legacy) — seed only if empty.
         if not self.list_role_permissions(member_role.id):
             self.grant_permissions_to_role(member_role.id, MEMBER_ROLE_PERMISSIONS)
         if not self.list_role_permissions(viewer_role.id):
             self.grant_permissions_to_role(viewer_role.id, VIEWER_ROLE_PERMISSIONS)
         if not self.list_role_permissions(vendor_role.id):
             self.grant_permissions_to_role(vendor_role.id, VENDOR_ROLE_PERMISSIONS)
+        # Doc 41 scoped roles — seed only if empty.
+        if not self.list_role_permissions(org_admin_role.id):
+            self.grant_permissions_to_role(org_admin_role.id, ORG_ADMIN_ROLE_PERMISSIONS)
+        if not self.list_role_permissions(project_admin_role.id):
+            self.grant_permissions_to_role(project_admin_role.id, PROJECT_ADMIN_ROLE_PERMISSIONS)
+        if not self.list_role_permissions(project_member_role.id):
+            self.grant_permissions_to_role(project_member_role.id, PROJECT_MEMBER_ROLE_PERMISSIONS)
+        if not self.list_role_permissions(division_member_role.id):
+            self.grant_permissions_to_role(division_member_role.id, DIVISION_MEMBER_ROLE_PERMISSIONS)
         self.db.flush()
         return permissions_inserted, added

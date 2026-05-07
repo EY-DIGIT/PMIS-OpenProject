@@ -12,7 +12,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from ....core.middleware.rbac import require_permission
+from ....core.middleware.rbac import (
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.session import get_db
 from .._inline_attachments import dispatch_create
 from .controller import ActivityController
@@ -90,7 +93,7 @@ def _activity_openapi_extra() -> Dict[str, Any]:
 
 @activities_milestone_router.post(
     "/{milestone_id}/activities/create",
-    dependencies=[require_permission(ACTIVITIES_CREATE)],
+    dependencies=[require_project_permission(ACTIVITIES_CREATE)],
     summary="Create an activity under a milestone (doc 38)",
     description=(
         "Create an activity. Accepts EITHER ``application/json`` "
@@ -147,7 +150,7 @@ def get(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Di
 
 @activities_router.patch(
     "/{activity_id}",
-    dependencies=[require_permission(ACTIVITIES_UPDATE)],
+    dependencies=[require_project_permission(ACTIVITIES_UPDATE)],
     summary="Update activity",
 )
 def update(
@@ -159,7 +162,7 @@ def update(
 
 @activities_router.delete(
     "/{activity_id}",
-    dependencies=[require_permission(ACTIVITIES_DELETE)],
+    dependencies=[require_project_permission(ACTIVITIES_DELETE)],
     summary="Soft-delete activity (cascades)",
 )
 def delete(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -168,7 +171,7 @@ def delete(request: Request, activity_id: str, db: Session = Depends(get_db)) ->
 
 @activities_router.post(
     "/{activity_id}/restore",
-    dependencies=[require_permission(ACTIVITIES_RESTORE)],
+    dependencies=[require_project_permission(ACTIVITIES_RESTORE)],
     summary="Restore a soft-deleted activity (admin)",
 )
 def restore(request: Request, activity_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:

@@ -3,7 +3,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from ....core.middleware.rbac import require_permission
+from ....core.middleware.rbac import (
+    require_permission,
+    require_project_permission,
+)
 from ....infrastructure.db.session import get_db
 from .._inline_attachments import dispatch_create
 from .controller import SubtaskController
@@ -66,7 +69,7 @@ def _subtask_openapi_extra() -> Dict[str, Any]:
 
 @subtasks_task_router.post(
     "/{task_id}/subtasks/create",
-    dependencies=[require_permission(SUBTASKS_CREATE)],
+    dependencies=[require_project_permission(SUBTASKS_CREATE)],
     summary="Create subtask under task",
     description=(
         "Create a task-scoped subtask. Accepts EITHER ``application/json`` "
@@ -111,7 +114,7 @@ def list_(
 
 @subtasks_router.post(
     "/{parent_subtask_id}/subtasks/create",
-    dependencies=[require_permission(SUBTASKS_CREATE)],
+    dependencies=[require_project_permission(SUBTASKS_CREATE)],
     summary="Create a subtask nested under another subtask",
     description=(
         "Create a subtask nested under another subtask. Same body as the "
@@ -150,7 +153,7 @@ def get(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dic
 
 @subtasks_router.patch(
     "/{subtask_id}",
-    dependencies=[require_permission(SUBTASKS_UPDATE)],
+    dependencies=[require_project_permission(SUBTASKS_UPDATE)],
     summary="Update subtask (handles type transitions + resource upsert)",
 )
 def update(request: Request, subtask_id: str, data: SubtaskUpdateRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -159,7 +162,7 @@ def update(request: Request, subtask_id: str, data: SubtaskUpdateRequest, db: Se
 
 @subtasks_router.delete(
     "/{subtask_id}",
-    dependencies=[require_permission(SUBTASKS_DELETE)],
+    dependencies=[require_project_permission(SUBTASKS_DELETE)],
     summary="Soft-delete subtask",
 )
 def delete(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -168,7 +171,7 @@ def delete(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> 
 
 @subtasks_router.post(
     "/{subtask_id}/restore",
-    dependencies=[require_permission(SUBTASKS_RESTORE)],
+    dependencies=[require_project_permission(SUBTASKS_RESTORE)],
     summary="Restore a soft-deleted subtask (admin)",
 )
 def restore(request: Request, subtask_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
