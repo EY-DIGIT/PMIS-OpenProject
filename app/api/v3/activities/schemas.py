@@ -8,11 +8,12 @@ DB columns kept for legacy reads. Single create endpoint:
 
 Doc 39:
 - Ownership fields ``ownerDivision`` / ``vendorId`` /
-  ``concernedDivisions`` are REQUIRED on create. ``concernedDivisions``
-  replaces the single-valued ``concernedDivision`` from doc 38 — accepts
-  a list of division codes.
-- The legacy single ``concernedDivision`` field is no longer accepted on
-  the wire (DB column kept on disk for legacy rows).
+  ``concernedDivision`` are REQUIRED on create.
+- ``concernedDivision`` keyword is preserved for FE compatibility; only
+  the *datatype* changed from string to list of division codes
+  (``["tmd1", "others"]``). Backed on disk by the new
+  ``concerned_divisions`` JSON column; the legacy single-value
+  ``concerned_division`` column is kept untouched for safety.
 """
 from typing import List, Optional
 
@@ -40,7 +41,7 @@ class ActivityCreateRequest(BaseModel):
       - name + description + dates  (existing)
       - ownerDivision  (REQUIRED — division code)
       - vendorId       (REQUIRED — must be in the project's vendor list)
-      - concernedDivisions  (REQUIRED — list of division codes, min 1)
+      - concernedDivision  (REQUIRED — list of division codes, min 1)
 
     ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate``
     are NOT accepted here — they belong on PATCH.
@@ -67,8 +68,11 @@ class ActivityCreateRequest(BaseModel):
             "project's vendor list."
         ),
     )
+    # Doc 39: wire keyword kept as ``concernedDivision`` (singular) for FE
+    # backwards compatibility — only the *datatype* changed from string to
+    # list. The Python attribute is plural to match the new JSON DB column.
     concerned_divisions: List[str] = Field(
-        ..., alias="concernedDivisions", min_length=1,
+        ..., alias="concernedDivision", min_length=1,
         description=(
             "List of division codes — at least one required. Each entry "
             f"must be one of: {', '.join(DIVISION_CHOICES)}."
@@ -92,7 +96,7 @@ class ActivityCreateRequest(BaseModel):
     @classmethod
     def _validate_concerned(cls, v):
         if not isinstance(v, list):
-            raise ValueError("concernedDivisions must be a list of division codes.")
+            raise ValueError("concernedDivision must be a list of division codes.")
         return [_validate_division_code(item) for item in v]
 
 
@@ -104,7 +108,7 @@ class ActivityUpdateRequest(BaseModel):
     wire (DB columns kept for read-side compat with legacy rows).
 
     ``dependsOn`` semantics: None = no change, [] = clear, [...] = replace.
-    Same semantics for ``concernedDivisions``.
+    Same semantics for ``concernedDivision``.
     """
     model_config = ConfigDict(populate_by_name=True)
 
@@ -122,7 +126,7 @@ class ActivityUpdateRequest(BaseModel):
     # Doc 38 + 39 ownership fields (optional on PATCH; required on create).
     owner_division: Optional[str] = Field(None, alias="ownerDivision")
     vendor_id: Optional[str] = Field(None, alias="vendorId")
-    concerned_divisions: Optional[List[str]] = Field(None, alias="concernedDivisions")
+    concerned_divisions: Optional[List[str]] = Field(None, alias="concernedDivision")
 
     @field_validator("status", mode="before")
     @classmethod
@@ -150,7 +154,7 @@ class ActivityUpdateRequest(BaseModel):
         if v is None:
             return v
         if not isinstance(v, list):
-            raise ValueError("concernedDivisions must be a list of division codes.")
+            raise ValueError("concernedDivision must be a list of division codes.")
         return [_validate_division_code(item) for item in v]
 
 

@@ -215,7 +215,7 @@ class TestEqualDatesCascade:
         msid = ms.json()["data"]["id"]
 
         # Doc 39: activity create needs ownerDivision / vendorId /
-        # concernedDivisions. Seed a vendor and attach it to the project.
+        # concernedDivision. Seed a vendor and attach it to the project.
         vresp = client.post("/api/v3/master/vendors/create", headers=admin_headers,
                             json={"name": f"Doc27 V {uuid4().hex[:4]}", "phoneNumber": "+919999999999"})
         vid = vresp.json()["data"]["id"]
@@ -230,7 +230,7 @@ class TestEqualDatesCascade:
                 "endDate": _iso_ist(2026, 7, 20),
                 "ownerDivision": "tmd1",
                 "vendorId": vid,
-                "concernedDivisions": ["tmd1"],
+                "concernedDivision": ["tmd1"],
             },
             headers=admin_headers,
         )

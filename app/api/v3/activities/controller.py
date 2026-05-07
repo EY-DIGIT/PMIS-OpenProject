@@ -43,14 +43,14 @@ from .services import (
 
 
 # Doc 38 multipart-form key spec.
-# Doc 39: ownerDivision / vendorId are required on create; concernedDivisions
+# Doc 39: ownerDivision / vendorId are required on create; concernedDivision (list)
 # is required as a list (multipart parses it from a repeated form field).
 _ACTIVITY_REQUIRED_STRING_KEYS = ("name", "ownerDivision", "vendorId")
 _ACTIVITY_OPTIONAL_STRING_KEYS = (
     "description", "startDate", "endDate",
 )
 _ACTIVITY_INT_KEYS = ("position",)
-_ACTIVITY_ARRAY_KEYS = ("concernedDivisions",)
+_ACTIVITY_ARRAY_KEYS = ("concernedDivision",)
 
 
 def _format_resource(r: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -107,11 +107,11 @@ def format_activity_response(
         # Doc 38: type / resource_* deprecated. Still surfaced for legacy rows.
         "type": a.get("type"),
         "ownerDivision": a.get("owner_division"),
-        # Doc 38 legacy single-value column — surfaced for legacy rows.
-        # New rows leave this NULL; the multi field below is the primary.
-        "concernedDivision": a.get("concerned_division"),
-        # Doc 39: list of division codes (replaces concernedDivision).
-        "concernedDivisions": a.get("concerned_divisions") or [],
+        # Doc 39: ``concernedDivision`` keyword preserved on the wire for
+        # FE compatibility; only the datatype changed from string to a
+        # list of division codes. The legacy single ``concerned_division``
+        # column is kept on disk but never surfaced through the API.
+        "concernedDivision": a.get("concerned_divisions") or [],
         "vendorId": a.get("vendor_id"),
         "startDate": a["start_date"],
         "endDate": a["end_date"],

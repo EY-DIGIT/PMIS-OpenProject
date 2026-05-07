@@ -165,7 +165,7 @@ class TestLegacyProjectActivityFloor:
         mid = m.json()["data"]["id"]
 
         # Doc 39: activity create needs ownerDivision / vendorId /
-        # concernedDivisions. Seed a vendor and attach it to the legacy project.
+        # concernedDivision. Seed a vendor and attach it to the legacy project.
         from uuid import uuid4
         vresp = client.post("/api/v3/master/vendors/create", headers=admin_headers,
                             json={"name": f"Doc30L V {uuid4().hex[:4]}", "phoneNumber": "+919999999999"})
@@ -183,7 +183,7 @@ class TestLegacyProjectActivityFloor:
                 "endDate":   "2026-05-31T23:59:59.000Z",
                 "ownerDivision": "tmd1",
                 "vendorId": vid,
-                "concernedDivisions": ["tmd1"],
+                "concernedDivision": ["tmd1"],
             },
         )
         assert a.status_code == 201, a.text
