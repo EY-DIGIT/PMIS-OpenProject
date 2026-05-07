@@ -164,6 +164,15 @@ class TestLegacyProjectActivityFloor:
         assert m.status_code == 201, m.text
         mid = m.json()["data"]["id"]
 
+        # Doc 39: activity create needs ownerDivision / vendorId /
+        # concernedDivisions. Seed a vendor and attach it to the legacy project.
+        from uuid import uuid4
+        vresp = client.post("/api/v3/master/vendors/create", headers=admin_headers,
+                            json={"name": f"Doc30L V {uuid4().hex[:4]}", "phoneNumber": "+919999999999"})
+        vid = vresp.json()["data"]["id"]
+        client.patch(f"/api/v3/projects/{legacy_project.id}", headers=admin_headers,
+                     json={"vendorIds": [vid]})
+
         # Activity on the same calendar day as the milestone.
         a = client.post(
             f"/api/v3/milestones/{mid}/activities/create",
@@ -172,6 +181,9 @@ class TestLegacyProjectActivityFloor:
                 "name": "A1",
                 "startDate": "2026-05-01T00:00:00.000Z",
                 "endDate":   "2026-05-31T23:59:59.000Z",
+                "ownerDivision": "tmd1",
+                "vendorId": vid,
+                "concernedDivisions": ["tmd1"],
             },
         )
         assert a.status_code == 201, a.text

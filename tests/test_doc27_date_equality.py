@@ -214,12 +214,23 @@ class TestEqualDatesCascade:
         assert ms.status_code == 201
         msid = ms.json()["data"]["id"]
 
+        # Doc 39: activity create needs ownerDivision / vendorId /
+        # concernedDivisions. Seed a vendor and attach it to the project.
+        vresp = client.post("/api/v3/master/vendors/create", headers=admin_headers,
+                            json={"name": f"Doc27 V {uuid4().hex[:4]}", "phoneNumber": "+919999999999"})
+        vid = vresp.json()["data"]["id"]
+        client.patch(f"/api/v3/projects/{pid}", headers=admin_headers,
+                     json={"vendorIds": [vid]})
+
         a = client.post(
             f"/api/v3/milestones/{msid}/activities/create",
             json={
                 "name": "Eq A1",
                 "startDate": _iso_ist(2026, 7, 10),
                 "endDate": _iso_ist(2026, 7, 20),
+                "ownerDivision": "tmd1",
+                "vendorId": vid,
+                "concernedDivisions": ["tmd1"],
             },
             headers=admin_headers,
         )

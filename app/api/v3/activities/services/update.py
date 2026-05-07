@@ -131,6 +131,8 @@ def update_activity(
     # Doc 38 additions — all optional.
     owner_division: Optional[str] = None,
     concerned_division: Optional[str] = None,
+    # Doc 39: replacement list (None = no change, [] = clear, [...] = replace).
+    concerned_divisions: Optional[List[str]] = None,
     vendor_id: Optional[str] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     repo = ActivityRepository(db)
@@ -456,7 +458,28 @@ def update_activity(
         updates["owner_division"] = owner_division
     if concerned_division is not None:
         updates["concerned_division"] = concerned_division
+    # Doc 39: list of division codes; None = no change, [] = clear,
+    # [...] = replace. Pydantic schema enforces value-membership.
+    if concerned_divisions is not None:
+        updates["concerned_divisions"] = list(concerned_divisions)
     if vendor_id is not None:
+        # Doc 39: vendor_id (when changed) must be one of the project's
+        # vendors. Same rule as create.
+        from .....infrastructure.db.models.project_vendor import ProjectVendorModel
+        in_project = (
+            db.query(ProjectVendorModel.vendor_id)
+            .filter(
+                ProjectVendorModel.project_id == model.project_id,
+                ProjectVendorModel.vendor_id == vendor_id,
+            )
+            .first()
+        )
+        if in_project is None:
+            raise ValidationError(
+                f"vendorId '{vendor_id}' is not in the project's vendor "
+                f"list. Add the vendor to the project before assigning "
+                f"it to an activity."
+            )
         updates["vendor_id"] = vendor_id
 
     before_snapshot = {k: _iso(getattr(model, k)) for k in updates.keys()} if updates else {}

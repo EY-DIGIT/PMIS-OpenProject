@@ -60,6 +60,9 @@ def create_activity(
     # Doc 38 additions — all optional.
     owner_division: Optional[str] = None,
     concerned_division: Optional[str] = None,
+    # Doc 39: list of division codes (multi). Backfilled from
+    # concerned_division for legacy rows; primary write target now.
+    concerned_divisions: Optional[List[str]] = None,
     vendor_id: Optional[str] = None,
 ) -> Tuple[Activity, Optional[ActivityResource]]:
     milestone = (
@@ -88,6 +91,27 @@ def create_activity(
         entity_label="activity",
         parent_label="milestone",
     )
+
+    # Doc 39: vendor_id (when provided) must be one of the project's
+    # vendors. Avoids attaching an activity to a vendor that's not part
+    # of the project — keeps the FE dropdown contract consistent on the
+    # server side.
+    if vendor_id is not None:
+        from .....infrastructure.db.models.project_vendor import ProjectVendorModel
+        in_project = (
+            db.query(ProjectVendorModel.vendor_id)
+            .filter(
+                ProjectVendorModel.project_id == milestone.project_id,
+                ProjectVendorModel.vendor_id == vendor_id,
+            )
+            .first()
+        )
+        if in_project is None:
+            raise ValidationError(
+                f"vendorId '{vendor_id}' is not in the project's vendor "
+                f"list. Add the vendor to the project before assigning "
+                f"it to an activity."
+            )
 
     # Resource block: validate the classification columns now that we know we
     # have a details-mode resource block.
@@ -207,6 +231,7 @@ def create_activity(
         status=resolved_status,
         owner_division=owner_division,
         concerned_division=concerned_division,
+        concerned_divisions=concerned_divisions,
         vendor_id=vendor_id,
     )
 
