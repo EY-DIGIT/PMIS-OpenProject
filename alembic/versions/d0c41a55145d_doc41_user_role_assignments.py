@@ -1,6 +1,6 @@
 """Doc 41 — scoped role assignments table.
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: d0c41a55145d
 Revises: e3f5b7a8c1d4
 Create Date: 2026-05-08
 
@@ -34,7 +34,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
+revision: str = "d0c41a55145d"
 down_revision: Union[str, Sequence[str], None] = "e3f5b7a8c1d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
