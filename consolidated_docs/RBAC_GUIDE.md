@@ -61,15 +61,15 @@ The pre-doc-41 model granted roles globally — a `member` was a member of the *
 
 **Where the boundary is enforced today**: monolith routes that mutate project state (`PATCH /projects/{id}`, project lifecycle, M/A/T/S create/update/delete/restore, project_members add/update/delete) all use `require_project_permission`. **Comment + attachment writes intentionally still use the global union** — their `target_id` path param is target-kind-agnostic and would need a target-kind-aware decorator factory to scope cleanly. Tightening this is a follow-up.
 
-**API surface** (all served by user-management on port 8001; monolith proxies them through):
+**API surface** (all served by user-management on port 8001):
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST/GET/DELETE | `/api/v3/users/{id}/role-assignments` | Per-user assignment CRUD. |
-| POST/DELETE | `/api/v3/projects/{id}/role-assignments` | Per-project assignment CRUD (path's `project_id` is canonical). |
-| GET | `/api/v3/projects/{id}/role-assignments` | Per-project drill-down view, grouped by role bucket. Powers the FE Project-Mapping mock. |
-| GET | `/api/v3/vendors/{id}/projects?expand=role-assignments` | Org-Mgmt landing view: every project owned by the vendor with optional role buckets inlined. |
-| GET | `/api/v3/users/{id}/projects` | User-Mgmt landing view: every project the user is assigned to and the role names they hold there. |
+| Method | Path | Purpose | Reachable via :8000 (proxy)? |
+|---|---|---|---|
+| POST/GET/DELETE | `/api/v3/users/{id}/role-assignments` | Per-user assignment CRUD. | Yes (matches existing `/api/v3/users/*` proxy prefix). |
+| POST/DELETE | `/api/v3/projects/{id}/role-assignments` | Per-project assignment CRUD (path's `project_id` is canonical). | **No** — FE must hit `:8001` directly. The monolith does not proxy `/projects/{id}/role-assignments` (would conflict with the heavily-used `/projects/*` namespace). |
+| GET | `/api/v3/projects/{id}/role-assignments` | Per-project drill-down view, grouped by role bucket. Powers the FE Project-Mapping mock. | **No** — same reason. `:8001` only. |
+| GET | `/api/v3/vendors/{id}/projects?expand=role-assignments` | Org-Mgmt landing view: every project owned by the vendor with optional role buckets inlined. | **No** — `:8001` only. Note: monolith has its own `/vendors/{id}/projects` legacy handler (different shape, no `roleAssignments`); FE picks based on need but the doc-41 shape lives only on `:8001`. |
+| GET | `/api/v3/users/{id}/projects` | User-Mgmt landing view: every project the user is assigned to and the role names they hold there. | Yes (matches `/api/v3/users/*` proxy prefix). |
 
 ---
 
