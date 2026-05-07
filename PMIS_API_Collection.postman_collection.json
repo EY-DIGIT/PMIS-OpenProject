@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "c9a4f34d-889e-4870-8e82-fe051be64f13",
+    "_postman_id": "e42fcdd6-1aa1-437f-826f-62c42f47d86e",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -3075,6 +3075,14 @@
                 "v3",
                 "master",
                 "vendors"
+              ],
+              "query": [
+                {
+                  "key": "active_only",
+                  "value": "False",
+                  "description": "When true, return only active vendors (legacy picker behaviour). Default false so management views see inactive rows too. Soft-deleted rows are always hidden.",
+                  "disabled": true
+                }
               ]
             },
             "description": "List live vendors (delegates to GET /api/v3/vendors)"
@@ -7436,9 +7444,17 @@
                 "api",
                 "v3",
                 "vendors"
+              ],
+              "query": [
+                {
+                  "key": "active_only",
+                  "value": "False",
+                  "description": "When true, return only active vendors (legacy picker behaviour). Default false so management views see inactive rows too. Soft-deleted rows are always hidden.",
+                  "disabled": true
+                }
               ]
             },
-            "description": "Returns vendors that are not soft-deleted, ordered by createdAt descending so the latest vendor is row 0 in Search Vendor."
+            "description": "Returns vendors that are not soft-deleted, ordered by createdAt descending so the latest vendor is row 0 in Search Vendor. Active and inactive vendors are returned by default so the FE Search Vendor / management view can show the active toggle on every row. Pass ``?active_only=true`` (used by picker dropdowns) to filter the list down to active vendors only."
           },
           "response": []
         },
