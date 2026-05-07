@@ -237,6 +237,15 @@ class UserServiceProxyMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # CORS preflights belong to whoever the client typed the URL at —
+        # the monolith — not to the upstream service. Forwarding OPTIONS
+        # makes user-service return 405 (no OPTIONS handler on its routes)
+        # and breaks browser preflight. Let the request fall through so
+        # monolith's CORSMiddleware answers it locally.
+        if (scope.get("method") or "").upper() == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path", "")
         if not _should_proxy_path(path):
             await self.app(scope, receive, send)

@@ -196,6 +196,51 @@ class TestProxyOn:
 
 
 # ---------------------------------------------------------------------------
+# CORS preflight handling — proxy must NOT forward OPTIONS
+# ---------------------------------------------------------------------------
+
+class TestCorsPreflightBypass:
+    """OPTIONS preflights stop at the monolith — same contract as the
+    user-service proxy. Forwarding them to notification-service would
+    return 405 and break browser-side template-management UI."""
+
+    def test_options_on_notification_templates_not_forwarded(
+        self, client, proxy_on, stub_httpx,
+    ):
+        resp = client.options(
+            "/api/v3/master/notification_templates",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+        assert stub_httpx["calls"] == [], (
+            f"OPTIONS leaked to notification-service: {stub_httpx['calls']}"
+        )
+        assert resp.status_code in (200, 204), resp.text
+
+    def test_get_after_options_still_forwards(
+        self, client, admin_headers, proxy_on, stub_httpx,
+    ):
+        stub_httpx["next_response"] = _StubResponse(
+            status_code=200,
+            body=b'{"data":{"_embedded":{"elements":[]}},"status":200}',
+        )
+        client.options(
+            "/api/v3/master/notification_templates",
+            headers={"Origin": "http://localhost:3000",
+                     "Access-Control-Request-Method": "GET"},
+        )
+        resp = client.get(
+            "/api/v3/master/notification_templates", headers=admin_headers,
+        )
+        assert resp.status_code == 200
+        assert len(stub_httpx["calls"]) == 1
+        assert stub_httpx["calls"][0]["method"] == "GET"
+
+
+# ---------------------------------------------------------------------------
 # Failure handling
 # ---------------------------------------------------------------------------
 

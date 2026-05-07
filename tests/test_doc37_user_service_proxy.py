@@ -290,6 +290,71 @@ class TestProxyOn:
 
 
 # ---------------------------------------------------------------------------
+# CORS preflight handling — proxy must NOT forward OPTIONS
+# ---------------------------------------------------------------------------
+
+class TestCorsPreflightBypass:
+    """OPTIONS preflights belong to the gateway the browser typed
+    (monolith), not to the upstream user-service. The proxy must let
+    them fall through so monolith's CORSMiddleware answers them
+    locally — otherwise user-service routes (POST-only on /login etc.)
+    return 405 and the browser blocks the actual request."""
+
+    def test_options_on_proxied_path_not_forwarded(
+        self, client, proxy_on, stub_httpx,
+    ):
+        # Build an actual CORS preflight: Origin + Access-Control-Request-*
+        resp = client.options(
+            "/api/v3/users/login",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,authorization",
+            },
+        )
+        # No httpx call should have been made — the proxy let it fall
+        # through, monolith's CORSMiddleware answered.
+        assert stub_httpx["calls"] == [], (
+            f"OPTIONS leaked to user-service: {stub_httpx['calls']}"
+        )
+        # CORSMiddleware answers 200 (or 204) with the right CORS headers.
+        assert resp.status_code in (200, 204), resp.text
+
+    def test_options_on_master_roles_not_forwarded(
+        self, client, proxy_on, stub_httpx,
+    ):
+        resp = client.options(
+            "/api/v3/master/roles",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert stub_httpx["calls"] == []
+        assert resp.status_code in (200, 204)
+
+    def test_post_after_options_still_forwards(
+        self, client, proxy_on, stub_httpx,
+    ):
+        """Sanity: bypassing OPTIONS doesn't accidentally also bypass POST."""
+        stub_httpx["next_response"] = _StubResponse(
+            status_code=200,
+            body=b'{"data":{"_type":"Login"},"status":200}',
+        )
+        client.options(
+            "/api/v3/users/login",
+            headers={"Origin": "http://localhost:3000",
+                     "Access-Control-Request-Method": "POST"},
+        )
+        resp = client.post(
+            "/api/v3/users/login", json={"login": "admin", "password": "x"},
+        )
+        assert resp.status_code == 200
+        assert len(stub_httpx["calls"]) == 1
+        assert stub_httpx["calls"][0]["method"] == "POST"
+
+
+# ---------------------------------------------------------------------------
 # Failure handling
 # ---------------------------------------------------------------------------
 

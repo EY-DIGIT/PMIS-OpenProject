@@ -147,6 +147,14 @@ class NotificationServiceProxyMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # CORS preflights belong to the gateway the client typed (monolith),
+        # not to the upstream. Forwarding OPTIONS makes notification-service
+        # return 405 and breaks browser preflight. Let CORSMiddleware on the
+        # monolith answer it locally.
+        if (scope.get("method") or "").upper() == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path", "")
         if not _should_proxy_path(path):
             await self.app(scope, receive, send)
