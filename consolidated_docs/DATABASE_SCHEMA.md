@@ -18,7 +18,8 @@ This doc inventories every table, its columns, indexes, FKs, and relationships. 
 | 2 | [`roles`](#2-roles) | Named permission bundles |
 | 3 | [`permissions`](#3-permissions) | Permission catalog (string codes) |
 | 4 | [`role_permissions`](#4-role_permissions) | Many-to-many: role ↔ permission |
-| 5 | [`user_roles`](#5-user_roles) | Many-to-many: user ↔ role |
+| 5 | [`user_roles`](#5-user_roles) | Many-to-many: user ↔ role (legacy global; doc 41 introduces scoped variant in `user_role_assignments`) |
+| 6a | [`user_role_assignments`](#6a-user_role_assignments-doc-41) | Doc 41 scoped grants (global / org / project) |
 | 6 | [`user_permissions`](#6-user_permissions) | Direct user-level permission grants (additive) |
 | 7 | [`revoked_tokens`](#7-revoked_tokens) | JWT JTI blacklist |
 | 8 | [`vendors`](#8-vendors) | Vendor catalog |
@@ -168,6 +169,39 @@ Direct grants — additive on top of role-derived permissions. There is no deny 
 | `permission_code` | `VARCHAR(128) PK FK → permissions(code)` | |
 | `created_at` | timestamp | |
 | `created_by` | `VARCHAR(36) FK → users(id) NULL` | |
+
+---
+
+## 6a. `user_role_assignments` (doc 41)
+
+Scoped role assignments (org / project / global). Replaces what `user_roles` (global-only) and `project_members.roles[]` (project-only) carried separately.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `INTEGER PK autoincrement` | Synthetic — lets a user hold the same role on multiple projects. |
+| `user_id` | `VARCHAR(36) NOT NULL FK → users(id)` | Indexed. |
+| `role_id` | `INTEGER NOT NULL FK → roles(id)` | Indexed. |
+| `organization_id` | `VARCHAR(36) NULL FK → vendors(id)` | Set ⇒ org-scope. Mutually exclusive with `project_id`. |
+| `project_id` | `VARCHAR(36) NULL FK → projects(id)` | Set ⇒ project-scope. Mutually exclusive with `organization_id`. |
+| `created_at` | timestamp NOT NULL | |
+| `created_by` | `VARCHAR(36) FK → users(id) NULL` | Actor who created the assignment. |
+
+**Constraints**:
+- `ck_ura_single_scope`: `(organization_id IS NULL OR project_id IS NULL)` — a row is global, org-scoped, or project-scoped, never two-scope.
+- `uq_user_role_assignment_scope`: `UNIQUE(user_id, role_id, organization_id, project_id)` — the same `(user, role, scope)` cannot be granted twice.
+
+**Scope semantics**:
+- Both columns NULL ⇒ global (legacy `user_roles` migrated here as global rows).
+- `organization_id` set ⇒ org scope; the user holds the role within that vendor (= organization).
+- `project_id` set ⇒ project scope; the user holds the role within that project only.
+
+**Caller-vs-target authority** for grants is enforced in the user-mgmt service layer, not at the table level. See [RBAC_GUIDE.md §2a](RBAC_GUIDE.md#2a-scoped-rbac-doc-41).
+
+**Lockout protection**: revoking the last global `super_admin` row returns 403 — the canonical-bootstrap path requires at least one super_admin always exist.
+
+**Backfill (alembic `d0c41a55145d`, deployed 2026-05-08)**:
+- Every row in `user_roles` was copied here as `(user, role, NULL, NULL)`.
+- Every `project_members.roles[]` JSON entry whose name matches an existing role was copied here as `(user, role, NULL, project_id)`.
 
 ---
 
