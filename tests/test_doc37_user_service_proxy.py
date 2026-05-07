@@ -149,6 +149,32 @@ class TestPathMatching:
         from app.shared.user_service_client import _should_proxy_path
         assert _should_proxy_path("/api/v3/userspace") is False
 
+    # Doc 41: project- and vendor-side role-assignment endpoints
+    # (e.g. /projects/{id}/role-assignments, /vendors/{id}/projects)
+    # are intentionally NOT proxied. The FE talks to user-mgmt :8001
+    # directly for those — keeps the new surface decoupled from the
+    # monolith and shrinks the proxy responsibility.
+    def test_doc41_project_role_assignments_NOT_proxied(self):
+        from app.shared.user_service_client import _should_proxy_path
+        assert _should_proxy_path(
+            "/api/v3/projects/abc-123/role-assignments"
+        ) is False
+
+    def test_doc41_vendor_projects_NOT_proxied(self):
+        from app.shared.user_service_client import _should_proxy_path
+        assert _should_proxy_path(
+            "/api/v3/vendors/abc-123/projects"
+        ) is False
+
+    def test_users_role_assignments_IS_proxied_via_users_prefix(self):
+        # /api/v3/users/{id}/role-assignments still goes through because
+        # it starts with the /api/v3/users prefix (existing rule). This
+        # is the only doc-41 path that's proxied — the user-side variant.
+        from app.shared.user_service_client import _should_proxy_path
+        assert _should_proxy_path(
+            "/api/v3/users/abc-123/role-assignments"
+        ) is True
+
 
 # ---------------------------------------------------------------------------
 # Active-flag gate

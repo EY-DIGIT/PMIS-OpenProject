@@ -206,6 +206,16 @@ _PROXIED_PATH_PREFIXES = (
     "/api/v3/master/permissions",
 )
 
+# Doc 41 note: scoped role-assignment + project-mapping endpoints
+# (``/api/v3/projects/{id}/role-assignments``,
+#  ``/api/v3/vendors/{id}/projects``,
+#  ``/api/v3/users/{id}/role-assignments``) live in user-mgmt at
+# port 8001. The user-side variant is reachable through the proxy via
+# the existing ``/api/v3/users`` prefix. The project- and vendor-side
+# variants are intentionally NOT proxied through monolith — FE
+# integrates against :8001 directly. This keeps the new surface
+# decoupled from monolith and shrinks the proxy surface.
+
 
 def _should_proxy_path(path: str) -> bool:
     return any(path == p or path.startswith(p + "/") for p in _PROXIED_PATH_PREFIXES)
