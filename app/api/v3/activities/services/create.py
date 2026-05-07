@@ -29,8 +29,8 @@ from .....infrastructure.db.repositories.resource_type_repository import (
 )
 from .....shared.date_rules import validate_entity_dates, validate_resource_dates
 from .....shared.dep_date_rules import (
-    collect_forward_violations,
-    raise_forward_if_violations,
+    collect_milestone_forward_violations,
+    raise_milestone_forward_if_violations,
 )
 from .....shared.labels import (
     KIND_ACTIVITY,
@@ -154,26 +154,31 @@ def create_activity(
         # it can't appear in any existing edge. (Self-edge is impossible on
         # create.) The cycle check kicks in on update.
 
-        # Doc 27: source.start_date >= target.end_date for every dep target.
+        # Milestone-style outlasting rule extended to A/T/S:
+        #   source.start_date >= target.start_date    (equality allowed)
+        #   source.end_date   >  target.end_date      (strict — equality REJECTED)
         if desired_deps:
             target_rows = (
                 db.query(
-                    ActivityModel.id, ActivityModel.name, ActivityModel.end_date,
+                    ActivityModel.id, ActivityModel.name,
+                    ActivityModel.start_date, ActivityModel.end_date,
                 )
                 .filter(ActivityModel.id.in_(desired_deps))
                 .all()
             )
             label_index = build_label_index_for_project(db, milestone.project_id)
             forward = [
-                (label_index.label_of(KIND_ACTIVITY, tid) or tname, tend)
-                for (tid, tname, tend) in target_rows
+                (label_index.label_of(KIND_ACTIVITY, tid) or tname, tstart, tend)
+                for (tid, tname, tstart, tend) in target_rows
             ]
-            raise_forward_if_violations(
-                collect_forward_violations(
-                    source_start=start_date, targets=forward,
-                ),
+            starts_v, ends_v = collect_milestone_forward_violations(
+                source_start=start_date, source_end=end_date, targets=forward,
+            )
+            raise_milestone_forward_if_violations(
+                starts_v, ends_v,
                 source_label=f"Activity '{name.strip()}'",
-                source_start=start_date,
+                source_start=start_date, source_end=end_date,
+                kind_singular="activity",
             )
 
     repo = ActivityRepository(db)
