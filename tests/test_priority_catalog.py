@@ -90,6 +90,22 @@ class TestPriorityCatalog:
         ]
         assert codes == ["p1", "p2", "p3"]
 
+    def test_picker_endpoint_lists_active_priorities(
+        self, client, admin_user, admin_headers, _seeded_priorities,
+    ):
+        """FE pickers hit ``GET /api/v3/priorities`` — auth-only, no
+        MASTER_DATA_VIEW required. Returns the same dataset the master
+        list does, in the same order, minus inactive rows."""
+        r = client.get("/api/v3/priorities", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        items = r.json()["data"]["_embedded"]["elements"]
+        assert [i["code"] for i in items] == ["p1", "p2", "p3"]
+        # Picker payload carries name + description for the dropdown UX.
+        for item in items:
+            assert "name" in item
+            assert "description" in item
+            assert "isBuiltin" in item
+
     def test_get_by_code(self, client, admin_user, admin_headers, _seeded_priorities):
         r = client.get("/api/v3/master/priorities/p1", headers=admin_headers)
         assert r.status_code == 200

@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "ba0b70a2-a597-43e0-8941-802c38707991",
+    "_postman_id": "a62ebc0f-4d94-46dd-ba39-c07ebd3c59fa",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -1524,6 +1524,32 @@
     {
       "name": "Catalogs",
       "item": [
+        {
+          "name": "List active priorities (FE picker \u2014 any authenticated user)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/priorities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "priorities"
+              ]
+            },
+            "description": "Returns active priority entries (sorted by ``position``, then ``code``) that the FE renders in the activity priority dropdown. Each entry has a ``code`` (the wire value the API accepts in ``activities.priority``), a ``name`` (display label), and a ``description``. Same dataset as ``GET /api/v3/master/priorities`` but gated by simple authentication (no MASTER_DATA_VIEW required). Admin CRUD lives at /api/v3/master/priorities/*."
+          },
+          "response": []
+        },
         {
           "name": "List divisions catalog (DEPRECATED \u2014 use /api/v3/master/divisions)",
           "request": {
