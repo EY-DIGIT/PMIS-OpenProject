@@ -109,6 +109,10 @@ class ProjectController:
 
     @staticmethod
     def list(request: Request, query: ProjectListQuery, db: Session) -> JSONResponse:
+        # Doc 44 round 4: filter to the caller's projects unless they
+        # hold admin / super_admin (full access). caller_id is read
+        # from request.state via the auth middleware.
+        caller_id = get_current_user_id(request)
         result = list_projects(
             db=db,
             page=query.offset,
@@ -116,6 +120,7 @@ class ProjectController:
             active=query.active,
             public=None,  # doc 38: dropped from list-query schema
             include_deleted=query.includeDeleted,
+            caller_id=caller_id,
         )
         if not result.is_success():
             return _error_response(result, default_status=500)

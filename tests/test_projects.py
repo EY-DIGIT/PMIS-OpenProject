@@ -287,6 +287,96 @@ class TestListNewestFirstSort:
         )
 
 
+class TestListScopedToCaller:
+    """Doc 44 round 4: GET /api/v3/projects filters to only the
+    projects the caller is associated with. admin / super_admin still
+    see everything; everyone else sees the union of:
+      - project_members rows for their user_id
+      - project-scoped user_role_assignments rows
+      - org-scoped user_role_assignments rows joined to project_vendors
+    """
+
+    def test_admin_sees_all_projects(
+        self, client, admin_user, admin_headers,
+    ):
+        """admin holds the legacy 'admin' role; user_has_admin_role
+        returns True; no scope filter applied."""
+        a = _create_baseline(client, admin_headers, name="Scope-Test-A")
+        b = _create_baseline(client, admin_headers, name="Scope-Test-B")
+        resp = client.get("/api/v3/projects?pageSize=100", headers=admin_headers)
+        assert resp.status_code == 200
+        ids = {p["id"] for p in resp.json()["data"]["_embedded"]["elements"]}
+        assert a["id"] in ids and b["id"] in ids
+
+    def test_member_sees_only_assigned_projects_via_project_members(
+        self, client, admin_user, admin_headers, member_user, member_headers,
+        db_session,
+    ):
+        """A non-admin caller with a project_members row for project A
+        but not for project B sees only A in the listing."""
+        from app.infrastructure.db.models.project_member import (
+            ProjectMemberModel,
+        )
+        a = _create_baseline(client, admin_headers, name="Scope-PM-A")
+        b = _create_baseline(client, admin_headers, name="Scope-PM-B")
+        db_session.add(ProjectMemberModel(
+            project_id=a["id"], user_id=member_user.id, roles=[],
+        ))
+        db_session.commit()
+
+        resp = client.get("/api/v3/projects?pageSize=100", headers=member_headers)
+        assert resp.status_code == 200, resp.text
+        ids = {p["id"] for p in resp.json()["data"]["_embedded"]["elements"]}
+        assert a["id"] in ids
+        assert b["id"] not in ids
+
+    def test_member_sees_project_via_user_role_assignments(
+        self, client, admin_user, admin_headers, member_user, member_headers,
+        db_session,
+    ):
+        """A doc-41 project-scoped user_role_assignments row also makes
+        the project visible — it's a separate path from project_members
+        but counts the same way for scope."""
+        from app.infrastructure.db.models.role import RoleModel
+        from app.infrastructure.db.models.user_role_assignment import (
+            UserRoleAssignmentModel,
+        )
+        a = _create_baseline(client, admin_headers, name="Scope-URA-A")
+        b = _create_baseline(client, admin_headers, name="Scope-URA-B")
+        pm_role_id = (
+            db_session.query(RoleModel)
+            .filter(RoleModel.name == "project_member").one().id
+        )
+        db_session.add(UserRoleAssignmentModel(
+            user_id=member_user.id, role_id=pm_role_id, project_id=a["id"],
+        ))
+        db_session.commit()
+
+        resp = client.get("/api/v3/projects?pageSize=100", headers=member_headers)
+        assert resp.status_code == 200, resp.text
+        ids = {p["id"] for p in resp.json()["data"]["_embedded"]["elements"]}
+        assert a["id"] in ids
+        assert b["id"] not in ids
+
+    def test_member_with_no_assignments_sees_no_projects(
+        self, client, admin_user, admin_headers, member_user, member_headers,
+    ):
+        """A non-admin caller with no membership and no role-assignment
+        rows on any project gets an empty listing (instead of every
+        project as before)."""
+        _create_baseline(client, admin_headers, name="Scope-Empty-A")
+        _create_baseline(client, admin_headers, name="Scope-Empty-B")
+        resp = client.get("/api/v3/projects?pageSize=100", headers=member_headers)
+        assert resp.status_code == 200, resp.text
+        elements = resp.json()["data"]["_embedded"]["elements"]
+        # Filter to the projects we created in this test (other tests'
+        # fixtures may add background projects).
+        assert elements == [] or all(
+            p["name"] not in ("Scope-Empty-A", "Scope-Empty-B")
+            for p in elements
+        )
+
+
 class TestProjectsAllEndpoint:
     """`GET /projects/all` returns soft-deleted rows too (doc 17 §6)."""
 

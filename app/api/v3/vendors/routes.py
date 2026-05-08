@@ -209,6 +209,28 @@ def list_vendors(
 ) -> JSONResponse:
     repo = VendorRepository(db)
     vendors = repo.list_active() if active_only else repo.list_all()
+
+    # Doc 44 round 4 — caller-scoped filter. admin / super_admin see
+    # all vendors (full access). Everyone else sees only the vendor
+    # they belong to (users.vendor_id). Users with no vendor mapping
+    # see an empty list.
+    caller_id = get_current_user_id(request)
+    if caller_id is not None:
+        from ....infrastructure.db.repositories.rbac_repository import (
+            RbacRepository,
+        )
+        from ....infrastructure.db.models.user import UserModel
+        if not RbacRepository(db).user_has_admin_role(caller_id):
+            caller_user = (
+                db.query(UserModel)
+                .filter(UserModel.id == caller_id)
+                .first()
+            )
+            caller_vendor_id = (
+                getattr(caller_user, "vendor_id", None) if caller_user else None
+            )
+            vendors = [v for v in vendors if v.id == caller_vendor_id]
+
     projects_by_vendor = _projects_by_vendor(db, (v.id for v in vendors))
     items = [
         _vendor_to_response(v, projects_by_vendor.get(v.id, []))
