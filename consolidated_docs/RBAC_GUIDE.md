@@ -1,6 +1,6 @@
 # PMIS RBAC Guide
 
-**Last refresh**: 2026-05-08 (post-doc-43 round 2 — admin demotion + bootstrap super_admin + F1-F4 + G1/G2/G3 hardening live in production)
+**Last refresh**: 2026-05-08 (post-doc-43 round 3 — admin demotion + bootstrap super_admin + F1-F4 + G1/G2/G3 (SA peer takeover) + G4/G5 (admin peer takeover) live in production)
 **Scope**: how authorization works today, what's legacy / pending cleanup, and how to extend.
 
 This document was written to clear up confusion between the **DB-driven 4-role model** the team designed (admin / member / viewer / vendor) and the **OpenProject-era artifacts** that came in with the upstream import. If you're reading source and seeing both `app/core/rbac.py` and `app/core/permissions.py`, both `/api/v3/roles` and `/api/v3/master/roles`, and a `Permission` enum next to permission strings — start here.
@@ -22,7 +22,7 @@ The catalog itself (permissions, roles, role-permission grants) is **DB-driven**
 | Role | Tier | What they can do | What they can't |
 |------|------|-----------------|-----------------|
 | `super_admin` (doc 41) | global | Everything `admin` does PLUS `users:grant_superadmin` (the gate for assigning `super_admin` itself). **Bootstrap path** (doc 43): a `super_admin / superadmin123` user is auto-created on first boot via `app/infrastructure/db/session.py` with a global row in `user_role_assignments` for the `super_admin` role. No API path lets a non-super-admin grant the role. | Lockout-protection refuses to revoke / deactivate / DELETE the last super_admin. **Post-G2/G3 (doc 43 round 2)**: a super_admin cannot change another super_admin's password or DELETE another super_admin without first revoking the target's super_admin role. |
-| `admin` | global | Everything except granting `super_admin`. Auto-synced to hold every code in `ADMIN_FULL_ROLE_PERMISSIONS` (= every code minus `users:grant_superadmin`) on every boot. **Pre-doc-43 the bootstrap admin user was auto-created on every boot — that auto-create is GONE post-doc-43.** Existing admin rows are preserved; new deploys must promote operators via super_admin. | Cannot grant `super_admin` or `admin` (doc 43 caller-vs-target). Cannot PATCH / password-change / DELETE a super_admin user (F1 hierarchy gate). Cannot self-deactivate (G1, doc 43 round 2). Admin role row is locked from delete / rename / permission-set mutation through the API. |
+| `admin` | global | Everything except granting `super_admin`. Auto-synced to hold every code in `ADMIN_FULL_ROLE_PERMISSIONS` (= every code minus `users:grant_superadmin`) on every boot. **Pre-doc-43 the bootstrap admin user was auto-created on every boot — that auto-create is GONE post-doc-43.** Existing admin rows are preserved; new deploys must promote operators via super_admin. | Cannot grant `super_admin` or `admin` (doc 43 caller-vs-target). Cannot PATCH / password-change / DELETE a super_admin user (F1 hierarchy gate). Cannot self-deactivate (G1, doc 43 round 2). **Cannot change another admin's password or DELETE another admin** without first revoking the target's admin role (G4/G5, doc 43 round 3). Admin role row is locked from delete / rename / permission-set mutation through the API. |
 | `member` | global | Default contributor: read/update users, full CRUD on projects + M/A/T/S, work_packages CRUD, meetings CRUD, comments, attachments. Read-only on master data + vendor catalog. | Cannot publish/close/delete projects, cannot manage RBAC (`rbac:assign`, `roles:*`, `permissions:*`), cannot manage master data (`master_data:manage`), cannot read all soft-deleted records (`*_all` flavors). |
 | `viewer` | global | Read-only across projects + master data. Can download attachments. | Anything that mutates state. |
 | `vendor` (doc 33 change 1) | global | External collaborator. Full CRUD on M/A/T/S + comments + attachments + own-user update. Read-only on project + master data + vendor catalog. View-only on meetings. | Cannot create / publish / close / delete projects, cannot manage RBAC, cannot touch master data, cannot create / edit / delete meetings, no work_packages access. |
@@ -151,6 +151,8 @@ Doc 43 pivoted the protected tier from `admin` to `super_admin`. Round 2 (G1/G2/
 | **G1 self-deactivate** | PATCH `status=inactive` where caller == target (any tier) | 403 "Cannot deactivate your own account." | doc 43 round 2 |
 | **G2 peer-SA password change** | super_admin → another super_admin via `PATCH /users/{id}/password` | 403 | doc 43 round 2 |
 | **G3 peer-SA DELETE** | super_admin → another super_admin via `DELETE /users/{id}` | 403 | doc 43 round 2 |
+| **G4 peer-admin password change** | admin → another admin via `PATCH /users/{id}/password` (neither holds super_admin) | 403 | doc 43 round 3 |
+| **G5 peer-admin DELETE** | admin → another admin via `DELETE /users/{id}` (neither holds super_admin) | 403 | doc 43 round 3 |
 | **Self-delete guard** (legacy) | DELETE on caller == target | 403 | pre-doc-41 |
 | **Self-demote-from-admin guard** | PATCH `admin=False` on caller's own row when they hold admin | 403 | pre-doc-41 |
 
@@ -300,6 +302,7 @@ Doc 21B + doc 26 settled the claim shape:
 | 403 + "Insufficient permissions" | Token good, but the route's required code is not in the user's effective set. Check `GET /users/me/permissions`. |
 | 403 + "Built-in role '\<admin\|super_admin\>' cannot be modified" | Trying to delete / rename / mutate the seeded admin or super_admin role. Use a custom role. |
 | 403 + "Cannot perform destructive actions (DELETE / password change) on another super_admin. Demote the target first by revoking their super_admin role assignment." | G2 / G3 peer-takeover guard (doc 43 round 2). Revoke target's `super_admin` role-assignment first, then retry. |
+| 403 + "Cannot perform destructive actions (DELETE / password change) on another admin. Demote the target first by revoking their admin role assignment." | G4 / G5 peer-takeover guard (doc 43 round 3). Revoke target's `admin` role first, then retry. |
 | 403 + "Cannot deactivate your own account." | G1 self-deactivate guard (doc 43 round 2). Have another user with appropriate authority deactivate the account instead. |
 | 403 + "Cannot demote yourself from admin." | Pre-doc-41 self-demote guard. |
 | 403 + "Cannot revoke last super_admin" | Last-super_admin role-assignment revoke lockout. Promote another user to super_admin first. |
