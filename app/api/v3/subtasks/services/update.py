@@ -133,6 +133,8 @@ def update_subtask(
     current_user_id: Optional[int],
     depends_on: Optional[List[str]] = None,
     status: Optional[str] = None,  # doc 38: status now editable on PATCH
+    # Doc 41 follow-up: priority code (None = no change).
+    priority: Optional[str] = None,
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
     repo = SubtaskRepository(db)
     model = repo.get_model(subtask_id)
@@ -335,6 +337,22 @@ def update_subtask(
         # any nested subtask is still ``completed``.
         _gate_subtask_revert_against_children(db, subtask_id, status)
 
+    # Doc 41 follow-up: priority — when supplied, must be an active code
+    # in the priorities catalog. None = no change. Independent per-level.
+    if priority is not None:
+        from .....infrastructure.db.models.priority import PriorityModel
+        from .....shared.static_catalog import is_known_code, active_codes
+        from .....domain.priorities.priority import PRIORITY_CHOICES
+        if not is_known_code(
+            db, priority, model=PriorityModel, fallback=PRIORITY_CHOICES,
+        ):
+            valid = sorted(active_codes(
+                db, model=PriorityModel, fallback=PRIORITY_CHOICES,
+            ))
+            raise ValidationError(
+                f"Priority must be one of: {', '.join(valid)}."
+            )
+
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
     if description is not None: updates["description"] = description
@@ -345,6 +363,7 @@ def update_subtask(
     if actual_end_date is not None: updates["actual_end_date"] = actual_end_date
     if position is not None: updates["position"] = position
     if status is not None: updates["status"] = status  # doc 38
+    if priority is not None: updates["priority"] = priority
     if final_mode != model.resource_mode or final_count != model.resource_count:
         updates["resource_mode"] = final_mode
         updates["resource_count"] = final_count

@@ -57,7 +57,7 @@ def _setup_and_publish(client, admin_headers):
     m = client.post(
         f"/api/v3/projects/{pid}/milestones/create",
         headers=admin_headers,
-        json={"name": "M1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30)},
+        json={"name": "M1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30), "priority": "p1"},
     ).json()["data"]
     a = client.post(
         f"/api/v3/milestones/{m['id']}/activities/create",
@@ -87,6 +87,7 @@ class TestActivityChildrenGate:
                 "name": "T-done",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5),
                 "status": "completed",
+                "priority": "p1",
             },
         )
         client.post(
@@ -95,6 +96,7 @@ class TestActivityChildrenGate:
             json={
                 "name": "T-running",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10),
+                "priority": "p1",
             },
         )
         r = client.patch(
@@ -118,6 +120,7 @@ class TestActivityChildrenGate:
                     "name": name,
                     "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10),
                     "status": "completed",
+                    "priority": "p1",
                 },
             )
         r = client.patch(
@@ -137,7 +140,7 @@ class TestTaskChildrenGate:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
@@ -146,6 +149,7 @@ class TestTaskChildrenGate:
                 "name": "S-done",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5),
                 "status": "completed",
+                "priority": "p1",
             },
         )
         client.post(
@@ -154,6 +158,7 @@ class TestTaskChildrenGate:
             json={
                 "name": "S-running",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 8),
+                "priority": "p1",
             },
         )
         r = client.patch(
@@ -174,12 +179,12 @@ class TestSubtaskChildrenGate:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         s = client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10)},
+            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
         # Nested subtask under S1, not completed.
         client.post(
@@ -188,6 +193,7 @@ class TestSubtaskChildrenGate:
             json={
                 "name": "S1.1 nested-running",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 3),
+                "priority": "p1",
             },
         )
         r = client.patch(
@@ -212,17 +218,17 @@ class TestBottomUpCascade:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         s = client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10)},
+            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
         nested = client.post(
             f"/api/v3/subtasks/{s['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1.1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5)},
+            json={"name": "S1.1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         ).json()["data"]
 
         # Top-down attempts must all fail.
@@ -260,7 +266,7 @@ class TestRevertAllowedWhenChildrenAreNotCompleted:
         client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         )
         # Mark activity + milestone completed (children gate currently
         # passes because the only child task is not_completed — wait,
@@ -274,7 +280,7 @@ class TestRevertAllowedWhenChildrenAreNotCompleted:
         m2 = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
             headers=admin_headers,
-            json={"name": "M2 empty", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30)},
+            json={"name": "M2 empty", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30), "priority": "p1"},
         ).json()["data"]
         # Empty milestone: forward + reverse both no-op.
         c = client.patch(
@@ -305,17 +311,17 @@ class TestRevertBlockedWhenChildrenStillCompleted:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         s = client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10)},
+            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
         nested = client.post(
             f"/api/v3/subtasks/{s['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1.1 nested", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5)},
+            json={"name": "S1.1 nested", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         ).json()["data"]
         # Complete bottom-up.
         for url in (
@@ -340,12 +346,12 @@ class TestRevertBlockedWhenChildrenStillCompleted:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         s = client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10)},
+            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
         # Complete bottom-up.
         client.patch(
@@ -376,6 +382,7 @@ class TestRevertBlockedWhenChildrenStillCompleted:
                 "name": "T1",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15),
                 "status": "completed",
+                "priority": "p1",
             },
         ).json()["data"]
         client.patch(
@@ -398,7 +405,7 @@ class TestRevertBlockedWhenChildrenStillCompleted:
         m = client.post(
             f"/api/v3/projects/{pid}/milestones/create",
             headers=admin_headers,
-            json={"name": "M1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30)},
+            json={"name": "M1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30), "priority": "p1"},
         ).json()["data"]
         client.post(
             f"/api/v3/milestones/{m['id']}/activities/create",
@@ -438,17 +445,17 @@ class TestBottomUpUncomplete:
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
-            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15)},
+            json={"name": "T1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15), "priority": "p1"},
         ).json()["data"]
         s = client.post(
             f"/api/v3/tasks/{t['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10)},
+            json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
         nested = client.post(
             f"/api/v3/subtasks/{s['id']}/subtasks/create",
             headers=admin_headers,
-            json={"name": "S1.1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5)},
+            json={"name": "S1.1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         ).json()["data"]
         # Bottom-up complete (already covered elsewhere; the gate just
         # tags along here as setup).

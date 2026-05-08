@@ -42,6 +42,9 @@ class Task:
     resource_count: Optional[int] = None
     # Doc 38: lifecycle status, set via PATCH only.
     status: Optional[str] = None
+    # Doc 41 follow-up: priority code from the ``priorities`` catalog.
+    # Required on the wire on create; backfill assigns existing rows ``p3``.
+    priority: Optional[str] = None
     # Target task ids this task depends on. Populated by the service from the
     # task_dependencies association table.
     depends_on: List[str] = field(default_factory=list)
@@ -62,6 +65,7 @@ class Task:
             "resource_mode": self.resource_mode,
             "resource_count": self.resource_count,
             "status": self.status,
+            "priority": self.priority,
             "depends_on": list(self.depends_on or []),
             "created_at": iso_ist(self.created_at),
             "updated_at": iso_ist(self.updated_at),

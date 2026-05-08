@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ....domain.priorities.priority import PRIORITY_CHOICES
 from ....shared.datetime import IstCalendarDate
 
 
@@ -33,6 +34,17 @@ class SubtaskCreateRequest(BaseModel):
     position: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None
     depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
+    # Doc 41 follow-up: priority code — REQUIRED on create. Independent
+    # per-level for both top-level AND nested subtasks (parent priority
+    # has no effect on the child's priority).
+    priority: str = Field(
+        ..., min_length=1, max_length=16,
+        description=(
+            "Priority code from the priorities catalog. Built-in codes: "
+            f"{', '.join(PRIORITY_CHOICES)}. Admins can add more via "
+            "POST /api/v3/master/priorities/create."
+        ),
+    )
 
     @field_validator("end_date")
     @classmethod
@@ -40,6 +52,13 @@ class SubtaskCreateRequest(BaseModel):
         s = info.data.get("start_date")
         if s is not None and v < s:
             raise ValueError("End date cannot be before the start date.")
+        return v
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _normalize_priority(cls, v):
+        if isinstance(v, str):
+            v = v.strip().lower()
         return v
 
 
@@ -61,6 +80,17 @@ class SubtaskUpdateRequest(BaseModel):
     depends_on: Optional[List[str]] = Field(None, alias="dependsOn")
     # Doc 38: lifecycle status, accepted on PATCH only.
     status: Optional[str] = None
+    # Doc 41 follow-up: priority code — optional on PATCH (None = no change).
+    priority: Optional[str] = Field(None, max_length=16)
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _normalize_priority(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip().lower()
+        return v
 
 
 class SubtaskListQuery(BaseModel):

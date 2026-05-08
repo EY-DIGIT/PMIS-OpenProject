@@ -272,6 +272,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "parentSubtaskId": getattr(s, "parent_subtask_id", None),
             "name": s.name, "description": s.description, "type": s.type,
             "status": getattr(s, "status", None),
+            # Doc 41 follow-up: priority code from the priorities catalog.
+            "priority": getattr(s, "priority", None),
             "startDate": _iso(s.start_date), "endDate": _iso(s.end_date),
             "actualStartDate": _iso(s.actual_start_date),
             "actualEndDate": _iso(s.actual_end_date),
@@ -304,6 +306,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "activityId": t.activity_id, "projectId": t.project_id,
             "name": t.name, "description": t.description, "type": t.type,
             "status": getattr(t, "status", None),
+            # Doc 41 follow-up: priority code from the priorities catalog.
+            "priority": getattr(t, "priority", None),
             "startDate": _iso(t.start_date), "endDate": _iso(t.end_date),
             "actualStartDate": _iso(t.actual_start_date),
             "actualEndDate": _iso(t.actual_end_date),
@@ -370,6 +374,8 @@ def build_project_tree(db: Session, project_id: str, include_deleted: bool = Fal
             "startDate": _iso(m.start_date), "endDate": _iso(m.end_date),
             "position": m.position,
             "status": getattr(m, "status", None),
+            # Doc 41 follow-up: priority code from the priorities catalog.
+            "priority": getattr(m, "priority", None),
             "dependsOn": deps,
             "dependsOnDisplay": label_idx.labels_of(KIND_MILESTONE, deps),
             "deletedAt": _iso(m.deleted_at),

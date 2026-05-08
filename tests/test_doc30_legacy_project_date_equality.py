@@ -101,6 +101,7 @@ class TestLegacyProjectMilestoneFloor:
                 "status":    "not_completed",
                 "vendorIds": [],
                 "dependsOn": [],
+                "priority": "p1",
             },
         )
         assert resp.status_code == 201, resp.text
@@ -117,6 +118,7 @@ class TestLegacyProjectMilestoneFloor:
                 "name": "M-too-early",
                 "startDate": "2026-04-30T00:00:00+05:30",  # April 30 IST = 1 day before May 1
                 "endDate":   "2026-05-31T00:00:00+05:30",
+                "priority": "p1",
             },
         )
         assert resp.status_code == 422, resp.text
@@ -134,6 +136,7 @@ class TestLegacyProjectMilestoneFloor:
                 "name": "M-ist-midnight",
                 "startDate": "2026-05-01T00:00:00+05:30",
                 "endDate":   "2026-05-31T00:00:00+05:30",
+                "priority": "p1",
             },
         )
         assert resp.status_code == 201, resp.text
@@ -159,6 +162,7 @@ class TestLegacyProjectActivityFloor:
                 "name": "M1",
                 "startDate": "2026-05-01T00:00:00.000Z",
                 "endDate":   "2026-05-31T23:59:59.000Z",
+                "priority": "p1",
             },
         )
         assert m.status_code == 201, m.text
@@ -211,6 +215,7 @@ class TestLegacyEndDateOrdering:
                 "name": "M-one-day",
                 "startDate": "2026-05-15T00:00:00.000Z",
                 "endDate":   "2026-05-15T23:59:59.000Z",
+                "priority": "p1",
             },
         )
         assert resp.status_code == 201, resp.text

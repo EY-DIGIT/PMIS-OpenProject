@@ -45,6 +45,12 @@ class TaskModel(Base):
     # PATCHed yet.
     status = Column(String(32), nullable=True, index=True)
 
+    # Doc 41 follow-up: priority code from the ``priorities`` catalog.
+    # Independent per-level — task priority is NOT derived from or
+    # constrained by activity / milestone / subtask priorities. Required
+    # on the wire on create; existing rows backfilled to ``p3``.
+    priority = Column(String(16), nullable=True, index=True)
+
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     # Doc 26: users.id flipped to UUID String(36).

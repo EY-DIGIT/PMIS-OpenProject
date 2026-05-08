@@ -130,6 +130,7 @@ def test_same_calendar_dates_accepted_regardless_of_encoding(
         f"/api/v3/projects/{pid}/milestones/create", json={
             "name": "M1",
             "startDate": m_start, "endDate": m_end,
+            "priority": "p1",
         }, headers=admin_headers,
     )
     assert ms.status_code == 201, (
@@ -155,6 +156,7 @@ class TestFloorStillEnforced:
             "name": "M-too-early",
             "startDate": "2026-05-03T00:00:00+05:30",  # genuinely 1 day earlier
             "endDate":   "2026-05-15T00:00:00+05:30",
+            "priority": "p1",
         }, headers=admin_headers)
         assert ms.status_code == 422
         assert "before the project start date" in ms.json()["error"]["message"]

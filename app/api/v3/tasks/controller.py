@@ -39,7 +39,7 @@ from .services import (
 # activity. ``resourceMode`` / ``resourceCount`` / ``resource`` are
 # only meaningful when the parent's type is 'resource'; the service
 # layer rejects them otherwise.
-_TASK_REQUIRED_STRING_KEYS = ("name",)
+_TASK_REQUIRED_STRING_KEYS = ("name", "priority")
 _TASK_OPTIONAL_STRING_KEYS = (
     "description", "startDate", "endDate", "actualStartDate", "actualEndDate",
     "resourceMode",
@@ -105,6 +105,8 @@ def format_task_response(
         "resourceMode": t.get("resource_mode"),
         "resourceCount": t.get("resource_count"),
         "status": t.get("status"),
+        # Doc 41 follow-up: priority code from the priorities catalog.
+        "priority": t.get("priority"),
         "dependsOn": deps,
         "dependsOnDisplay": deps_display,
         "createdAt": t["created_at"],
@@ -135,6 +137,7 @@ class TaskController:
             resource=None, current_user_id=cuid,
             depends_on=data.depends_on,
             status=data.status,
+            priority=data.priority,
         )
         idx = build_label_index_for_project(db, t.project_id)
         return BaseController.created(data=format_task_response(
@@ -219,6 +222,7 @@ class TaskController:
             resource=None, current_user_id=cuid,
             depends_on=data.depends_on,
             status=data.status,
+            priority=data.priority,
         )
 
         # ---- 3. Inline comment / standalone attachments ----------------
@@ -298,6 +302,7 @@ class TaskController:
             resource=None, current_user_id=cuid,
             depends_on=data.depends_on,
             status=data.status,
+            priority=data.priority,
         )
         idx = build_label_index_for_project(db, t.project_id)
         return BaseController.ok(data=format_task_response(

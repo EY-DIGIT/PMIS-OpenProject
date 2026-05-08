@@ -74,6 +74,7 @@ def _create_milestone(client, headers, project_id, *, start_iso, end_iso, name=N
         "name": name or f"Doc27 M {uuid4().hex[:4]}",
         "startDate": start_iso,
         "endDate": end_iso,
+        "priority": "p1",
     }
     return client.post(
         f"/api/v3/projects/{project_id}/milestones/create",

@@ -88,6 +88,8 @@ def create_task(
     type: Optional[str] = None,
     # Unified create/update shape: status is now optional on create.
     status: Optional[str] = None,
+    # Doc 41 follow-up: priority code from the priorities catalog.
+    priority: Optional[str] = None,
 ) -> Tuple[Task, Optional[TaskResource]]:
     activity = (
         db.query(ActivityModel)
@@ -180,6 +182,23 @@ def create_task(
             project_start_date=project.start_date,
         )
 
+    # Doc 41 follow-up: priority code (when supplied) must reference an
+    # active row in the priorities catalog. Catalog-first with in-code
+    # fallback. Independent per-level — no parent-child constraint.
+    if priority is not None:
+        from .....infrastructure.db.models.priority import PriorityModel
+        from .....shared.static_catalog import is_known_code, active_codes
+        from .....domain.priorities.priority import PRIORITY_CHOICES
+        if not is_known_code(
+            db, priority, model=PriorityModel, fallback=PRIORITY_CHOICES,
+        ):
+            valid = sorted(active_codes(
+                db, model=PriorityModel, fallback=PRIORITY_CHOICES,
+            ))
+            raise ValidationError(
+                f"Priority must be one of: {', '.join(valid)}."
+            )
+
     # Validate dependsOn BEFORE inserting the task row. Accepts UUIDs or
     # labels (e.g. "T1.2.3") — see app/shared/labels.py.
     desired_deps: List[str] = []
@@ -269,6 +288,7 @@ def create_task(
         resource_mode=store_mode,
         resource_count=store_count,
         status=status,
+        priority=priority,
     )
     resource_domain = None
     if type == TASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:

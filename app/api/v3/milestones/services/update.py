@@ -179,6 +179,8 @@ def update_milestone(
     status: Optional[str] = None,
     depends_on: Optional[List[str]] = None,
     vendor_ids: Optional[List[str]] = None,
+    # Doc 41 follow-up: priority code (None = no change).
+    priority: Optional[str] = None,
 ) -> Milestone:
     repo = MilestoneRepository(db)
     model = repo.get_model(milestone_id)
@@ -224,6 +226,22 @@ def update_milestone(
             ))
             raise ValidationError(
                 f"Milestone status must be one of: {', '.join(valid)}."
+            )
+
+    # Doc 41 follow-up: priority — when supplied, must be an active code
+    # in the priorities catalog. None = no change.
+    if priority is not None:
+        from .....infrastructure.db.models.priority import PriorityModel
+        from .....shared.static_catalog import active_codes, is_known_code
+        from .....domain.priorities.priority import PRIORITY_CHOICES
+        if not is_known_code(
+            db, priority, model=PriorityModel, fallback=PRIORITY_CHOICES,
+        ):
+            valid = sorted(active_codes(
+                db, model=PriorityModel, fallback=PRIORITY_CHOICES,
+            ))
+            raise ValidationError(
+                f"Priority must be one of: {', '.join(valid)}."
             )
 
     # Doc 31 (rule 2c): status-completion gate. Run before any dep-date
@@ -378,6 +396,8 @@ def update_milestone(
         updates["position"] = position
     if status is not None:
         updates["status"] = status
+    if priority is not None:
+        updates["priority"] = priority
 
     vendor_repo = VendorRepository(db)
     will_replace_vendors = vendor_ids is not None
