@@ -79,6 +79,42 @@ def _gate_subtask_status_against_children(
         )
 
 
+def _gate_subtask_revert_against_children(
+    db: Session, subtask_id: str, target_status: str,
+) -> None:
+    """Reverse mirror: block flipping the subtask to ``not_completed``
+    while any of its nested subtasks is still ``completed``.
+    Recurses to any depth via the subtask gate firing again on each
+    parent at flip time.
+    """
+    if target_status != "not_completed":
+        return
+    rows = (
+        db.query(SubtaskModel.id, SubtaskModel.name, SubtaskModel.status)
+        .filter(SubtaskModel.parent_subtask_id == subtask_id)
+        .filter(SubtaskModel.deleted_at.is_(None))
+        .all()
+    )
+    if not rows:
+        return
+    blockers = [
+        (row[0], row[1], row[2])
+        for row in rows
+        if (row[2] or "") == _SUBTASK_STATUS_COMPLETED
+    ]
+    if blockers:
+        names = ", ".join(f"'{b[1]}'" for b in blockers[:3])
+        more = "" if len(blockers) <= 3 else f" (+{len(blockers) - 3} more)"
+        raise ValidationError(
+            f"Cannot revert this subtask to not_completed — the "
+            f"following nested subtask"
+            f"{' is' if len(blockers) == 1 else 's are'} "
+            f"still completed. Revert "
+            f"{'it' if len(blockers) == 1 else 'them'} first: "
+            f"{names}{more}.",
+        )
+
+
 def update_subtask(
     db: Session,
     *,
@@ -295,6 +331,9 @@ def update_subtask(
     # children at flip time.
     if status is not None:
         _gate_subtask_status_against_children(db, subtask_id, status)
+        # Reverse mirror — block reverting to ``not_completed`` while
+        # any nested subtask is still ``completed``.
+        _gate_subtask_revert_against_children(db, subtask_id, status)
 
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
