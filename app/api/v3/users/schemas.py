@@ -8,6 +8,7 @@ from ....domain.resource_types.resource_type import (
     DIVISION_CHOICES,
     DIVISION_OTHERS,
 )
+from ....shared.phone import validate_phone_number
 
 
 # Allowed values for the user's status field. "inactive" is what soft-deleted
@@ -69,10 +70,10 @@ class UserCreateRequest(BaseModel):
         min_length=1,
         max_length=50,
         description=(
-            "User's phone / mobile number. Required on create. Free-form "
-            "string (no regex check — international formats vary; FE may "
-            "apply its own client-side mask). Mirrors the vendor schema's "
-            "``phoneNumber`` field exactly."
+            "User's phone / mobile number. Required on create. Accepts "
+            "an optional leading ``+`` country-code prefix; ``[7..15]`` "
+            "digits total after stripping spaces / hyphens / parens / "
+            "dots. Mirrors the vendor schema's ``phoneNumber`` field."
         ),
     )
 
@@ -84,6 +85,11 @@ class UserCreateRequest(BaseModel):
                 f"Division must be one of: {', '.join(DIVISION_CHOICES)}."
             )
         return v
+
+    @field_validator("phoneNumber", mode="before")
+    @classmethod
+    def _validate_phone(cls, v):
+        return validate_phone_number(v)
 
 
 class UserUpdateRequest(BaseModel):
@@ -133,6 +139,14 @@ class UserUpdateRequest(BaseModel):
                 f"Division must be one of: {', '.join(DIVISION_CHOICES)}."
             )
         return v
+
+    @field_validator("phoneNumber", mode="before")
+    @classmethod
+    def _validate_phone(cls, v):
+        # Optional on PATCH — None / unset means "no change".
+        if v is None:
+            return v
+        return validate_phone_number(v)
 
 
 class UserPasswordUpdateRequest(BaseModel):
