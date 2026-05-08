@@ -1,0 +1,10 @@
+# Doc 38 phase 2 cutover override.
+# Adds proxy env vars without touching the original docker-compose.yml.
+# Rollback: rm this file, then `cd /home/uidaiadmin/pmis-backend && IMAGE_TAG=v69 docker compose --env-file /home/uidaiadmin/pmis-env/.env up -d --force-recreate`
+services:
+  backend:
+    environment:
+      USER_SERVICE_PROXY_ENABLED: "true"
+      USER_SERVICE_URL: "http://host.docker.internal:8001"
+      NOTIFICATION_SERVICE_PROXY_ENABLED: "true"
+      FILE_SERVER_PUBLIC_BASE_URL: "${FILE_SERVER_PUBLIC_BASE_URL}"
