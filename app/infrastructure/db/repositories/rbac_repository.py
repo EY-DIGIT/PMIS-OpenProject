@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 
 from ....core.permissions import (
     ADMIN_ROLE_NAME,
-    VENDOR_ROLE_NAME,
     # Doc 41 — scoped role names (seeded as empty rows here; their
     # permission sets are owned + seeded by user-mgmt's startup sync).
     SUPER_ADMIN_ROLE_NAME,
@@ -35,18 +34,18 @@ from ....core.permissions import (
     PROJECT_MEMBER_ROLE_PERMISSIONS,
     DIVISION_MEMBER_ROLE_NAME,
     DIVISION_MEMBER_ROLE_PERMISSIONS,
-    VENDOR_ROLE_PERMISSIONS,
     ADMIN_ROLE_PERMISSIONS,
     ADMIN_FULL_ROLE_PERMISSIONS,
     USERS_GRANT_SUPERADMIN,
     BUILTIN_PERMISSIONS,
-    MEMBER_ROLE_NAME,
-    MEMBER_ROLE_PERMISSIONS,
-    VIEWER_ROLE_NAME,
-    VIEWER_ROLE_PERMISSIONS,
-    # Doc 41 scoped roles.
-    SUPER_ADMIN_ROLE_NAME,
 )
+
+# Doc 43 round 4 (2026-05-08): legacy roles retired (mirrors user-mgmt).
+# member / viewer / vendor were superseded by doc-41 scoped tiers
+# (project_member / division_member / org_admin). Production verified
+# zero holders before the seed was removed; the cleanup loop below
+# deletes any drifted rows on every boot.
+_RETIRED_LEGACY_ROLE_NAMES: tuple[str, ...] = ("member", "viewer", "vendor")
 from ..models.permission import PermissionModel
 from ..models.role import RoleModel
 from ..models.role_permission import RolePermissionModel
@@ -498,9 +497,6 @@ class RbacRepository:
         # internal doc / commit references.
         seed_roles = (
             (ADMIN_ROLE_NAME, "Built-in admin role. Holds every permission except the ability to grant super_admin. Cannot grant the admin or super_admin roles to other users — only super_admin can. Cannot be deleted."),
-            (MEMBER_ROLE_NAME, "Default role for project contributors."),
-            (VIEWER_ROLE_NAME, "Read-only role."),
-            (VENDOR_ROLE_NAME, "External vendor collaborator. Edits milestones / activities / tasks / subtasks on assigned projects; no project lifecycle, no RBAC management, no master-data writes."),
             (SUPER_ADMIN_ROLE_NAME, "Built-in super_admin role. Holds every permission. The only role that can grant the super_admin or admin roles to other users."),
             (ORG_ADMIN_ROLE_NAME, "Manages users and project memberships within a vendor (organization). Cannot edit project content directly. Can grant project-tier roles only on projects in their vendor."),
             (PROJECT_ADMIN_ROLE_NAME, "Manages tasks, subtasks, and project memberships on a single project. Can grant project_member on that project. Cannot edit milestones / activities or grant project_admin / higher roles."),
@@ -518,9 +514,6 @@ class RbacRepository:
         self.db.flush()
 
         admin_role = self.get_role_by_name(ADMIN_ROLE_NAME)
-        member_role = self.get_role_by_name(MEMBER_ROLE_NAME)
-        viewer_role = self.get_role_by_name(VIEWER_ROLE_NAME)
-        vendor_role = self.get_role_by_name(VENDOR_ROLE_NAME)
         super_admin_role = self.get_role_by_name(SUPER_ADMIN_ROLE_NAME)
         org_admin_role = self.get_role_by_name(ORG_ADMIN_ROLE_NAME)
         project_admin_role = self.get_role_by_name(PROJECT_ADMIN_ROLE_NAME)
@@ -536,13 +529,6 @@ class RbacRepository:
         # self-heals any drift on existing deploys.
         added = self.grant_permissions_to_role(admin_role.id, ADMIN_FULL_ROLE_PERMISSIONS)
         self.revoke_permission_from_role(admin_role.id, USERS_GRANT_SUPERADMIN)
-        # Member / viewer / vendor (legacy) — seed only if empty.
-        if not self.list_role_permissions(member_role.id):
-            self.grant_permissions_to_role(member_role.id, MEMBER_ROLE_PERMISSIONS)
-        if not self.list_role_permissions(viewer_role.id):
-            self.grant_permissions_to_role(viewer_role.id, VIEWER_ROLE_PERMISSIONS)
-        if not self.list_role_permissions(vendor_role.id):
-            self.grant_permissions_to_role(vendor_role.id, VENDOR_ROLE_PERMISSIONS)
         # Doc 41 scoped roles — seed only if empty.
         if not self.list_role_permissions(org_admin_role.id):
             self.grant_permissions_to_role(org_admin_role.id, ORG_ADMIN_ROLE_PERMISSIONS)
@@ -552,5 +538,35 @@ class RbacRepository:
             self.grant_permissions_to_role(project_member_role.id, PROJECT_MEMBER_ROLE_PERMISSIONS)
         if not self.list_role_permissions(division_member_role.id):
             self.grant_permissions_to_role(division_member_role.id, DIVISION_MEMBER_ROLE_PERMISSIONS)
+
+        # Doc 43 round 4: drop legacy member/viewer/vendor on every boot.
+        # Skip the delete if any user still holds the role; log a warning
+        # so an operator can clean up manually. Fresh DBs never see these
+        # roles since the seed loop above no longer creates them.
+        for legacy_name in _RETIRED_LEGACY_ROLE_NAMES:
+            row = self.get_role_by_name(legacy_name)
+            if row is None:
+                continue
+            legacy_holders = (
+                self.db.query(UserRoleModel)
+                .filter(UserRoleModel.role_id == row.id).count()
+            )
+            scoped_holders = (
+                self.db.query(UserRoleAssignmentModel)
+                .filter(UserRoleAssignmentModel.role_id == row.id).count()
+            )
+            if legacy_holders + scoped_holders > 0:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Legacy role '%s' still has %d holders (legacy + scoped) "
+                    "— skipping cleanup. Reassign users before next boot.",
+                    legacy_name, legacy_holders + scoped_holders,
+                )
+                continue
+            self.db.query(RolePermissionModel).filter(
+                RolePermissionModel.role_id == row.id,
+            ).delete()
+            self.db.delete(row)
+
         self.db.flush()
         return permissions_inserted, added

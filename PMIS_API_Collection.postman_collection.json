@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "7a412e12-2b34-44d4-9fcb-8b345438b140",
+    "_postman_id": "6a266b2a-97a3-43b9-a6fe-4775a4138d28",
     "name": "PMIS API",
-    "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled — see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
+    "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -46,7 +46,7 @@
                 }
               ]
             },
-            "description": "Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).: type / resource fields are no longer accepted here. Set ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate`` via PATCH after the row exists.",
+            "description": "Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).\n\nDoc 38: type / resource fields are no longer accepted here. Set ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate`` via PATCH after the row exists.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"ownerDivision\": \"\",\n  \"vendorId\": \"\",\n  \"concernedDivision\": [\n    \"\"\n  ],\n  \"priority\": \"\"\n}",
@@ -315,7 +315,7 @@
                 }
               ]
             },
-            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -364,7 +364,7 @@
                 }
               ]
             },
-            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -413,7 +413,7 @@
                 }
               ]
             },
-            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -462,7 +462,7 @@
                 }
               ]
             },
-            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -496,7 +496,7 @@
                 }
               ]
             },
-            "description": ": aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them."
+            "description": "Doc 35: aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them."
           },
           "response": []
         },
@@ -531,7 +531,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -566,7 +566,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -601,7 +601,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -636,7 +636,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         }
@@ -709,7 +709,7 @@
                 "login"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAuthenticate user and receive a JWT token. change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAuthenticate user and receive a JWT token. Doc 33 change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login\": \"\",\n  \"password\": \"\"\n}",
@@ -834,12 +834,12 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nDelete user by ID. Path param accepts integer ``id`` or ``US-...`` code."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nDelete user by ID. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
           },
           "response": []
         },
         {
-          "name": "Effective permissions for a user (role-derived ∪ direct)",
+          "name": "Effective permissions for a user (role-derived \u222a direct)",
           "request": {
             "method": "GET",
             "header": [
@@ -897,7 +897,7 @@
                 "permissions"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the caller's effective permission set + admin flag.\n\nUsed by the FE to decide which UI actions to show. Requires only\nauthentication — no separate permission to read your own grants."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the caller's effective permission set + admin flag.\n\nUsed by the FE to decide which UI actions to show. Requires only\nauthentication \u2014 no separate permission to read your own grants."
           },
           "response": []
         },
@@ -958,7 +958,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` — see). The dispatcher auto-detects via the ``US-`` prefix."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` \u2014 see doc 25). The dispatcher auto-detects via the ``US-`` prefix."
           },
           "response": []
         },
@@ -1026,7 +1026,7 @@
                 "introspect"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nPublic token introspection. Returns metadata (active, exp, iat, jti, sub, userId, role, isAdmin) for the supplied access_token and/or refresh_token. NEVER rotates — use POST /users/refresh to mint a fresh access + refresh pair from a valid refresh token. When both tokens are supplied, the response shape becomes {access: {...}, refresh: {...}}.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nPublic token introspection. Returns metadata (active, exp, iat, jti, sub, userId, role, isAdmin) for the supplied access_token and/or refresh_token. NEVER rotates \u2014 use POST /users/refresh to mint a fresh access + refresh pair from a valid refresh token. When both tokens are supplied, the response shape becomes {access: {...}, refresh: {...}}.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"access_token\": \"\",\n  \"refresh_token\": \"\"\n}",
@@ -1181,7 +1181,7 @@
                 "refresh"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nValidates the supplied refresh token and issues a fresh access + refresh pair. The user row's stored refresh_token_jti is rotated atomically — concurrent refreshes with the same token can only succeed once. Response includes accessTokenExpiresAt + refreshTokenExpiresAt so the client can schedule the next preemptive refresh.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nValidates the supplied refresh token and issues a fresh access + refresh pair. The user row's stored refresh_token_jti is rotated atomically \u2014 concurrent refreshes with the same token can only succeed once. Response includes accessTokenExpiresAt + refreshTokenExpiresAt so the client can schedule the next preemptive refresh.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refresh_token\": \"\"\n}",
@@ -1266,7 +1266,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nClears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users — returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nClears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users \u2014 returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
           },
           "response": []
         },
@@ -1429,7 +1429,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user details. Path param accepts integer ``id`` or ``US-...`` code.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user details. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"phone_number\": \"\"\n}",
@@ -1478,7 +1478,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user password. Path param accepts integer ``id`` or ``US-...`` code.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user password. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"password\": \"\"\n}",
@@ -1539,7 +1539,7 @@
       "name": "Catalogs",
       "item": [
         {
-          "name": "List active priorities (FE picker — any authenticated user)",
+          "name": "List active priorities (FE picker \u2014 any authenticated user)",
           "request": {
             "method": "GET",
             "header": [
@@ -1565,7 +1565,7 @@
           "response": []
         },
         {
-          "name": "List divisions catalog (DEPRECATED — use /api/v3/master/divisions)",
+          "name": "List divisions catalog (DEPRECATED \u2014 use /api/v3/master/divisions)",
           "request": {
             "method": "GET",
             "header": [
@@ -1586,12 +1586,12 @@
                 "divisions"
               ]
             },
-            "description": "Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` — tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too."
+            "description": "Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` \u2014 tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too."
           },
           "response": []
         },
         {
-          "name": "List project status transition catalog (DEPRECATED — use /api/v3/master/project_status_transitions)",
+          "name": "List project status transition catalog (DEPRECATED \u2014 use /api/v3/master/project_status_transitions)",
           "request": {
             "method": "GET",
             "header": [
@@ -1997,7 +1997,7 @@
       "name": "Files",
       "item": [
         {
-          "name": ": local fallback that streams attachment file bytes",
+          "name": "Doc 35: local fallback that streams attachment file bytes",
           "request": {
             "method": "GET",
             "header": [],
@@ -2018,7 +2018,7 @@
                 }
               ]
             },
-            "description": "Fallback route that serves the bytes of an attachment file from local storage. Auth-free — URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused."
+            "description": "Fallback route that serves the bytes of an attachment file from local storage. Auth-free \u2014 URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused."
           },
           "response": []
         }
@@ -2041,7 +2041,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n - the API process itself (\"status\")\n - file-storage backend reachability (NFS mount in prod, local\n folder in dev) — surfaced separately so ops can distinguish a\n fully-healthy app from one that's serving but can't accept\n attachment uploads.\n - notification client config + reachability — diagnostic for the\n 2FA / forgot-password flow. Exposes which backend is selected\n (``mock`` or ``http``), the configured service URL, and a quick\n reachability probe so ops can tell at a glance whether the BE\n will actually dispatch OTP emails or silently sink them in\n the audit table.\n\nThe NFS server / export are reported back from settings (informational\n— the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
+            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) \u2014 surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n  - notification client config + reachability \u2014 diagnostic for the\n    2FA / forgot-password flow. Exposes which backend is selected\n    (``mock`` or ``http``), the configured service URL, and a quick\n    reachability probe so ops can tell at a glance whether the BE\n    will actually dispatch OTP emails or silently sink them in\n    the audit table.\n\nThe NFS server / export are reported back from settings (informational\n\u2014 the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
           },
           "response": []
         }
@@ -2247,7 +2247,7 @@
                 "create"
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAdds a new template row. Returns 409 if an active row already exists for the (templateKind, channel) pair — the renderer lookup invariant is at most one active row per pair. To replace an existing template, PATCH the existing row instead.",
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAdds a new template row. Returns 409 if an active row already exists for the (templateKind, channel) pair \u2014 the renderer lookup invariant is at most one active row per pair. To replace an existing template, PATCH the existing row instead.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"template_kind\": \"\",\n  \"channel\": \"\",\n  \"subject\": \"\",\n  \"body\": \"\",\n  \"is_html\": false,\n  \"description\": \"\",\n  \"active\": true\n}",
@@ -3272,7 +3272,7 @@
                 }
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. Doc 36 moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
           },
           "response": []
         },
@@ -3558,7 +3558,7 @@
                 "by-module"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the full permission catalog bucketed by module — the leading segment of each ``module:action`` code. The FE uses this to render a permission picker tree without parsing codes client-side. Admin-defined modules (created via ``POST /master/permissions/create`` with codes like ``custom_module:my_action``) appear in the same response."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the full permission catalog bucketed by module \u2014 the leading segment of each ``module:action`` code. The FE uses this to render a permission picker tree without parsing codes client-side. Admin-defined modules (created via ``POST /master/permissions/create`` with codes like ``custom_module:my_action``) appear in the same response."
           },
           "response": []
         },
@@ -3594,7 +3594,7 @@
                 }
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=true``. Returns 409 when another active row already covers the (templateKind, channel) pair — at most one active row per pair is the lookup invariant the renderer relies on."
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=true``. Returns 409 when another active row already covers the (templateKind, channel) pair \u2014 at most one active row per pair is the lookup invariant the renderer relies on."
           },
           "response": []
         },
@@ -4080,7 +4080,7 @@
                 }
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=false``. Built-in rows are protected from hard delete but CAN be soft-deactivated — when no active row covers the (kind, channel) pair, the renderer falls back to a generic body. To bring it back, POST /restore."
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nSets ``active=false``. Built-in rows are protected from hard delete but CAN be soft-deactivated \u2014 when no active row covers the (kind, channel) pair, the renderer falls back to a generic body. To bring it back, POST /restore."
           },
           "response": []
         },
@@ -4225,7 +4225,7 @@
           "response": []
         },
         {
-          "name": "Soft-delete a division (admin) — sets active=false",
+          "name": "Soft-delete a division (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4260,7 +4260,7 @@
           "response": []
         },
         {
-          "name": "Soft-delete a resource type (admin) — sets active=false",
+          "name": "Soft-delete a resource type (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4290,12 +4290,12 @@
                 }
               ]
             },
-            "description": "Soft-delete a resource type (admin) — sets active=false"
+            "description": "Soft-delete a resource type (admin) \u2014 sets active=false"
           },
           "response": []
         },
         {
-          "name": "Soft-delete a transition (admin) — sets active=false",
+          "name": "Soft-delete a transition (admin) \u2014 sets active=false",
           "request": {
             "method": "DELETE",
             "header": [
@@ -4325,7 +4325,7 @@
                 }
               ]
             },
-            "description": "Soft-delete a transition (admin) — sets active=false"
+            "description": "Soft-delete a transition (admin) \u2014 sets active=false"
           },
           "response": []
         },
@@ -4400,7 +4400,7 @@
                 }
               ]
             },
-            "description": "Patch ``label`` / ``requiresOther`` / ``email`` / ``phoneNumber``. ``code`` is NOT patchable — every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept ``email`` / ``phoneNumber`` updates so admins can attach contact details to the seeded divisions, but reject ``label`` / ``requiresOther`` changes with 403.",
+            "description": "Patch ``label`` / ``requiresOther`` / ``email`` / ``phoneNumber``. ``code`` is NOT patchable \u2014 every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept ``email`` / ``phoneNumber`` updates so admins can attach contact details to the seeded divisions, but reject ``label`` / ``requiresOther`` changes with 403.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"label\": \"\",\n  \"requiresOther\": false,\n  \"email\": \"user@example.com\",\n  \"phone_number\": \"\"\n}",
@@ -4498,7 +4498,7 @@
                 }
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nEdit ``subject`` / ``body`` / ``isHtml`` / ``description`` / ``active``. ``templateKind`` and ``channel`` are immutable — they're the row's identity. Built-in rows ARE editable on subject/body (the whole point of moving templates to DB). Placeholder validation runs against the row's existing kind+channel; a body referencing an unknown placeholder for that pair returns 422.",
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nEdit ``subject`` / ``body`` / ``isHtml`` / ``description`` / ``active``. ``templateKind`` and ``channel`` are immutable \u2014 they're the row's identity. Built-in rows ARE editable on subject/body (the whole point of moving templates to DB). Placeholder validation runs against the row's existing kind+channel; a body referencing an unknown placeholder for that pair returns 422.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"subject\": \"\",\n  \"body\": \"\",\n  \"is_html\": false,\n  \"description\": \"\",\n  \"active\": false\n}",
@@ -5495,7 +5495,7 @@
                 }
               ]
             },
-            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape — milestone fields only) OR ``multipart/form-data`` ( — milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
+            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape \u2014 milestone fields only) OR ``multipart/form-data`` (doc 30 \u2014 milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -5720,7 +5720,7 @@
       "name": "Permissions",
       "item": [
         {
-          "name": "Create a custom permission (DEPRECATED — use POST /api/v3/master/permissions/create)",
+          "name": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
           "request": {
             "method": "POST",
             "header": [
@@ -5746,7 +5746,7 @@
                 "permissions"
               ]
             },
-            "description": "Create a custom permission (DEPRECATED — use POST /api/v3/master/permissions/create)",
+            "description": "Create a custom permission (DEPRECATED \u2014 use POST /api/v3/master/permissions/create)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"code\": \"\",\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -5760,7 +5760,7 @@
           "response": []
         },
         {
-          "name": "Delete a permission (DEPRECATED — use DELETE /api/v3/master/permissions/{code})",
+          "name": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -5789,12 +5789,12 @@
                 }
               ]
             },
-            "description": "Delete a permission (DEPRECATED — use DELETE /api/v3/master/permissions/{code})"
+            "description": "Delete a permission (DEPRECATED \u2014 use DELETE /api/v3/master/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})",
+          "name": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
           "request": {
             "method": "PATCH",
             "header": [
@@ -5828,7 +5828,7 @@
                 }
               ]
             },
-            "description": "Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})",
+            "description": "Edit name/description of a permission (DEPRECATED \u2014 use PATCH /api/v3/master/permissions/{code})",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\"\n}",
@@ -5842,7 +5842,7 @@
           "response": []
         },
         {
-          "name": "Get a permission row (DEPRECATED — use GET /api/v3/master/permissions/{code})",
+          "name": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})",
           "request": {
             "method": "GET",
             "header": [
@@ -5871,12 +5871,12 @@
                 }
               ]
             },
-            "description": "Get a permission row (DEPRECATED — use GET /api/v3/master/permissions/{code})"
+            "description": "Get a permission row (DEPRECATED \u2014 use GET /api/v3/master/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)",
+          "name": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)",
           "request": {
             "method": "GET",
             "header": [
@@ -5911,7 +5911,7 @@
                 }
               ]
             },
-            "description": "List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)"
+            "description": "List permission catalog (DEPRECATED \u2014 use GET /api/v3/master/permissions)"
           },
           "response": []
         }
@@ -6145,7 +6145,7 @@
                 }
               ]
             },
-            "description": "Returns the full project tree in one call: milestones → activities → tasks → subtasks, with resource details inlined for resource-type entities. Soft-deleted rows are filtered by default; pass `includeDeleted=true` to include them (admin-only in practice)."
+            "description": "Returns the full project tree in one call: milestones \u2192 activities \u2192 tasks \u2192 subtasks, with resource details inlined for resource-type entities. Soft-deleted rows are filtered by default; pass `includeDeleted=true` to include them (admin-only in practice)."
           },
           "response": []
         }
@@ -6238,7 +6238,7 @@
                 }
               ]
             },
-            "description": "Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards — re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.",
+            "description": "Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards \u2014 re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"status_explanation\": \"\",\n  \"parent_id\": \"\",\n  \"status\": \"new\",\n  \"owner\": \"\",\n  \"owner_other\": \"\",\n  \"vendor_ids\": [\n    \"\"\n  ],\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\"\n}",
@@ -6375,7 +6375,7 @@
                 }
               ]
             },
-            "description": "Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field — NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects."
+            "description": "Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field \u2014 NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects."
           },
           "response": []
         },
@@ -6497,7 +6497,7 @@
                 }
               ]
             },
-            "description": "Maps to the 'Save Project' button in the Step-1 wizard. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Adding a milestone alone does NOT change status — only this explicit save call does. Idempotent: a no-op once past 'new'."
+            "description": "Maps to the 'Save Project' button in the Step-1 wizard. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Adding a milestone alone does NOT change status \u2014 only this explicit save call does. Idempotent: a no-op once past 'new'."
           },
           "response": []
         },
@@ -6661,7 +6661,7 @@
       "name": "Roles",
       "item": [
         {
-          "name": "Create role (DEPRECATED — use POST /api/v3/master/roles/create)",
+          "name": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
           "request": {
             "method": "POST",
             "header": [
@@ -6688,7 +6688,7 @@
                 "create"
               ]
             },
-            "description": "Create role (DEPRECATED — use POST /api/v3/master/roles/create)",
+            "description": "Create role (DEPRECATED \u2014 use POST /api/v3/master/roles/create)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"builtin\": false\n}",
@@ -6702,7 +6702,7 @@
           "response": []
         },
         {
-          "name": "Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})",
+          "name": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -6731,12 +6731,12 @@
                 }
               ]
             },
-            "description": "Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})"
+            "description": "Delete role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "Get role (DEPRECATED — use GET /api/v3/master/roles/{id})",
+          "name": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})",
           "request": {
             "method": "GET",
             "header": [
@@ -6765,12 +6765,12 @@
                 }
               ]
             },
-            "description": "Get role (DEPRECATED — use GET /api/v3/master/roles/{id})"
+            "description": "Get role (DEPRECATED \u2014 use GET /api/v3/master/roles/{id})"
           },
           "response": []
         },
         {
-          "name": "Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})",
+          "name": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})",
           "request": {
             "method": "POST",
             "header": [
@@ -6806,12 +6806,12 @@
                 }
               ]
             },
-            "description": "Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})"
+            "description": "Grant a single permission to a role (DEPRECATED \u2014 use POST /api/v3/master/roles/{id}/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)",
+          "name": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)",
           "request": {
             "method": "GET",
             "header": [
@@ -6841,12 +6841,12 @@
                 }
               ]
             },
-            "description": "List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)"
+            "description": "List a role's permissions (DEPRECATED \u2014 use GET /api/v3/master/roles/{id}/permissions)"
           },
           "response": []
         },
         {
-          "name": "List roles (DEPRECATED — use GET /api/v3/master/roles)",
+          "name": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)",
           "request": {
             "method": "GET",
             "header": [
@@ -6881,12 +6881,12 @@
                 }
               ]
             },
-            "description": "List roles (DEPRECATED — use GET /api/v3/master/roles)"
+            "description": "List roles (DEPRECATED \u2014 use GET /api/v3/master/roles)"
           },
           "response": []
         },
         {
-          "name": "Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)",
+          "name": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
           "request": {
             "method": "PUT",
             "header": [
@@ -6921,7 +6921,7 @@
                 }
               ]
             },
-            "description": "Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)",
+            "description": "Replace a role's permission set (DEPRECATED \u2014 use PUT /api/v3/master/roles/{id}/permissions)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -6935,7 +6935,7 @@
           "response": []
         },
         {
-          "name": "Revoke a single permission from a role (DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})",
+          "name": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})",
           "request": {
             "method": "DELETE",
             "header": [
@@ -6971,12 +6971,12 @@
                 }
               ]
             },
-            "description": "Revoke a single permission from a role (DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})"
+            "description": "Revoke a single permission from a role (DEPRECATED \u2014 use DELETE /api/v3/master/roles/{id}/permissions/{code})"
           },
           "response": []
         },
         {
-          "name": "Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})",
+          "name": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
           "request": {
             "method": "PATCH",
             "header": [
@@ -7010,7 +7010,7 @@
                 }
               ]
             },
-            "description": "Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})",
+            "description": "Update role (DEPRECATED \u2014 use PATCH /api/v3/master/roles/{id})",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ]\n}",
@@ -7040,7 +7040,7 @@
               ],
               "path": []
             },
-            "description": "Root endpoint.\n\nReturns:\n API information"
+            "description": "Root endpoint.\n\nReturns:\n    API information"
           },
           "response": []
         }
@@ -7136,7 +7136,7 @@
                 }
               ]
             },
-            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -7397,7 +7397,7 @@
                 }
               ]
             },
-            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 \u2014 same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -7692,7 +7692,7 @@
                 }
               ]
             },
-            "description": "Returns full vendor detail — name, description, email, contact person, phone number, soft-delete metadata — plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
+            "description": "Returns full vendor detail \u2014 name, description, email, contact person, phone number, soft-delete metadata \u2014 plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
           },
           "response": []
         },
@@ -7761,7 +7761,7 @@
                 }
               ]
             },
-            "description": "Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out — they're preserved on disk but no longer presented in the vendor's project list per product rule."
+            "description": "Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out \u2014 they're preserved on disk but no longer presented in the vendor's project list per product rule."
           },
           "response": []
         },
@@ -7869,7 +7869,7 @@
                 }
               ]
             },
-            "description": "Path param accepts UUID or ``VN-...`` code.",
+            "description": "Path param accepts UUID or ``VN-...`` code (doc 25).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
@@ -8352,139 +8352,6 @@
           "response": []
         }
       ]
-    },
-    {
-      "name": "Role Assignments ( — proxied via :8000)",
-      "item": [
-        {
-          "name": "List a user's role assignments ( — global / org / project)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "type": "text",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": {
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "users",
-                ":userId",
-                "role-assignments"
-              ],
-              "raw": "{{baseUrl}}/api/v3/users/:userId/role-assignments"
-            },
-            "description": "GET /api/v3/users/{id}/role-assignments — Returns every scoped role-assignment row for the user (global, org-scoped, project-scoped) in one list. Replaces the legacy GET /api/v3/users/{id}/roles which only surfaced global user_roles entries. Auth: USERS_READ on self, USERS_READ_ALL on others."
-          },
-          "response": []
-        },
-        {
-          "name": "Grant a scoped role to a user",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "type": "text",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "type": "text",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "users",
-                ":userId",
-                "role-assignments"
-              ],
-              "raw": "{{baseUrl}}/api/v3/users/:userId/role-assignments"
-            },
-            "description": "POST /api/v3/users/{id}/role-assignments — Body: roleId (int) + exactly one of organizationId / projectId (or both omitted for global). Caller-vs-target gate enforced server-side: super_admin grants any; admin grants any except super_admin; org_admin grants project-tier roles within its vendor; project_admin grants project_member only on its project. Auth: rbac:assign + the caller-vs-target rule.",
-            "body": {
-              "mode": "raw",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              },
-              "raw": "{\n  \"roleId\": 0,\n  \"organizationId\": null,\n  \"projectId\": null\n}"
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Revoke a scoped role assignment",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "type": "text",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": {
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "users",
-                ":userId",
-                "role-assignments",
-                ":assignmentId"
-              ],
-              "raw": "{{baseUrl}}/api/v3/users/:userId/role-assignments/:assignmentId"
-            },
-            "description": "DELETE /api/v3/users/{id}/role-assignments/{aid} — Revokes a single (user, role, scope) row. Last-super_admin lockout: the only global super_admin row cannot be revoked. Auth: rbac:assign + caller-vs-target."
-          },
-          "response": []
-        },
-        {
-          "name": "User's project map (User Mgmt landing)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "type": "text",
-                "value": "Bearer {{accessToken}}"
-              }
-            ],
-            "url": {
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v3",
-                "users",
-                ":userId",
-                "projects"
-              ],
-              "raw": "{{baseUrl}}/api/v3/users/:userId/projects"
-            },
-            "description": "GET /api/v3/users/{id}/projects — Every project the user is assigned to + the role names they hold on each. Powers the User Mgmt menu landing view. Auth: USERS_READ on self / USERS_READ_ALL on others."
-          },
-          "response": []
-        }
-      ],
-      "description": "— user-side scoped role-assignment views, reachable via the monolith proxy on port 8000 (matches the existing `/api/v3/users/*` prefix rule).\n\nThe project- and vendor-side variants (`/projects/{id}/role-assignments`, `/vendors/{id}/projects`) are intentionally NOT proxied per — call user-mgmt :8001 directly for those. They appear in the user-mgmt Postman collection but not here.\n\nSee `C:/Programming/PMIS/DOC_41_FLOWS.md` for the full flow narrative."
     }
   ],
   "variable": [
