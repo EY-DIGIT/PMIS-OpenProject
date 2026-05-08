@@ -94,7 +94,7 @@ def _activity_openapi_extra() -> Dict[str, Any]:
 @activities_milestone_router.post(
     "/{milestone_id}/activities/create",
     dependencies=[require_project_permission(ACTIVITIES_CREATE)],
-    summary="Create an activity under a milestone (doc 38)",
+    summary="Create an activity under a milestone",
     description=(
         "Create an activity. Accepts EITHER ``application/json`` "
         "(legacy) OR ``multipart/form-data`` (doc 30 — same fields plus "

@@ -618,13 +618,9 @@ def init_db() -> None:
         # Do not prevent application start for any unexpected inspector errors
         pass
     
-    # Idempotent admin bootstrap. Creds come from env (BOOTSTRAP_ADMIN_*) so
-    # ops can rotate them without code changes. If the configured login
-    # already exists, skip — no overwrite, no demotion of an existing admin.
-    # RBAC seed (doc 21 part B): upsert built-in permissions, ensure the
-    # admin/member/viewer roles exist with the right grants. Must happen
-    # BEFORE the bootstrap admin user is created so the user-role
-    # assignment can find the admin role row.
+    # RBAC seed: upsert built-in permissions + ensure the seeded roles
+    # exist with the right grants. Must happen BEFORE any user-role
+    # assignment below.
     db = SessionLocal()
     try:
         from .repositories.rbac_repository import RbacRepository
@@ -635,67 +631,72 @@ def init_db() -> None:
     finally:
         db.close()
 
-    # Idempotent bootstrap admin. Doc 21 part B: admin status now derived
-    # from membership in the seeded ``admin`` role (created by the RBAC
-    # seed above). The ``UserModel`` no longer has an ``admin`` column.
-    #
-    # Doc 35: the original doc-33 hotfix forced ``two_factor_enabled=false``
-    # on the bootstrap admin to keep the always-reachable account
-    # single-stage when notification dispatch was broken. With the live
-    # ``HttpNotificationClient`` (doc 33 follow-up) AND the universal-OTP
-    # break-glass (``UNIVERSAL_OTP_ENABLED`` + ``UNIVERSAL_OTP_CODE``,
-    # doc 35) BOTH available, the bootstrap admin can safely run with 2FA
-    # on. We now force ``two_factor_enabled=true`` on every boot —
-    # idempotent: a fresh create or an existing False value both end up
-    # at True. If notification dispatch is misconfigured, the universal
-    # OTP serves as the break-glass.
+    # Bootstrap admin user removed (doc 42b). Pre-doc-42b an `admin`
+    # user was auto-created here on every boot. Post-doc-42b the only
+    # system-bootstrapped user is `super_admin` (below). `admin` is
+    # now created on-demand by the operator via the API
+    # (super_admin → POST /api/v3/users/create + POST
+    # /api/v3/users/{id}/role-assignments granting the admin role).
+    # This makes admin "just another user" with no special bootstrap
+    # treatment.
+    from .models.role import RoleModel  # noqa: F401  (used below)
+
+    # ---- Bootstrap super_admin (doc 42b) ------------------------------
+    # Separate account from `admin`. Doc 42b demoted the `admin` role
+    # so it no longer carries `users:grant_superadmin` and per the
+    # caller-vs-target rule cannot grant `admin` to others either.
+    # Without bootstrapping a super_admin user, no one would ever be
+    # able to grant super_admin / admin (chicken-and-egg). The
+    # super_admin assignment uses the doc-41 user_role_assignments
+    # table (global scope) — that's where new RBAC writes go.
     db = SessionLocal()
     try:
-        from .models.role import RoleModel
-        from .models.user_role import UserRoleModel
+        from .models.user_role_assignment import UserRoleAssignmentModel
 
-        admin_user = db.query(UserModel).filter(
-            UserModel.login == settings.BOOTSTRAP_ADMIN_LOGIN
+        sa_user = db.query(UserModel).filter(
+            UserModel.login == settings.BOOTSTRAP_SUPERADMIN_LOGIN
         ).first()
-
-        if admin_user is None:
-            admin_user = UserModel(
-                login=settings.BOOTSTRAP_ADMIN_LOGIN,
-                email=settings.BOOTSTRAP_ADMIN_EMAIL,
-                hashed_password=hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD),
-                first_name="Administrator",
-                last_name="System",
+        if sa_user is None:
+            sa_user = UserModel(
+                login=settings.BOOTSTRAP_SUPERADMIN_LOGIN,
+                email=settings.BOOTSTRAP_SUPERADMIN_EMAIL,
+                hashed_password=hash_password(
+                    settings.BOOTSTRAP_SUPERADMIN_PASSWORD
+                ),
+                first_name="Super",
+                last_name="Admin",
                 status="active",
                 two_factor_enabled=True,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
-            db.add(admin_user)
-            db.flush()
-        elif admin_user.two_factor_enabled is not True:
-            # Reverse the doc-33 hotfix: restore 2FA on the bootstrap
-            # admin row. Idempotent — once True, this branch is a no-op.
-            admin_user.two_factor_enabled = True
-            admin_user.updated_at = datetime.now(timezone.utc)
+            db.add(sa_user)
             db.flush()
 
-        admin_role = (
-            db.query(RoleModel).filter(RoleModel.name == "admin").first()
-        )
-        if admin_role is not None:
-            already_admin = (
-                db.query(UserRoleModel)
+        sa_role = db.query(RoleModel).filter(
+            RoleModel.name == "super_admin"
+        ).first()
+        if sa_role is not None:
+            existing_sa = (
+                db.query(UserRoleAssignmentModel)
                 .filter(
-                    UserRoleModel.user_id == admin_user.id,
-                    UserRoleModel.role_id == admin_role.id,
+                    UserRoleAssignmentModel.user_id == sa_user.id,
+                    UserRoleAssignmentModel.role_id == sa_role.id,
+                    UserRoleAssignmentModel.organization_id.is_(None),
+                    UserRoleAssignmentModel.project_id.is_(None),
                 )
                 .first()
             )
-            if already_admin is None:
-                db.add(UserRoleModel(
-                    user_id=admin_user.id, role_id=admin_role.id,
+            if existing_sa is None:
+                db.add(UserRoleAssignmentModel(
+                    user_id=sa_user.id,
+                    role_id=sa_role.id,
                 ))
         db.commit()
+    except Exception:
+        db.rollback()
+        # Bootstrap is best-effort; surface via logs not exception so
+        # the rest of init_db can still run.
     finally:
         db.close()
 

@@ -45,15 +45,28 @@ def _bare_user(db, login):
 # ---------------------------------------------------------------------------
 
 class TestMePermissions:
-    def test_admin_sees_full_set(self, client, admin_user, admin_headers):
+    def test_admin_sees_full_set_minus_grant_superadmin(
+        self, client, admin_user, admin_headers,
+    ):
+        """admin holds every built-in permission EXCEPT
+        users:grant_superadmin (post-doc-42b demotion). The exclusion
+        is what stops admin from promoting users to super_admin."""
         resp = client.get("/api/v3/users/me/permissions", headers=admin_headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()["data"]
         assert body["isAdmin"] is True
-        # Should hold every built-in permission code.
-        from app.core.permissions import BUILTIN_PERMISSIONS
-        codes = {p.code for p in BUILTIN_PERMISSIONS}
-        assert codes.issubset(set(body["permissions"]))
+        from app.core.permissions import (
+            BUILTIN_PERMISSIONS, USERS_GRANT_SUPERADMIN,
+        )
+        all_codes = {p.code for p in BUILTIN_PERMISSIONS}
+        expected = all_codes - {USERS_GRANT_SUPERADMIN}
+        actual = set(body["permissions"])
+        assert expected.issubset(actual), (
+            f"admin missing codes: {expected - actual}"
+        )
+        assert USERS_GRANT_SUPERADMIN not in actual, (
+            "admin must NOT hold users:grant_superadmin"
+        )
 
     def test_member_sees_member_set_only(self, client, member_user, member_headers):
         resp = client.get(

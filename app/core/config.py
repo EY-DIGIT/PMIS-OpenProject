@@ -129,6 +129,15 @@ class Settings(BaseSettings):
     BOOTSTRAP_ADMIN_EMAIL: str = "admin@example.com"
     BOOTSTRAP_ADMIN_PASSWORD: str = "admin123"
 
+    # Bootstrap super_admin (doc 42b). Separate account from `admin`
+    # so the everyday admin login does NOT carry super_admin privilege.
+    # super_admin is the only role that can grant super_admin / admin
+    # to others. Rotate the password immediately after first login via
+    # PATCH /api/v3/users/{id}/password.
+    BOOTSTRAP_SUPERADMIN_LOGIN: str = "super_admin"
+    BOOTSTRAP_SUPERADMIN_EMAIL: str = "super_admin@example.com"
+    BOOTSTRAP_SUPERADMIN_PASSWORD: str = "superadmin123"
+
     # ---- File attachments (Comments & Attachments feature) ----
     #
     # All values are env-driven so they can change per environment without

@@ -10,7 +10,7 @@
       "name": "Activities",
       "item": [
         {
-          "name": "Create an activity under a milestone (doc 38)",
+          "name": "Create an activity under a milestone",
           "request": {
             "method": "POST",
             "header": [
@@ -46,7 +46,7 @@
                 }
               ]
             },
-            "description": "Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).\n\nDoc 38: type / resource fields are no longer accepted here. Set ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate`` via PATCH after the row exists.",
+            "description": "Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).: type / resource fields are no longer accepted here. Set ``status`` / ``dependsOn`` / ``actualStartDate`` / ``actualEndDate`` via PATCH after the row exists.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ],\n  \"ownerDivision\": \"\",\n  \"vendorId\": \"\",\n  \"concernedDivision\": [\n    \"\"\n  ],\n  \"priority\": \"\"\n}",
@@ -315,7 +315,7 @@
                 }
               ]
             },
-            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -364,7 +364,7 @@
                 }
               ]
             },
-            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -413,7 +413,7 @@
                 }
               ]
             },
-            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -462,7 +462,7 @@
                 }
               ]
             },
-            "description": "Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first."
+            "description": ": returns comments rows whose body is NULL (attachment-only sends), newest-first."
           },
           "response": []
         },
@@ -496,7 +496,7 @@
                 }
               ]
             },
-            "description": "Doc 35: aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them."
+            "description": ": aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them."
           },
           "response": []
         },
@@ -531,7 +531,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -566,7 +566,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -601,7 +601,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         },
@@ -636,7 +636,7 @@
                 }
               ]
             },
-            "description": "Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
+            "description": "Upload a single file via multipart/form-data (field name ``file``).: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE."
           },
           "response": []
         }
@@ -709,7 +709,7 @@
                 "login"
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAuthenticate user and receive a JWT token. Doc 33 change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nAuthenticate user and receive a JWT token. change 3: when 2FA is required for the user (per-user flag + global ``REQUIRE_2FA``), this endpoint returns ``{requires_otp: true, ephemeral_token, channels_available}`` instead of an access_token. The client then calls ``/login/send-otp`` and ``/login/verify-otp``.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"login\": \"\",\n  \"password\": \"\"\n}",
@@ -834,7 +834,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nDelete user by ID. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nDelete user by ID. Path param accepts integer ``id`` or ``US-...`` code."
           },
           "response": []
         },
@@ -958,7 +958,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` — see doc 25). The dispatcher auto-detects via the ``US-`` prefix."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nGet user by ID. The path param accepts EITHER the integer ``id`` OR the human-readable ``userCode`` (``US-XXXX-YYMMDDHHMMSS`` — see). The dispatcher auto-detects via the ``US-`` prefix."
           },
           "response": []
         },
@@ -1266,7 +1266,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nClears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users — returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code (doc 25)."
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nClears deletedAt/deletedBy and sets status='active' on a soft-deleted user. Idempotent on already-active users — returns the current snapshot rather than 409. All project mappings, vendor association, and division values are preserved on disk during soft-delete and re-surface automatically. Mirrors POST /api/v3/vendors/{id}/restore. Path param accepts integer ``id`` or ``US-...`` code."
           },
           "response": []
         },
@@ -1429,7 +1429,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user details. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user details. Path param accepts integer ``id`` or ``US-...`` code.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"admin\": false,\n  \"status\": \"\",\n  \"vendor_id\": \"\",\n  \"division\": \"\",\n  \"division_other\": \"\",\n  \"phone_number\": \"\"\n}",
@@ -1478,7 +1478,7 @@
                 }
               ]
             },
-            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user password. Path param accepts integer ``id`` or ``US-...`` code (doc 25).",
+            "description": "**Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nUpdate user password. Path param accepts integer ``id`` or ``US-...`` code.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"password\": \"\"\n}",
@@ -1997,7 +1997,7 @@
       "name": "Files",
       "item": [
         {
-          "name": "Doc 35: local fallback that streams attachment file bytes",
+          "name": ": local fallback that streams attachment file bytes",
           "request": {
             "method": "GET",
             "header": [],
@@ -2041,7 +2041,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n  - the API process itself (\"status\")\n  - file-storage backend reachability (NFS mount in prod, local\n    folder in dev) — surfaced separately so ops can distinguish a\n    fully-healthy app from one that's serving but can't accept\n    attachment uploads.\n  - notification client config + reachability — diagnostic for the\n    2FA / forgot-password flow. Exposes which backend is selected\n    (``mock`` or ``http``), the configured service URL, and a quick\n    reachability probe so ops can tell at a glance whether the BE\n    will actually dispatch OTP emails or silently sink them in\n    the audit table.\n\nThe NFS server / export are reported back from settings (informational\n— the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
+            "description": "Health check endpoint.\n\nReports the status of subsystems the app depends on. Currently:\n - the API process itself (\"status\")\n - file-storage backend reachability (NFS mount in prod, local\n folder in dev) — surfaced separately so ops can distinguish a\n fully-healthy app from one that's serving but can't accept\n attachment uploads.\n - notification client config + reachability — diagnostic for the\n 2FA / forgot-password flow. Exposes which backend is selected\n (``mock`` or ``http``), the configured service URL, and a quick\n reachability probe so ops can tell at a glance whether the BE\n will actually dispatch OTP emails or silently sink them in\n the audit table.\n\nThe NFS server / export are reported back from settings (informational\n— the app doesn't connect to them directly; the OS mount does). They\nlet ops verify which file store this instance is wired to."
           },
           "response": []
         }
@@ -3272,7 +3272,7 @@
                 }
               ]
             },
-            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. Doc 36 moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
+            "description": "**Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.\n\nReturns the email + SMS template catalog used by ``app/shared/notifications.py`` to render OTP / password-reset / future notification messages. moved templates from hardcoded renderers into this catalog so ops can edit copy without a release. Pass ``?include_inactive=true`` to also see soft-disabled rows."
           },
           "response": []
         },
@@ -5495,7 +5495,7 @@
                 }
               ]
             },
-            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape — milestone fields only) OR ``multipart/form-data`` (doc 30 — milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
+            "description": "Create a milestone. Accepts EITHER ``application/json`` (legacy shape — milestone fields only) OR ``multipart/form-data`` ( — milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -7040,7 +7040,7 @@
               ],
               "path": []
             },
-            "description": "Root endpoint.\n\nReturns:\n    API information"
+            "description": "Root endpoint.\n\nReturns:\n API information"
           },
           "response": []
         }
@@ -7136,7 +7136,7 @@
                 }
               ]
             },
-            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -7397,7 +7397,7 @@
                 }
               ]
             },
-            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
+            "description": "Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` ( — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"startDate\": \"2026-01-01T00:00:00Z\",\n  \"endDate\": \"2026-01-01T00:00:00Z\",\n  \"actualStartDate\": \"2026-01-01T00:00:00Z\",\n  \"actualEndDate\": \"2026-01-01T00:00:00Z\",\n  \"position\": 0,\n  \"status\": \"\",\n  \"dependsOn\": [\n    \"\"\n  ]\n}",
@@ -7869,7 +7869,7 @@
                 }
               ]
             },
-            "description": "Path param accepts UUID or ``VN-...`` code (doc 25).",
+            "description": "Path param accepts UUID or ``VN-...`` code.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
@@ -8354,10 +8354,10 @@
       ]
     },
     {
-      "name": "Role Assignments (doc 41 — proxied via :8000)",
+      "name": "Role Assignments ( — proxied via :8000)",
       "item": [
         {
-          "name": "List a user's role assignments (doc 41 — global / org / project)",
+          "name": "List a user's role assignments ( — global / org / project)",
           "request": {
             "method": "GET",
             "header": [
@@ -8385,7 +8385,7 @@
           "response": []
         },
         {
-          "name": "Grant a scoped role to a user (doc 41)",
+          "name": "Grant a scoped role to a user",
           "request": {
             "method": "POST",
             "header": [
@@ -8427,7 +8427,7 @@
           "response": []
         },
         {
-          "name": "Revoke a scoped role assignment (doc 41)",
+          "name": "Revoke a scoped role assignment",
           "request": {
             "method": "DELETE",
             "header": [
@@ -8456,7 +8456,7 @@
           "response": []
         },
         {
-          "name": "User's project map (User Mgmt landing) (doc 41)",
+          "name": "User's project map (User Mgmt landing)",
           "request": {
             "method": "GET",
             "header": [
@@ -8484,7 +8484,7 @@
           "response": []
         }
       ],
-      "description": "Doc 41 — user-side scoped role-assignment views, reachable via the monolith proxy on port 8000 (matches the existing `/api/v3/users/*` prefix rule).\n\nThe project- and vendor-side variants (`/projects/{id}/role-assignments`, `/vendors/{id}/projects`) are intentionally NOT proxied per doc 42 — call user-mgmt :8001 directly for those. They appear in the user-mgmt Postman collection but not here.\n\nSee `C:/Programming/PMIS/DOC_41_FLOWS.md` for the full flow narrative."
+      "description": "— user-side scoped role-assignment views, reachable via the monolith proxy on port 8000 (matches the existing `/api/v3/users/*` prefix rule).\n\nThe project- and vendor-side variants (`/projects/{id}/role-assignments`, `/vendors/{id}/projects`) are intentionally NOT proxied per — call user-mgmt :8001 directly for those. They appear in the user-mgmt Postman collection but not here.\n\nSee `C:/Programming/PMIS/DOC_41_FLOWS.md` for the full flow narrative."
     }
   ],
   "variable": [
