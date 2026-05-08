@@ -90,6 +90,8 @@ def create_task(
     status: Optional[str] = None,
     # Doc 41 follow-up: priority code from the priorities catalog.
     priority: Optional[str] = None,
+    # Doc 41 follow-up: optional single assignee (active user UUID).
+    assigned_to: Optional[str] = None,
 ) -> Tuple[Task, Optional[TaskResource]]:
     activity = (
         db.query(ActivityModel)
@@ -199,6 +201,13 @@ def create_task(
                 f"Priority must be one of: {', '.join(valid)}."
             )
 
+    # Doc 41 follow-up: validate the assignee (if any). Must be a live,
+    # active user from the users catalog. Independent per-level: no
+    # cascade from / to subtasks.
+    if assigned_to is not None:
+        from .....shared.assignee import validate_assignable_user_id
+        validate_assignable_user_id(db, assigned_to)
+
     # Validate dependsOn BEFORE inserting the task row. Accepts UUIDs or
     # labels (e.g. "T1.2.3") — see app/shared/labels.py.
     desired_deps: List[str] = []
@@ -289,6 +298,7 @@ def create_task(
         resource_count=store_count,
         status=status,
         priority=priority,
+        assigned_to=assigned_to,
     )
     resource_domain = None
     if type == TASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:

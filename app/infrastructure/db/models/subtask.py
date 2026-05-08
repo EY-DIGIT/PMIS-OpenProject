@@ -81,6 +81,15 @@ class SubtaskModel(Base):
     # the wire on create; existing rows backfilled to ``p3``.
     priority = Column(String(16), nullable=True, index=True)
 
+    # Doc 41 follow-up: optional single assignee (FE dropdown — picks one
+    # active user from the users catalog). Independent per-level for both
+    # top-level AND nested subtasks; parent's assignee has no effect.
+    # NULL = unassigned. Wire keyword: ``assignedTo``; emitted alongside
+    # ``assignedToName``.
+    assigned_to = Column(
+        String(36), ForeignKey("users.id"), nullable=True, index=True,
+    )
+
     created_at = Column(UtcDateTime, default=_utcnow, nullable=False)
     updated_at = Column(UtcDateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
     # Doc 26: users.id flipped to UUID String(36).

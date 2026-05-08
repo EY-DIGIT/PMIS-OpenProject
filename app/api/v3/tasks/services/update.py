@@ -149,6 +149,12 @@ def update_task(
     status: Optional[str] = None,  # doc 38: status now editable on PATCH
     # Doc 41 follow-up: priority code (None = no change).
     priority: Optional[str] = None,
+    # Doc 41 follow-up: assignee. Distinguish "field omitted" (no change)
+    # from "field sent as null" (unassign). The default sentinel
+    # ``...`` (Ellipsis) means "no change"; an explicit ``None`` clears
+    # the assignment; a UUID string assigns. The controller flips between
+    # these based on ``data.model_fields_set``.
+    assigned_to: Any = ...,
 ) -> Tuple[Task, Optional[TaskResource]]:
     repo = TaskRepository(db)
     model = repo.get_model(task_id)
@@ -370,6 +376,15 @@ def update_task(
                 f"Priority must be one of: {', '.join(valid)}."
             )
 
+    # Doc 41 follow-up: assignee — only validate / write when the caller
+    # explicitly sent the field (sentinel != ...). When the value is a
+    # UUID, validate it points to a live, active user. When it's None,
+    # no validation needed (we're just clearing the column).
+    if assigned_to is not ...:
+        if assigned_to is not None:
+            from .....shared.assignee import validate_assignable_user_id
+            validate_assignable_user_id(db, assigned_to)
+
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
     if description is not None: updates["description"] = description
@@ -381,6 +396,7 @@ def update_task(
     if position is not None: updates["position"] = position
     if status is not None: updates["status"] = status  # doc 38
     if priority is not None: updates["priority"] = priority
+    if assigned_to is not ...: updates["assigned_to"] = assigned_to
     if final_mode != model.resource_mode or final_count != model.resource_count:
         updates["resource_mode"] = final_mode
         updates["resource_count"] = final_count

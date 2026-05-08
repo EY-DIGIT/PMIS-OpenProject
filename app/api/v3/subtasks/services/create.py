@@ -150,6 +150,8 @@ def create_subtask(
     status: Optional[str] = None,
     # Doc 41 follow-up: priority code from the priorities catalog.
     priority: Optional[str] = None,
+    # Doc 41 follow-up: optional single assignee (active user UUID).
+    assigned_to: Optional[str] = None,
 ) -> Tuple[Subtask, Optional[SubtaskResource]]:
     task, parent_subtask, new_depth = _resolve_parent(
         db, task_id=task_id, parent_subtask_id=parent_subtask_id,
@@ -251,6 +253,13 @@ def create_subtask(
                 f"Priority must be one of: {', '.join(valid)}."
             )
 
+    # Doc 41 follow-up: validate the assignee (if any). Must be a live,
+    # active user. Independent per-level — applies the same to nested
+    # subtasks; parent's assignee has no effect.
+    if assigned_to is not None:
+        from .....shared.assignee import validate_assignable_user_id
+        validate_assignable_user_id(db, assigned_to)
+
     desired_deps: List[str] = []
     if depends_on is not None:
         candidates, _id_to_raw = resolve_labels_to_ids(
@@ -349,6 +358,7 @@ def create_subtask(
         resource_count=store_count,
         status=status,
         priority=priority,
+        assigned_to=assigned_to,
     )
     resource_domain = None
     if type == SUBTASK_TYPE_RESOURCE and resource_mode == RESOURCE_MODE_DETAILS:

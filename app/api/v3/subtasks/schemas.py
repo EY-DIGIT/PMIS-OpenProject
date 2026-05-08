@@ -45,6 +45,18 @@ class SubtaskCreateRequest(BaseModel):
             "POST /api/v3/master/priorities/create."
         ),
     )
+    # Doc 41 follow-up: optional single assignee. Service-side validation
+    # confirms the user exists, is active, and is not soft-deleted. Applies
+    # equally to top-level and nested subtasks; parent's assignee has no
+    # effect. Picker source: GET /api/v3/users.
+    assigned_to: Optional[str] = Field(
+        None, alias="assignedTo", max_length=36,
+        description=(
+            "Optional. UUID of an active user to assign this subtask to. "
+            "Validated against the users catalog (must exist, status='active', "
+            "not soft-deleted). Omit for unassigned."
+        ),
+    )
 
     @field_validator("end_date")
     @classmethod
@@ -82,6 +94,18 @@ class SubtaskUpdateRequest(BaseModel):
     status: Optional[str] = None
     # Doc 41 follow-up: priority code — optional on PATCH (None = no change).
     priority: Optional[str] = Field(None, max_length=16)
+    # Doc 41 follow-up: PATCH assignedTo. Distinguish omitted from null:
+    #   - omitted  -> no change
+    #   - null     -> unassign
+    #   - <uuid>   -> assign
+    # Controller checks ``model_fields_set`` to tell omitted from null.
+    assigned_to: Optional[str] = Field(
+        None, alias="assignedTo", max_length=36,
+        description=(
+            "Optional. UUID of an active user. Omit to leave assignment "
+            "unchanged; send null to unassign; send a UUID to assign."
+        ),
+    )
 
     @field_validator("priority", mode="before")
     @classmethod

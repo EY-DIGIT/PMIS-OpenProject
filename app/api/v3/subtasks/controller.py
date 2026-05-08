@@ -40,7 +40,7 @@ from .services import (
 _SUBTASK_REQUIRED_STRING_KEYS = ("name", "priority")
 _SUBTASK_OPTIONAL_STRING_KEYS = (
     "description", "startDate", "endDate", "actualStartDate", "actualEndDate",
-    "resourceMode",
+    "resourceMode", "assignedTo",
 )
 _SUBTASK_INT_KEYS = ("position", "resourceCount")
 _SUBTASK_ARRAY_KEYS = ("dependsOn",)
@@ -136,6 +136,7 @@ def _persist_subtask_inline(
         subtask.to_dict(),
         resource.to_dict() if resource else None,
         label_index=idx,
+        assigned_to_name=_resolve_assignee_name(db, subtask.assigned_to),
     )
     if comment_payload is not None:
         response_data["comment"] = comment_payload
@@ -172,6 +173,7 @@ def format_subtask_response(
     base_url: str = "/api/v3",
     *,
     nested_subtasks: Optional[List[Dict[str, Any]]] = None,
+    assigned_to_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Format a Subtask response.
 
@@ -212,6 +214,11 @@ def format_subtask_response(
         "status": s.get("status"),
         # Doc 41 follow-up: priority code from the priorities catalog.
         "priority": s.get("priority"),
+        # Doc 41 follow-up: optional single assignee. ``assignedTo`` is
+        # the user UUID; ``assignedToName`` is the resolved display name.
+        # Both NULL when unassigned.
+        "assignedTo": s.get("assigned_to"),
+        "assignedToName": assigned_to_name,
         "dependsOn": deps,
         "dependsOnDisplay": deps_display,
         "createdAt": s["created_at"],
@@ -224,6 +231,14 @@ def format_subtask_response(
     if nested_subtasks is not None:
         out["subtasks"] = nested_subtasks
     return out
+
+
+def _resolve_assignee_name(db: Session, user_id: Optional[str]) -> Optional[str]:
+    """Single-user name lookup for the response. NULL when unassigned."""
+    if not user_id:
+        return None
+    from ....shared.assignee import bulk_user_name_lookup
+    return bulk_user_name_lookup(db, [user_id]).get(user_id)
 
 
 class SubtaskController:
@@ -245,10 +260,12 @@ class SubtaskController:
             depends_on=data.depends_on,
             status=data.status,
             priority=data.priority,
+            assigned_to=data.assigned_to,
         )
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.created(data=format_subtask_response(
             s.to_dict(), r.to_dict() if r else None, label_index=idx,
+            assigned_to_name=_resolve_assignee_name(db, s.assigned_to),
         ))
 
     @staticmethod
@@ -279,10 +296,12 @@ class SubtaskController:
             depends_on=data.depends_on,
             status=data.status,
             priority=data.priority,
+            assigned_to=data.assigned_to,
         )
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.created(data=format_subtask_response(
             s.to_dict(), r.to_dict() if r else None, label_index=idx,
+            assigned_to_name=_resolve_assignee_name(db, s.assigned_to),
         ))
 
     @staticmethod
@@ -318,6 +337,7 @@ class SubtaskController:
             depends_on=data.depends_on,
             status=data.status,
             priority=data.priority,
+            assigned_to=data.assigned_to,
         )
         return _persist_subtask_inline(request, db, s, r, body, files)
 
@@ -358,6 +378,7 @@ class SubtaskController:
             depends_on=data.depends_on,
             status=data.status,
             priority=data.priority,
+            assigned_to=data.assigned_to,
         )
         return _persist_subtask_inline(request, db, s, r, body, files)
 
@@ -404,6 +425,16 @@ class SubtaskController:
         for bucket in children_by_parent.values():
             bucket.sort(key=lambda x: (x.position, x.id))
 
+        # Doc 41 follow-up: bulk-resolve assignee names across the whole
+        # tree (top-level + nested) so each format call gets a name with
+        # zero extra queries.
+        from ....shared.assignee import bulk_user_name_lookup
+        all_uids = (
+            [s.assigned_to for s in top_level if s.assigned_to]
+            + [s.assigned_to for s in nested_flat if s.assigned_to]
+        )
+        name_by_uid = bulk_user_name_lookup(db, all_uids)
+
         def _build(s) -> Dict[str, Any]:
             """Recursive: format ``s`` and embed its children under
             ``subtasks: [...]``. Each leaf row gets ``subtasks: []`` so
@@ -416,6 +447,7 @@ class SubtaskController:
                 nested_subtasks=[
                     _build(child) for child in children_by_parent.get(s.id, [])
                 ],
+                assigned_to_name=name_by_uid.get(s.assigned_to),
             )
 
         items = [_build(s) for s in top_level]
@@ -434,6 +466,7 @@ class SubtaskController:
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.ok(data=format_subtask_response(
             s.to_dict(), r.to_dict() if r else None, label_index=idx,
+            assigned_to_name=_resolve_assignee_name(db, s.assigned_to),
         ))
 
     @staticmethod
@@ -441,8 +474,9 @@ class SubtaskController:
         cuid = getattr(request.state, "user_id", None)
         # Doc 38: type / resource_mode / resource_count / resource dropped
         # from the wire. Pass None into the underlying service.
-        s, r = update_subtask(
-            db,
+        # Doc 41 follow-up: PATCH ``assignedTo`` distinguishes omitted
+        # (no change) from null (unassign). Forward only when present.
+        update_kwargs = dict(
             subtask_id=subtask_id,
             name=data.name, description=data.description, type=None,
             start_date=data.start_date, end_date=data.end_date,
@@ -454,9 +488,13 @@ class SubtaskController:
             status=data.status,
             priority=data.priority,
         )
+        if "assigned_to" in data.model_fields_set:
+            update_kwargs["assigned_to"] = data.assigned_to
+        s, r = update_subtask(db, **update_kwargs)
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.ok(data=format_subtask_response(
             s.to_dict(), r.to_dict() if r else None, label_index=idx,
+            assigned_to_name=_resolve_assignee_name(db, s.assigned_to),
         ))
 
     @staticmethod
@@ -472,4 +510,5 @@ class SubtaskController:
         idx = build_label_index_for_project(db, s.project_id)
         return BaseController.ok(data=format_subtask_response(
             s.to_dict(), label_index=idx,
+            assigned_to_name=_resolve_assignee_name(db, s.assigned_to),
         ))

@@ -38,6 +38,7 @@ class TaskRepository:
             resource_count=t.resource_count,
             status=getattr(t, "status", None),
             priority=getattr(t, "priority", None),
+            assigned_to=getattr(t, "assigned_to", None),
             created_at=t.created_at,
             updated_at=t.updated_at,
             created_by=t.created_by,
@@ -137,6 +138,8 @@ class TaskRepository:
         status: Optional[str] = None,
         # Doc 41 follow-up: priority code from the priorities catalog.
         priority: Optional[str] = None,
+        # Doc 41 follow-up: optional assignee user UUID.
+        assigned_to: Optional[str] = None,
     ) -> Task:
         t = TaskModel(
             project_id=project_id,
@@ -153,6 +156,7 @@ class TaskRepository:
             resource_count=resource_count,
             status=status,
             priority=priority,
+            assigned_to=assigned_to,
             created_by=created_by,
             updated_by=created_by,
         )
