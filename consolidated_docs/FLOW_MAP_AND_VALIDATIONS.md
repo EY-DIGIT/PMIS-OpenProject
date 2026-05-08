@@ -375,9 +375,9 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `POST /users/create` | JWT | `users:create` | `UserCreateRequest` | login 3-50 alphanum/underscore/hyphen; email valid; password ≥ 8; **`vendorId` + `division` + `projectIds` + `phoneNumber` required**. login + email unique. `vendorId` accepts a vendor UUID **or** `VN-XXXX-YYMMDDHHMMSS` `vendorCode` (doc 25). `admin=true` assigns the seeded `admin` role. Created row is returned with `id` (UUID — doc 26) and `userCode` (doc 25). |
 | `GET /users` | JWT | `users:read_all` | — | `offset≥1`, `pageSize∈[1,100]`, optional `status`. Newest-first. |
 | `GET /users/{user_id}` | JWT | `users:read` | — | Path param accepts the UUID `users.id` (doc 26) **or** the `US-XXXX-YYMMDDHHMMSS` `userCode` (doc 25 — auto-detected by the `US-` prefix). Members can read themselves + active users; admins read all. |
-| `PATCH /users/{user_id}` | JWT | `users:update` | `UserUpdateRequest` | UUID **or** `US-` code. Members can't change `admin` or `status`; admins can. Last-admin protection on demote/deactivate. |
-| `PATCH /users/{user_id}/password` | JWT | `users:update` | `UserPasswordUpdateRequest` | UUID **or** `US-` code. Password ≥ 8. Self-service or admin-for-any. |
-| `DELETE /users/{user_id}` | JWT | `users:delete_all` | — | UUID **or** `US-` code. Soft-delete (sets `deleted_at`, `status='inactive'`). Project_members rows preserved. Last-admin lockout. |
+| `PATCH /users/{user_id}` | JWT | `users:update` | `UserUpdateRequest` | UUID **or** `US-` code. Members can't change `admin` or `status`; admins can. **Hierarchy guards (doc 43)**: admin → super_admin PATCH refused (F1, 403). **Self-deactivate refused for any tier** (G1, 403, doc 43 round 2). Last-super_admin deactivation lockout still in service code as defence-in-depth (422). |
+| `PATCH /users/{user_id}/password` | JWT | `users:update` | `UserPasswordUpdateRequest` | UUID **or** `US-` code. Password ≥ 8. Self-service or admin-for-any. **Hierarchy guards (doc 43)**: admin → super_admin password change refused (F1, 403); super_admin → another super_admin refused without first revoking target's super_admin role (G2, 403, doc 43 round 2). |
+| `DELETE /users/{user_id}` | JWT | `users:delete_all` | — | UUID **or** `US-` code. Soft-delete (sets `deleted_at`, `status='inactive'`). Project_members rows preserved. **Hierarchy guards (doc 43)**: self-delete refused (legacy, 403); admin → super_admin DELETE refused (F1, 403); super_admin → another super_admin DELETE refused without first revoking target's super_admin role (G3, 403, doc 43 round 2); last live super_admin DELETE refused (F3, 422). |
 | `POST /users/{user_id}/restore` | JWT | `users:delete_all` | — | UUID **or** `US-` code. Clears `deleted_at`, `status='active'`. Idempotent on already-active. |
 
 **RBAC user-side endpoints (doc 21B):**
@@ -389,7 +389,7 @@ Doc 24 part 3 dropped the parent-activity hierarchy rule from tasks and the pare
 | `DELETE /users/{id}/permissions/{code}` | `rbac:assign` | Revoke direct grant. |
 | `GET /users/{id}/roles` | `permissions:read` | List user's roles. |
 | `POST /users/{id}/roles/{role_id}` | `rbac:assign` | Assign role. |
-| `DELETE /users/{id}/roles/{role_id}` | `rbac:assign` | Unassign role; **last-admin lockout fires** on the seeded `admin` role. |
+| `DELETE /users/{id}/roles/{role_id}` | `rbac:assign` | Unassign role. Symmetric caller-vs-target gate (doc 43): a caller who can't grant a role can't revoke it either. **Last-super_admin role-revoke lockout fires (403)** if revoking would leave zero global super_admin assignments. (Pre-doc-43 last-admin lockout removed — admin is no longer the protected tier.) |
 
 ### 3.2 Projects — [`app/api/v3/projects/routes.py`](app/api/v3/projects/routes.py)
 
