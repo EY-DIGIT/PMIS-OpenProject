@@ -102,6 +102,17 @@ def list_projects(
             )
             query = query.filter(ProjectModel.id.in_(visible_pids))
 
+            # Doc 44 round 8 — non-admin tiers see only published
+            # projects. Spec: "Org Admins, Project Admins, and Project
+            # Members should not be able to view projects assigned to
+            # them before the projects are published." Pre-publish
+            # statuses (draft, new) are hidden; the post-publish
+            # lifecycle (closed/suspended/archived) stays visible so
+            # historical projects remain readable.
+            query = query.filter(ProjectModel.status != "draft").filter(
+                ProjectModel.status != "new",
+            )
+
         # Get total count
         total = query.count()
 

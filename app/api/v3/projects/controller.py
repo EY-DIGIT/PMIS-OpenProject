@@ -141,6 +141,24 @@ class ProjectController:
         result = get_project_by_id(db, project_uuid)
         if not result.is_success():
             return _error_response(result, default_status=404)
+
+        # Doc 44 round 8 — non-admin tiers cannot view pre-publish
+        # projects (status in {draft, new}). Mirrors the list filter.
+        # 404 keeps the response shape consistent with the list-side
+        # silent-hide behaviour (FE shouldn't be able to distinguish
+        # "doesn't exist" from "not yet published").
+        caller_id = get_current_user_id(request)
+        project_status = getattr(result.data, "status", None)
+        if (
+            caller_id is not None
+            and project_status in ("draft", "new")
+        ):
+            from ....infrastructure.db.repositories.rbac_repository import (
+                RbacRepository,
+            )
+            if not RbacRepository(db).user_has_admin_role(caller_id):
+                return _error_response(_NotFoundResult(), default_status=404)
+
         formatted = format_project_response(result.data.to_dict(), "/api/v3")
         return BaseController.ok(data=formatted)
 

@@ -15,6 +15,16 @@ from ....core.middleware.rbac import (
 )
 from ....infrastructure.db.session import get_db
 
+from ....core.base_controller import BaseController
+from ....core.errors import NotFoundError
+from ....core.permissions import PROJECT_MEMBERS_READ
+from ....infrastructure.db.models.project import ProjectModel
+from ....infrastructure.db.models.role import RoleModel
+from ....infrastructure.db.models.user import UserModel
+from ....infrastructure.db.models.user_role_assignment import (
+    UserRoleAssignmentModel,
+)
+
 from .controller import ProjectController
 from .permissions import (
     PROJECTS_CLOSE,
@@ -207,3 +217,61 @@ def close_project(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     return ProjectController.close(request, project_uuid, data, db)
+
+
+@router.get(
+    "/{project_uuid}/role-assignments",
+    dependencies=[require_permission(PROJECT_MEMBERS_READ)],
+    summary="Per-project role assignments grouped by role",
+    description=(
+        "Doc 44 round 8: monolith mirror of the user-mgmt route at the "
+        "same path. Returns the users assigned to this project, grouped "
+        "by the doc-41 scoped role they hold (project_admin / "
+        "project_member / division_member). Powers the project-opened "
+        "User Management view so the FE can avoid a cross-service call "
+        "to user-mgmt for this read."
+    ),
+)
+def list_project_role_assignments(
+    project_uuid: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    rows = (
+        db.query(UserRoleAssignmentModel, RoleModel, UserModel)
+        .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+        .join(UserModel, UserModel.id == UserRoleAssignmentModel.user_id)
+        .filter(UserRoleAssignmentModel.project_id == project_uuid)
+        .filter(UserModel.deleted_at.is_(None))
+        .order_by(RoleModel.name.asc(), UserModel.login.asc())
+        .all()
+    )
+
+    buckets: Dict[int, Dict[str, Any]] = {}
+    for ura, role, user in rows:
+        bucket = buckets.setdefault(role.id, {
+            "roleId": role.id,
+            "roleName": role.name,
+            "users": [],
+        })
+        bucket["users"].append({
+            "id": user.id,
+            "login": user.login,
+            "email": user.email,
+            "firstName": user.first_name,
+            "lastName": user.last_name,
+            "assignmentId": ura.id,
+        })
+
+    project = (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .first()
+    )
+    if project is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+
+    return BaseController.ok(data={
+        "projectId": project_uuid,
+        "projectName": project.name,
+        "roles": list(buckets.values()),
+    })

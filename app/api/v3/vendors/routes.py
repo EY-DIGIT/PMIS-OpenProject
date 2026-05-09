@@ -23,11 +23,14 @@ from sqlalchemy.orm import Session
 
 from ....core.base_controller import BaseController
 from ....core.dependencies import get_current_user_id
-from ....core.errors import AlreadyExistsError, NotFoundError
-from ....core.middleware.rbac import require_permission
+from ....core.errors import AlreadyExistsError, AuthorizationError, NotFoundError
+from ....core.middleware.rbac import require_authenticated, require_permission
+from ....core.permissions import RBAC_ASSIGN
 from ....core.rbac import Permission
 from ....infrastructure.db.models.project import ProjectModel
 from ....infrastructure.db.models.project_vendor import ProjectVendorModel
+from ....infrastructure.db.models.user import UserModel
+from ....infrastructure.db.repositories.rbac_repository import RbacRepository
 from ....infrastructure.db.repositories.vendor_repository import VendorRepository
 from ....infrastructure.db.session import get_db
 from ....shared.datetime import iso_ist
@@ -292,6 +295,24 @@ def get_vendor(
     vendor = repo.get_by_id_or_code(vendor_id)
     if vendor is None:
         raise NotFoundError("Vendor not found.")
+
+    # Doc 44 round 8 — caller-vendor scope check. admin / super_admin
+    # bypass; non-admin callers may only fetch the vendor they belong
+    # to (users.vendor_id). Mirrors the list-vendors filter so the
+    # detail endpoint doesn't leak cross-vendor data.
+    caller_id = get_current_user_id(request)
+    if caller_id is not None and not RbacRepository(db).user_has_admin_role(caller_id):
+        caller_user = (
+            db.query(UserModel).filter(UserModel.id == caller_id).first()
+        )
+        caller_vendor_id = (
+            getattr(caller_user, "vendor_id", None) if caller_user else None
+        )
+        if caller_vendor_id != vendor.id:
+            raise AuthorizationError(
+                "You can only view your own organization's details.",
+            )
+
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
     assignments = user_assignments_for_vendor(db, vendor.id)
     return BaseController.stamp_deprecation(
@@ -362,8 +383,17 @@ def create_vendor(
 
 @router.patch(
     "/{vendor_id}",
-    dependencies=[require_permission(Permission.VENDORS_MANAGE)],
-    summary="Update a vendor (admin)",
+    dependencies=[require_authenticated()],
+    summary="Update a vendor (admin or org_admin for user_assignments only)",
+    description=(
+        "Doc 44 round 8: body-shape-aware permission gate. Bodies that "
+        "touch any vendor field (name, description, active, email, "
+        "contactPerson, phoneNumber, projectIds) require ``vendors:manage`` "
+        "(admin / super_admin only). Bodies that ONLY supply "
+        "``user_assignments`` may pass with ``rbac:assign`` (org_admin) — "
+        "the per-(project, role) tuples are validated against the caller's "
+        "scope by the existing ``apply_vendor_user_assignments`` helper."
+    ),
 )
 def update_vendor(
     request: Request,
@@ -372,10 +402,51 @@ def update_vendor(
     db: Session = Depends(get_db),
 ) -> JSONResponse:
     """Path param accepts UUID or ``VN-...`` code (doc 25)."""
+    # Doc 44 round 8 — body-shape-aware perm split. Determine which
+    # fields the caller is actually trying to mutate (Pydantic
+    # exclude_unset semantics) and gate accordingly.
+    body_set = data.model_dump(exclude_unset=True, by_alias=True)
+    user_assignments_only = (
+        "user_assignments" in body_set
+        and not (set(body_set.keys()) - {"user_assignments"})
+    )
+    held = getattr(request.state, "user_permissions", set()) or set()
+    has_vendors_manage = Permission.VENDORS_MANAGE.value in held or "vendors:manage" in held
+    has_rbac_assign = RBAC_ASSIGN in held
+    if user_assignments_only:
+        if not (has_vendors_manage or has_rbac_assign):
+            raise AuthorizationError(
+                "Insufficient permissions. Required: vendors:manage or rbac:assign",
+            )
+    else:
+        if not has_vendors_manage:
+            raise AuthorizationError(
+                "Insufficient permissions. Required: vendors:manage",
+            )
+
     repo = VendorRepository(db)
     m = repo.get_model_by_id_or_code(vendor_id)
     if m is None:
         raise NotFoundError("Vendor not found.")
+
+    # Doc 44 round 8 — vendor-scope guard for non-admin callers using
+    # the user_assignments carve-out. Without ``vendors:manage`` the
+    # caller can only PATCH the vendor they belong to; this prevents
+    # an org_admin of vendor X from writing assignments on vendor Y.
+    # admin / super_admin (who hold ``vendors:manage``) bypass.
+    if not has_vendors_manage:
+        caller_id = get_current_user_id(request)
+        caller_user = (
+            db.query(UserModel).filter(UserModel.id == caller_id).first()
+            if caller_id else None
+        )
+        caller_vendor_id = (
+            getattr(caller_user, "vendor_id", None) if caller_user else None
+        )
+        if caller_vendor_id != m.id:
+            raise AuthorizationError(
+                "You can only update your own organization.",
+            )
     # If projectIds is supplied, validate BEFORE applying any field changes
     # so a bad id doesn't leave the row half-updated. None means "leave the
     # mapping unchanged"; [] clears it; non-empty list replaces it.

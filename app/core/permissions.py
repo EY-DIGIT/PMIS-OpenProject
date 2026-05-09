@@ -292,7 +292,12 @@ ORG_ADMIN_ROLE_PERMISSIONS: List[str] = [
     PROJECTS_READ, PROJECTS_READ_ALL,
     PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
     PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
-    VENDORS_READ, MASTER_DATA_VIEW,
+    # Doc 44 round 8: master_data:view stripped from org_admin per
+    # spec "Org Admins must not have access to any Master Data".
+    # vendors:read kept — org_admin still views their own vendor (the
+    # GET /vendors and GET /vendors/{id} endpoints scope to caller's
+    # vendor for non-admins).
+    VENDORS_READ,
     MILESTONES_READ,
     ACTIVITIES_READ,
     # Doc 44 round 7: org_admin gets full task/subtask CRUD (incl.
@@ -315,7 +320,11 @@ PROJECT_ADMIN_ROLE_PERMISSIONS: List[str] = [
     # Doc 44 round 5: project_admin can VIEW, change role, do project
     # mapping, and toggle active — but cannot create / edit / delete
     # user fields.
-    USERS_READ, USERS_DEACTIVATE,
+    # Doc 44 round 8: USERS_READ_ALL added so project_admin can list
+    # users on the Search User page (the GET /users endpoint requires
+    # USERS_READ_ALL). The round-7 vendor-scope filter caps non-admin
+    # callers to their own vendor's users — no cross-vendor leak.
+    USERS_READ, USERS_READ_ALL, USERS_DEACTIVATE,
     PROJECTS_READ,
     PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
     PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
