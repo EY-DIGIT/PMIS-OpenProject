@@ -327,6 +327,37 @@ class RbacRepository:
         self.db.flush()
         return True
 
+    def _align_role_permissions(
+        self, role_id: int, canonical_codes: Iterable[str],
+    ) -> None:
+        """Doc 44 round 5 — make the role's permission set EXACTLY match
+        ``canonical_codes`` on every boot (mirror of user-mgmt's helper).
+
+        Adds missing rows, removes rows whose code isn't canonical.
+        Used by the seed loop's self-heal step so spec changes to
+        scoped-role permission sets propagate to existing DBs without
+        manual SQL.
+        """
+        desired = set(canonical_codes)
+        existing = {
+            r[0]
+            for r in self.db.query(RolePermissionModel.permission_code)
+            .filter(RolePermissionModel.role_id == role_id)
+            .all()
+        }
+        to_add = desired - existing
+        to_remove = existing - desired
+        for code in to_add:
+            self.db.add(RolePermissionModel(
+                role_id=role_id, permission_code=code,
+            ))
+        if to_remove:
+            self.db.query(RolePermissionModel).filter(
+                RolePermissionModel.role_id == role_id,
+                RolePermissionModel.permission_code.in_(to_remove),
+            ).delete(synchronize_session=False)
+        self.db.flush()
+
     def replace_role_permissions(
         self, role_id: int, codes: Iterable[str],
     ) -> None:
@@ -538,6 +569,16 @@ class RbacRepository:
             self.grant_permissions_to_role(project_member_role.id, PROJECT_MEMBER_ROLE_PERMISSIONS)
         if not self.list_role_permissions(division_member_role.id):
             self.grant_permissions_to_role(division_member_role.id, DIVISION_MEMBER_ROLE_PERMISSIONS)
+
+        # Doc 44 round 5 — boot-time self-heal on existing DBs (mirror
+        # of user-mgmt). Each call is idempotent — adds missing perms,
+        # removes any not in the canonical list. Without this, a spec
+        # change to a scoped role's permission set drifts forever on
+        # already-seeded deployments.
+        self._align_role_permissions(org_admin_role.id, ORG_ADMIN_ROLE_PERMISSIONS)
+        self._align_role_permissions(project_admin_role.id, PROJECT_ADMIN_ROLE_PERMISSIONS)
+        self._align_role_permissions(project_member_role.id, PROJECT_MEMBER_ROLE_PERMISSIONS)
+        self._align_role_permissions(division_member_role.id, DIVISION_MEMBER_ROLE_PERMISSIONS)
 
         # Doc 43 round 4: drop legacy member/viewer/vendor on every boot.
         # Skip the delete if any user still holds the role; log a warning

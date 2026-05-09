@@ -40,6 +40,10 @@ USERS_UPDATE = "users:update"
 USERS_UPDATE_ALL = "users:update_all"
 USERS_DELETE = "users:delete"
 USERS_DELETE_ALL = "users:delete_all"
+# Doc 44 round 5 — narrow status-flip permission. Granted to
+# org_admin / project_admin so they can deactivate / reactivate
+# users in their scope without needing USERS_UPDATE.
+USERS_DEACTIVATE = "users:deactivate"
 
 # Projects
 PROJECTS_CREATE = "projects:create"
@@ -145,6 +149,11 @@ BUILTIN_PERMISSIONS: List[PermissionDef] = [
     PermissionDef(USERS_UPDATE_ALL, "Update any user", "Edit any user record."),
     PermissionDef(USERS_DELETE, "Delete own user", "Soft-delete own user record."),
     PermissionDef(USERS_DELETE_ALL, "Delete any user", "Soft-delete any user record."),
+    PermissionDef(
+        USERS_DEACTIVATE,
+        "Deactivate user",
+        "Toggle a user's active/inactive status without editing other fields.",
+    ),
 
     PermissionDef(PROJECTS_CREATE, "Create project", "Create a new project."),
     PermissionDef(PROJECTS_READ, "View own project", "View projects the user is a member of."),
@@ -268,39 +277,64 @@ ADMIN_FULL_ROLE_PERMISSIONS: List[str] = [
     p.code for p in BUILTIN_PERMISSIONS if p.code != USERS_GRANT_SUPERADMIN
 ]
 
+# org_admin (doc 44 round 5): manages users (create + edit, NOT
+# delete) within their org, plus task/subtask content of every
+# project owned by their vendor. Project lifecycle + milestone /
+# activity editing remain off-limits. The route gate
+# `require_project_permission` (option a, round 5) walks
+# project → vendor so org-scoped perms apply only to the right
+# projects (no cross-vendor leak).
 ORG_ADMIN_ROLE_PERMISSIONS: List[str] = [
-    USERS_READ, USERS_READ_ALL, USERS_UPDATE_ALL,
+    # Doc 44 round 5 spec: only super_admin / admin can create / edit /
+    # delete users. org_admin can VIEW, change role, do project
+    # mapping, and toggle active/inactive (users:deactivate).
+    USERS_READ, USERS_READ_ALL, USERS_DEACTIVATE,
     PROJECTS_READ, PROJECTS_READ_ALL,
     PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
     PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
     VENDORS_READ, MASTER_DATA_VIEW,
+    MILESTONES_READ,
+    ACTIVITIES_READ,
+    TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_RESTORE,
+    SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_RESTORE,
+    COMMENTS_CREATE, COMMENTS_READ,
+    ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD,
     RBAC_ASSIGN,
 ]
 
-# project_admin: per spec, "manage task and sub-task and add project
-# member". Milestones + activities are READ-ONLY (navigation anchors
-# above task/subtask, not editable). Trimmed in the post-doc-41
-# spec-alignment pass on 2026-05-08.
+# project_admin (doc 44 round 5): user create / edit (NOT delete) for
+# project_member tier within their org, plus full task / subtask CRUD
+# (incl. delete) on the project. Cannot publish / close / delete the
+# project itself. Vendor visibility is read-only (scoped to own org
+# via the list-scope filter).
 PROJECT_ADMIN_ROLE_PERMISSIONS: List[str] = [
-    USERS_READ, PROJECTS_READ,
+    # Doc 44 round 5: project_admin can VIEW, change role, do project
+    # mapping, and toggle active — but cannot create / edit / delete
+    # user fields.
+    USERS_READ, USERS_DEACTIVATE,
+    PROJECTS_READ,
     PROJECT_MEMBERS_READ, PROJECT_MEMBERS_ADD,
     PROJECT_MEMBERS_UPDATE, PROJECT_MEMBERS_DELETE,
+    VENDORS_READ,
     MILESTONES_READ,
     ACTIVITIES_READ,
-    TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_DELETE,
-    SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_DELETE,
+    TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_DELETE, TASKS_RESTORE,
+    SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_DELETE, SUBTASKS_RESTORE,
     COMMENTS_CREATE, COMMENTS_READ, COMMENTS_DELETE,
     ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD, ATTACHMENTS_DELETE,
     RBAC_ASSIGN,
 ]
 
+# project_member (doc 44 round 5): create + edit tasks / subtasks on
+# their project (no delete). User Management and Vendor Management
+# are NOT visible — no users:read, no vendors:read.
 PROJECT_MEMBER_ROLE_PERMISSIONS: List[str] = [
-    USERS_READ, PROJECTS_READ,
+    PROJECTS_READ,
     PROJECT_MEMBERS_READ,
     MILESTONES_READ,
     ACTIVITIES_READ,
-    TASKS_READ, TASKS_UPDATE,
-    SUBTASKS_READ, SUBTASKS_UPDATE,
+    TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_RESTORE,
+    SUBTASKS_CREATE, SUBTASKS_READ, SUBTASKS_UPDATE, SUBTASKS_RESTORE,
     COMMENTS_CREATE, COMMENTS_READ,
     ATTACHMENTS_CREATE, ATTACHMENTS_DOWNLOAD,
 ]

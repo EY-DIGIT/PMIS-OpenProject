@@ -18,7 +18,7 @@ Two layers:
 
 Anonymous calls have empty permission sets → every gate rejects 401.
 """
-from typing import Dict, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 from fastapi import Depends, Request
 
 from ..errors import AuthenticationError, AuthorizationError
@@ -285,6 +285,27 @@ def _project_id_for_target(db, target_type: str, target_id: str) -> Optional[str
     return None
 
 
+def _project_owning_vendor_ids(project_id: str) -> List[str]:
+    """Return the vendor_ids that own ``project_id`` via project_vendors.
+
+    Used by ``require_project_permission`` to let an org_admin's
+    ``("org", vendor_id)`` perms apply to projects in their vendor
+    (doc 44 round 5 / option a). Empty list when the project has no
+    vendor mapping (rare; pre-doc-25 rows).
+    """
+    from ...infrastructure.db.session import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text("SELECT vendor_id FROM project_vendors WHERE project_id = :pid"),
+            {"pid": project_id},
+        ).all()
+        return [r[0] for r in rows]
+    finally:
+        db.close()
+
+
 def _has_scoped_permission(
     request: Request, code: str, scope_key: Tuple[str, Optional[str]],
 ) -> bool:
@@ -293,6 +314,13 @@ def _has_scoped_permission(
     Global wins by design: a global super_admin / admin pass every
     scoped check. The per-scope bucket layered on top never *removes*
     permissions — assignments are purely additive.
+
+    Doc 44 round 5 (option a): the legacy flat-union fallback was
+    DROPPED for project-scoped checks. Use
+    ``_has_project_scoped_permission`` instead for those — it walks
+    project → vendor so an org_admin's org-scoped perms apply to
+    projects in their vendor without the cross-vendor leak the flat
+    union would cause.
     """
     scoped = _scoped_permissions(request)
     if code in scoped.get(("global", None), set()):
@@ -300,8 +328,39 @@ def _has_scoped_permission(
     if code in scoped.get(scope_key, set()):
         return True
     # Backwards-compat: legacy ``user_permissions`` flat set may still
-    # carry the perm via paths the scope view didn't include.
+    # carry the perm via paths the scope view didn't include. Only
+    # used for non-project gates now (org gate + custom callers).
     return code in _user_permissions(request)
+
+
+def _has_project_scoped_permission(
+    request: Request, code: str, project_id: str,
+) -> bool:
+    """Project-scoped variant of ``_has_scoped_permission``.
+
+    Checks (in order):
+      1. ``("global", None)`` — admin / super_admin pass everything.
+      2. ``("project", project_id)`` — direct project-scoped grant.
+      3. ``("org", vendor_id)`` for every vendor that owns the project
+         — lets org_admin's perms reach projects in their vendor.
+
+    NO flat-union fallback. The flat union includes ALL of the user's
+    perms at every scope, so falling back to it would let an org_admin's
+    task perms apply to projects in *other* vendors — exactly the
+    cross-vendor leak the round-5 spec forbids.
+    """
+    scoped = _scoped_permissions(request)
+    if code in scoped.get(("global", None), set()):
+        return True
+    if code in scoped.get(("project", project_id), set()):
+        return True
+    # Org-scope spillover: if the caller has the perm at any vendor
+    # that OWNS this project, they pass.
+    vendor_ids = _project_owning_vendor_ids(project_id)
+    for vid in vendor_ids:
+        if code in scoped.get(("org", vid), set()):
+            return True
+    return False
 
 
 def require_project_permission(permission: Union[str, "object"]):
@@ -309,7 +368,9 @@ def require_project_permission(permission: Union[str, "object"]):
 
     Resolves project_id directly from path or via M-A-T-S ancestor.
     User passes if they hold ``permission`` at scope
-    ``("project", project_id)`` OR at global scope.
+    ``("project", project_id)``, OR at the project's owning vendor
+    via ``("org", vendor_id)`` (doc 44 round 5 / option a),
+    OR at global scope.
     """
     code = getattr(permission, "value", permission)
 
@@ -322,7 +383,7 @@ def require_project_permission(permission: Union[str, "object"]):
                 f"require_project_permission({code}) used on a route "
                 f"without a resolvable project_id."
             )
-        if not _has_scoped_permission(request, code, ("project", project_id)):
+        if not _has_project_scoped_permission(request, code, project_id):
             raise AuthorizationError(
                 f"Insufficient permissions. Required: {code} on project {project_id}"
             )
