@@ -159,39 +159,46 @@ def _gate_activity_status_against_children(
         )
 
 
-def _gate_activity_revert_against_children(
+def _gate_activity_revert_against_parent(
     db: Session, activity_id: str, target_status: str,
 ) -> None:
-    """Reverse mirror of the activity forward children gate: block
-    flipping the activity to ``not_completed`` while any of its child
-    tasks is still ``completed``. Symmetric with the milestone-side
-    revert gate.
+    """Tester-feedback fix (top-down uncomplete): block flipping an
+    activity to ``not_completed`` while its parent milestone is still
+    ``completed``. Forces revert to flow top-down (parent first), so the
+    "parent=completed but child=not_completed" inconsistency can never
+    arise — including at leaf-task / leaf-subtask levels by induction.
+
+    Replaces the previous parent-side reverse gate (which checked the
+    activity's own children); that approach was a no-op for leaf
+    tasks/subtasks and let testers reach the inconsistent state
+    documented in the bug report.
+
+    Soft-deleted parents are ignored (the rule applies only to live
+    parents).
     """
     if target_status != "not_completed":
         return
-    rows = (
-        db.query(TaskModel.id, TaskModel.name, TaskModel.status)
-        .filter(TaskModel.activity_id == activity_id)
-        .filter(TaskModel.deleted_at.is_(None))
-        .all()
+    activity_row = (
+        db.query(ActivityModel.milestone_id)
+        .filter(ActivityModel.id == activity_id)
+        .first()
     )
-    if not rows:
+    if activity_row is None or activity_row[0] is None:
         return
-    blockers = [
-        (row[0], row[1], row[2])
-        for row in rows
-        if (row[2] or "") == ACTIVITY_STATUS_COMPLETED
-    ]
-    if blockers:
-        names = ", ".join(f"'{b[1]}'" for b in blockers[:3])
-        more = "" if len(blockers) <= 3 else f" (+{len(blockers) - 3} more)"
+    parent = (
+        db.query(MilestoneModel.id, MilestoneModel.name, MilestoneModel.status)
+        .filter(MilestoneModel.id == activity_row[0])
+        .filter(MilestoneModel.deleted_at.is_(None))
+        .first()
+    )
+    if parent is None:
+        return
+    _pid, pname, pstatus = parent
+    if (pstatus or "") == "completed":
         raise ValidationError(
-            f"Cannot revert this activity to not_completed — the "
-            f"following child task"
-            f"{' is' if len(blockers) == 1 else 's are'} "
-            f"still completed. Revert "
-            f"{'it' if len(blockers) == 1 else 'them'} first: "
-            f"{names}{more}.",
+            f"Cannot revert this activity to not_completed — its parent "
+            f"milestone '{pname}' is still completed. Revert the parent "
+            f"milestone first."
         )
 
 
@@ -407,11 +414,10 @@ def update_activity(
             db, activity_id, ACTIVITY_STATUS_COMPLETED,
         )
 
-    # Reverse children gate — fires when reverting to ``not_completed``.
-    # Symmetric mirror of the forward gate above: a parent can't go back
-    # to not_completed while its children are still completed.
+    # Tester-feedback fix: top-down uncomplete. Block reverting this
+    # activity while its parent milestone is still completed.
     if status_supplied and status == "not_completed":
-        _gate_activity_revert_against_children(
+        _gate_activity_revert_against_parent(
             db, activity_id, "not_completed",
         )
 

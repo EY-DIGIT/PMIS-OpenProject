@@ -295,18 +295,25 @@ class TestRevertAllowedWhenChildrenAreNotCompleted:
         assert r.status_code == 200, r.text
 
 
-class TestRevertBlockedWhenChildrenStillCompleted:
-    """Reverse mirror of the forward children gate — symmetric block.
+class TestRevertBlockedWhenParentStillCompleted:
+    """Tester-feedback fix: top-down uncomplete model.
 
-    Once a parent is ``completed``, you can't revert it back to
-    ``not_completed`` while children are still ``completed``. To revert,
-    walk the tree bottom-up: revert the leaf first, then its parent,
-    and so on.
+    A node can only be reverted to ``not_completed`` once its parent
+    is also ``not_completed``. This prevents the "parent=completed but
+    child=not_completed" inconsistency the tester reproduced — which
+    was reachable previously by reverting a leaf task or leaf subtask
+    while ancestors were still ``completed``.
+
+    Milestone reverts are not gated here because a milestone has no
+    completion-relevant parent (the project lifecycle status is
+    separate). See ``TestMilestoneRevertAlwaysAllowed`` below for that.
     """
 
-    def test_subtask_revert_blocked_when_nested_still_completed(
+    def test_subtask_revert_blocked_when_parent_subtask_still_completed(
         self, client, admin_user, admin_headers,
     ):
+        """Nested subtask can't be reverted while its parent subtask
+        is still completed."""
         pid, vid, m, a = _setup_and_publish(client, admin_headers)
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
@@ -323,25 +330,27 @@ class TestRevertBlockedWhenChildrenStillCompleted:
             headers=admin_headers,
             json={"name": "S1.1 nested", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         ).json()["data"]
-        # Complete bottom-up.
+        # Bottom-up complete (forward gate setup).
         for url in (
             f"/api/v3/subtasks/{nested['id']}",
             f"/api/v3/subtasks/{s['id']}",
             f"/api/v3/tasks/{t['id']}",
         ):
             client.patch(url, headers=admin_headers, json={"status": "completed"})
-        # Try to revert S1 (parent of nested) → blocked.
+        # Try to revert nested S → blocked (parent S1 still completed).
         r = client.patch(
-            f"/api/v3/subtasks/{s['id']}", headers=admin_headers,
+            f"/api/v3/subtasks/{nested['id']}", headers=admin_headers,
             json={"status": "not_completed"},
         )
         assert r.status_code == 422, r.text
-        assert "S1.1 nested" in r.text
-        assert "still completed" in r.text.lower()
+        assert "S1" in r.text
+        assert "parent" in r.text.lower()
 
-    def test_task_revert_blocked_when_subtask_still_completed(
+    def test_subtask_revert_blocked_when_parent_task_still_completed(
         self, client, admin_user, admin_headers,
     ):
+        """Top-level subtask can't be reverted while its parent task
+        is still completed."""
         pid, vid, m, a = _setup_and_publish(client, admin_headers)
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
@@ -353,7 +362,7 @@ class TestRevertBlockedWhenChildrenStillCompleted:
             headers=admin_headers,
             json={"name": "S1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10), "priority": "p1"},
         ).json()["data"]
-        # Complete bottom-up.
+        # Bottom-up complete.
         client.patch(
             f"/api/v3/subtasks/{s['id']}", headers=admin_headers,
             json={"status": "completed"},
@@ -362,43 +371,90 @@ class TestRevertBlockedWhenChildrenStillCompleted:
             f"/api/v3/tasks/{t['id']}", headers=admin_headers,
             json={"status": "completed"},
         )
-        # Try to revert T1 → blocked because S1 is still completed.
+        # Try to revert S → blocked (parent T1 still completed).
         r = client.patch(
-            f"/api/v3/tasks/{t['id']}", headers=admin_headers,
+            f"/api/v3/subtasks/{s['id']}", headers=admin_headers,
             json={"status": "not_completed"},
         )
         assert r.status_code == 422, r.text
-        assert "S1" in r.text
-        assert "still completed" in r.text.lower()
+        assert "T1" in r.text
+        assert "parent" in r.text.lower()
 
-    def test_activity_revert_blocked_when_task_still_completed(
+    def test_task_revert_blocked_when_parent_activity_still_completed(
         self, client, admin_user, admin_headers,
     ):
+        """LEAF task case — was reachable under the old model: revert
+        of a leaf task with no subtasks let the user produce the
+        documented inconsistent state. The new gate blocks it."""
         pid, vid, m, a = _setup_and_publish(client, admin_headers)
         t = client.post(
             f"/api/v3/activities/{a['id']}/tasks/create",
             headers=admin_headers,
             json={
-                "name": "T1",
+                "name": "T-leaf",
                 "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 15),
-                "status": "completed",
-                "priority": "p1",
+                "priority": "p1", "status": "completed",
             },
         ).json()["data"]
         client.patch(
             f"/api/v3/activities/{a['id']}", headers=admin_headers,
             json={"status": "completed"},
         )
-        # Revert activity → blocked because T1 still completed.
+        # Revert leaf task → blocked (parent activity A1 still completed).
+        r = client.patch(
+            f"/api/v3/tasks/{t['id']}", headers=admin_headers,
+            json={"status": "not_completed"},
+        )
+        assert r.status_code == 422, r.text
+        assert "A1" in r.text
+        assert "parent" in r.text.lower()
+
+    def test_activity_revert_blocked_when_parent_milestone_still_completed(
+        self, client, admin_user, admin_headers,
+    ):
+        pid, vid = _setup(client, admin_headers)
+        m = client.post(
+            f"/api/v3/projects/{pid}/milestones/create",
+            headers=admin_headers,
+            json={"name": "M1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 8, 30), "priority": "p1"},
+        ).json()["data"]
+        a = client.post(
+            f"/api/v3/milestones/{m['id']}/activities/create",
+            headers=admin_headers,
+            json={
+                "name": "A-done",
+                "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 10),
+                "ownerDivision": "tmd1", "vendorId": vid,
+                "concernedDivision": ["tmd1"],
+                "priority": "p1",
+                "status": "completed",
+            },
+        ).json()["data"]
+        client.patch(
+            f"/api/v3/milestones/{m['id']}", headers=admin_headers,
+            json={"status": "completed"},
+        )
+        # Revert activity → blocked (parent milestone M1 still completed).
         r = client.patch(
             f"/api/v3/activities/{a['id']}", headers=admin_headers,
             json={"status": "not_completed"},
         )
         assert r.status_code == 422, r.text
-        assert "T1" in r.text
-        assert "still completed" in r.text.lower()
+        assert "M1" in r.text
+        assert "parent" in r.text.lower()
 
-    def test_milestone_revert_blocked_when_activity_still_completed(
+
+class TestMilestoneRevertAlwaysAllowed:
+    """Milestone has no completion-relevant parent (project lifecycle
+    status is unrelated), so reverting a milestone is always permitted
+    even when child activities are still ``completed``.
+
+    Behavior change vs. the previous model — the user explicitly chose
+    this so the top-down uncomplete sequence has a starting point at
+    the top of the tree.
+    """
+
+    def test_milestone_revert_succeeds_with_completed_children(
         self, client, admin_user, admin_headers,
     ):
         pid, vid = _setup(client, admin_headers)
@@ -423,22 +479,20 @@ class TestRevertBlockedWhenChildrenStillCompleted:
             f"/api/v3/milestones/{m['id']}", headers=admin_headers,
             json={"status": "completed"},
         )
-        # Revert milestone → blocked because A-done is still completed.
         r = client.patch(
             f"/api/v3/milestones/{m['id']}", headers=admin_headers,
             json={"status": "not_completed"},
         )
-        assert r.status_code == 422, r.text
-        assert "A-done" in r.text
-        assert "still completed" in r.text.lower()
+        assert r.status_code == 200, r.text
+        assert r.json()["data"]["status"] == "not_completed"
 
 
-class TestBottomUpUncomplete:
+class TestTopDownUncomplete:
     """Once everything is completed, the only legal revert order is
-    bottom-up (leaf first, then walk up). This is the symmetric mirror
-    of the bottom-up complete order enforced by the forward gates."""
+    top-down (parent first). Mirror of the previous BottomUpUncomplete
+    test — assertions inverted to match the new model."""
 
-    def test_full_uncomplete_cascade_bottom_up(
+    def test_full_uncomplete_cascade_top_down(
         self, client, admin_user, admin_headers,
     ):
         pid, vid, m, a = _setup_and_publish(client, admin_headers)
@@ -457,8 +511,7 @@ class TestBottomUpUncomplete:
             headers=admin_headers,
             json={"name": "S1.1", "startDate": _iso(2026, 7, 1), "endDate": _iso(2026, 7, 5), "priority": "p1"},
         ).json()["data"]
-        # Bottom-up complete (already covered elsewhere; the gate just
-        # tags along here as setup).
+        # Bottom-up complete (forward gate setup).
         for url in (
             f"/api/v3/subtasks/{nested['id']}",
             f"/api/v3/subtasks/{s['id']}",
@@ -469,25 +522,28 @@ class TestBottomUpUncomplete:
             r = client.patch(url, headers=admin_headers, json={"status": "completed"})
             assert r.status_code == 200, f"complete {url}: {r.text}"
 
-        # Top-down uncomplete attempts must all fail (reverse gate).
-        for url in (
-            f"/api/v3/milestones/{m['id']}",
-            f"/api/v3/activities/{a['id']}",
-            f"/api/v3/tasks/{t['id']}",
-            f"/api/v3/subtasks/{s['id']}",
-        ):
-            r = client.patch(url, headers=admin_headers, json={"status": "not_completed"})
-            assert r.status_code == 422, f"top-down revert at {url} should fail: {r.text}"
-
-        # Bottom-up uncomplete cascade — each must succeed once its
-        # children are already not_completed.
+        # Bottom-up uncomplete attempts must all fail under the new
+        # top-down model — except the leaf, which succeeds because we
+        # walk up: actually no. Under top-down, even the leaf is
+        # blocked while its parent is still completed.
         for url in (
             f"/api/v3/subtasks/{nested['id']}",
             f"/api/v3/subtasks/{s['id']}",
             f"/api/v3/tasks/{t['id']}",
             f"/api/v3/activities/{a['id']}",
-            f"/api/v3/milestones/{m['id']}",
         ):
             r = client.patch(url, headers=admin_headers, json={"status": "not_completed"})
-            assert r.status_code == 200, f"bottom-up revert at {url} should succeed: {r.text}"
+            assert r.status_code == 422, f"bottom-up revert at {url} should fail: {r.text}"
+
+        # Top-down uncomplete cascade — each must succeed once its
+        # parent is already not_completed.
+        for url in (
+            f"/api/v3/milestones/{m['id']}",
+            f"/api/v3/activities/{a['id']}",
+            f"/api/v3/tasks/{t['id']}",
+            f"/api/v3/subtasks/{s['id']}",
+            f"/api/v3/subtasks/{nested['id']}",
+        ):
+            r = client.patch(url, headers=admin_headers, json={"status": "not_completed"})
+            assert r.status_code == 200, f"top-down revert at {url} should succeed: {r.text}"
             assert r.json()["data"]["status"] == "not_completed"
