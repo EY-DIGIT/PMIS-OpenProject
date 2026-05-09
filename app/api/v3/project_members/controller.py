@@ -280,14 +280,61 @@ class ProjectMembersController:
         """
         Remove a member from a project.
 
-        Args:
-            request: FastAPI request
-            membership_id: Membership ID
-            db: Database session
-
-        Returns:
-            JSONResponse with success or error
+        Doc 44 round 7: a project_admin cannot unassign themselves
+        from a project they admin. Self-removal via this endpoint is
+        refused for project_admin callers acting on their own row.
+        super_admin / admin / org_admin can still remove anyone
+        (including a project_admin who's themselves).
         """
+        # Doc 44 round 7 self-unassign guard.
+        from ....infrastructure.db.models.project_member import (
+            ProjectMemberModel,
+        )
+        from ....infrastructure.db.models.role import RoleModel
+        from ....infrastructure.db.models.user_role_assignment import (
+            UserRoleAssignmentModel,
+        )
+        from ....core.dependencies import get_current_user_id
+        caller_id = get_current_user_id(request)
+        membership = (
+            db.query(ProjectMemberModel)
+            .filter(ProjectMemberModel.id == membership_id)
+            .first()
+        )
+        if membership is not None and caller_id == membership.user_id:
+            # Caller is removing their own membership — refuse if they
+            # hold project_admin on this project (they can't unassign
+            # themselves from a project they admin per spec).
+            holds_pa = (
+                db.query(UserRoleAssignmentModel)
+                .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+                .filter(
+                    UserRoleAssignmentModel.user_id == caller_id,
+                    UserRoleAssignmentModel.project_id == membership.project_id,
+                    RoleModel.name == "project_admin",
+                )
+                .first()
+            )
+            # Higher tiers (admin / super_admin globally) bypass this
+            # guard — they're not "self-unassigning AS project_admin"
+            # in the spec's sense.
+            from ....infrastructure.db.repositories.rbac_repository import (
+                RbacRepository,
+            )
+            is_admin_global = RbacRepository(db).user_has_admin_role(caller_id)
+            if holds_pa and not is_admin_global:
+                return BaseController.error(
+                    {
+                        "_type": "Error",
+                        "errorIdentifier": "forbidden",
+                        "message": (
+                            "Project admin cannot unassign themselves "
+                            "from a project they administer."
+                        ),
+                    },
+                    status=403,
+                )
+
         # Call service
         result = delete_project_member(
             db=db,
