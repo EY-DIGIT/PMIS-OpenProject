@@ -27,6 +27,9 @@ from .v3.master_data import master_data_router
 from .v3.comments import router as comments_router
 from .v3.attachments import router as attachments_router
 
+# Dashboard (admin-only aggregations across projects / vendors / M / A)
+from .v3.dashboard import router as dashboard_router
+
 # Legacy / superseded surfaces (mounted last; bottom of Swagger UI)
 from .v3.project_members import (
     projects_router as pm_projects_router,
@@ -80,6 +83,9 @@ api_v3_router.include_router(master_data_router)
 # Comments + attachments (polymorphic across M/A/T/S targets)
 api_v3_router.include_router(comments_router)
 api_v3_router.include_router(attachments_router)
+
+# Dashboard (admin / super_admin only — read-only aggregations)
+api_v3_router.include_router(dashboard_router)
 
 
 # ---------------------------------------------------------------------------

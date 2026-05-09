@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "c0d04b5b-5789-4c0e-8ffa-178a0d8885af",
+    "_postman_id": "6e862d2e-ce8b-445f-a79a-235142fcbf3b",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -1994,6 +1994,278 @@
       ]
     },
     {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "M/A drill-down rows under a project (with filters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "projects",
+                ":project_uuid",
+                "items"
+              ],
+              "variable": [
+                {
+                  "key": "project_uuid",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "bucket",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "milestoneId",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minDelay",
+                  "value": "0",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Drill-down for KPI clicks. Returns milestone and / or activity rows under a project. Filters: `kind` (milestone | activity), `bucket` (ontrack | delayed | completed), `milestoneId` (only rows under one milestone), `minDelay` (days)."
+          },
+          "response": []
+        },
+        {
+          "name": "Organization view grid + active/inactive vendor pie",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/organisations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "organisations"
+              ]
+            },
+            "description": "Vendor cards for the Organization view top page. Each card carries the vendor's project count split by bucket. The pie block at the top shows vendor catalog distribution by `active` flag."
+          },
+          "response": []
+        },
+        {
+          "name": "Project View payload (header + 5 KPIs + pie + delayed track)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "projects",
+                ":project_uuid"
+              ],
+              "variable": [
+                {
+                  "key": "project_uuid",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "delayMinDays",
+                  "value": "5",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Single payload for the Project View screen. Includes the project header card, 5 KPI tiles (Overall Progress, Milestones, Activities, Pending Approvals \u2014 static 0 in v1, Delayed), pie counts over M/A items, and delayed-track rows for items above `delayMinDays`."
+          },
+          "response": []
+        },
+        {
+          "name": "Project cards listing with filters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "projects"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "vendorId",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "division",
+                  "value": "",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "200",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns project cards (id, name, vendor list, division, lifecycle status, bucket, progress %, item counters) with optional filters: `bucket` (total / active / ontrack / delayed / completed), free-text `q` over id / code / name / division / vendor names, `vendorId`, `division` code. Paginated \u2014 default 200 rows."
+          },
+          "response": []
+        },
+        {
+          "name": "Summary view payload (KPIs + pie + delayed track + top org/division)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "delayMinDays",
+                  "value": "5",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Single payload that powers the Summary screen. Returns global project bucket counts (ontrack / delayed / completed; the 'Active' KPI tile is FE-derived as `total - completed`), the top-N delayed projects with their item delay info, the top-N vendor cards by project count, and the top-N division cards. Admin-only."
+          },
+          "response": []
+        },
+        {
+          "name": "Vendor detail page (KPI counts + project pie + project list)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v3/dashboard/organisations/{vendor_id}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v3",
+                "dashboard",
+                "organisations",
+                ":vendor_id"
+              ],
+              "variable": [
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Drill-down when a vendor card is clicked. Returns the vendor's project list as cards, KPI counts (total / completed / ontrack / delayed), and the corresponding pie counts."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Files",
       "item": [
         {
@@ -2460,7 +2732,7 @@
             "description": "Create a vendor (delegates)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"user_assignments\": [\n    {\n      \"project_id\": \"\",\n      \"role\": \"\",\n      \"user_ids\": [\n        \"\"\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4795,7 +5067,7 @@
             "description": "Update a vendor (delegates)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"user_assignments\": [\n    {\n      \"project_id\": \"\",\n      \"role\": \"\",\n      \"user_ids\": [\n        \"\"\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7652,7 +7924,7 @@
             "description": "Create a vendor (admin)",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": true,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"user_assignments\": [\n    {\n      \"project_id\": \"\",\n      \"role\": \"\",\n      \"user_ids\": [\n        \"\"\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7663,7 +7935,7 @@
           "response": []
         },
         {
-          "name": "Get vendor detail (with mapped projects)",
+          "name": "Get vendor detail (with mapped projects + user assignments)",
           "request": {
             "method": "GET",
             "header": [
@@ -7692,7 +7964,7 @@
                 }
               ]
             },
-            "description": "Returns full vendor detail \u2014 name, description, email, contact person, phone number, soft-delete metadata \u2014 plus the list of projects this vendor is mapped to (closed/completed/soft-deleted projects filtered out, same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
+            "description": "Returns full vendor detail \u2014 name, description, email, contact person, phone number, soft-delete metadata \u2014 plus the list of projects this vendor is mapped to AND the per-(project, role) user assignments matrix (doc 44 round 6). Closed/completed/soft-deleted projects are filtered out (same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors)."
           },
           "response": []
         },
@@ -7872,7 +8144,7 @@
             "description": "Path param accepts UUID or ``VN-...`` code (doc 25).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ]\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"user_assignments\": [\n    {\n      \"project_id\": \"\",\n      \"role\": \"\",\n      \"user_ids\": [\n        \"\"\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
