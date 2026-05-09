@@ -32,6 +32,10 @@ from ....infrastructure.db.repositories.vendor_repository import VendorRepositor
 from ....infrastructure.db.session import get_db
 from ....shared.datetime import iso_ist
 from .schemas import VendorCreateRequest, VendorUpdateRequest
+from .user_assignments import (
+    apply_vendor_user_assignments,
+    user_assignments_for_vendor,
+)
 
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
@@ -44,7 +48,11 @@ router = APIRouter(prefix="/vendors", tags=["vendors"])
 _HIDDEN_PROJECT_STATUSES = {"closed", "completed"}
 
 
-def _vendor_to_response(v, projects: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
+def _vendor_to_response(
+    v,
+    projects: List[Dict[str, Any]] | None = None,
+    user_assignments: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
     d = v.to_dict()
     return {
         "_type": "Vendor",
@@ -69,6 +77,12 @@ def _vendor_to_response(v, projects: List[Dict[str, Any]] | None = None) -> Dict
         # Empty list when the vendor has no live mappings — never null, so
         # the FE can iterate unconditionally.
         "projects": projects if projects is not None else [],
+        # Doc 44 round 6: per-(project, role) user assignments. Mirror
+        # of the FE's PATCH/POST body shape so the form can re-render
+        # without translating. Always a list (never null) so iteration
+        # is unconditional; empty when no role rows exist for any of
+        # this vendor's projects.
+        "user_assignments": user_assignments if user_assignments is not None else [],
     }
 
 
@@ -233,7 +247,11 @@ def list_vendors(
 
     projects_by_vendor = _projects_by_vendor(db, (v.id for v in vendors))
     items = [
-        _vendor_to_response(v, projects_by_vendor.get(v.id, []))
+        _vendor_to_response(
+            v,
+            projects_by_vendor.get(v.id, []),
+            user_assignments_for_vendor(db, v.id),
+        )
         for v in vendors
     ]
     return BaseController.stamp_deprecation(
@@ -250,14 +268,16 @@ def list_vendors(
 @router.get(
     "/{vendor_id}",
     dependencies=[require_permission(Permission.VENDORS_READ)],
-    summary="Get vendor detail (with mapped projects)",
+    summary="Get vendor detail (with mapped projects + user assignments)",
     description=(
         "Returns full vendor detail — name, description, email, contact "
         "person, phone number, soft-delete metadata — plus the list of "
-        "projects this vendor is mapped to (closed/completed/soft-deleted "
-        "projects filtered out, same rule as GET /vendors). 404 on "
-        "soft-deleted vendors; admins can see them by hitting "
-        "GET /vendors/{id}/projects (which already accepts deleted vendors)."
+        "projects this vendor is mapped to AND the per-(project, role) "
+        "user assignments matrix (doc 44 round 6). Closed/completed/"
+        "soft-deleted projects are filtered out (same rule as GET "
+        "/vendors). 404 on soft-deleted vendors; admins can see them by "
+        "hitting GET /vendors/{id}/projects (which already accepts "
+        "deleted vendors)."
     ),
 )
 def get_vendor(
@@ -273,8 +293,11 @@ def get_vendor(
     if vendor is None:
         raise NotFoundError("Vendor not found.")
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
+    assignments = user_assignments_for_vendor(db, vendor.id)
     return BaseController.stamp_deprecation(
-        BaseController.ok(data=_vendor_to_response(vendor, projects)),
+        BaseController.ok(
+            data=_vendor_to_response(vendor, projects, assignments),
+        ),
         successor_path=f"/api/v3/master/vendors/{vendor.id}",
     )
 
@@ -312,10 +335,27 @@ def create_vendor(
     )
     if project_ids:
         repo.set_vendor_projects(vendor.id, project_ids)
+    db.flush()
+    # Doc 44 round 6: apply user_assignments after the vendor +
+    # project mappings exist (the helper validates project ownership).
+    if data.userAssignments:
+        try:
+            apply_vendor_user_assignments(
+                db, vendor.id,
+                [a.model_dump(by_alias=False) for a in data.userAssignments],
+                actor_id=getattr(request.state, "user_id", None),
+            )
+        except ValueError as exc:
+            db.rollback()
+            from ....core.errors import ValidationError
+            raise ValidationError(str(exc)) from exc
     db.commit()
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
+    assignments = user_assignments_for_vendor(db, vendor.id)
     return BaseController.stamp_deprecation(
-        BaseController.created(data=_vendor_to_response(vendor, projects)),
+        BaseController.created(
+            data=_vendor_to_response(vendor, projects, assignments),
+        ),
         successor_path="/api/v3/master/vendors/create",
     )
 
@@ -359,6 +399,21 @@ def update_vendor(
     db.flush()
     if will_replace_projects:
         repo.set_vendor_projects(m.id, project_ids)
+        db.flush()
+    # Doc 44 round 6: reconcile user_assignments after project
+    # mappings are committed (the helper validates project ownership
+    # against project_vendors).
+    if data.userAssignments is not None:
+        try:
+            apply_vendor_user_assignments(
+                db, m.id,
+                [a.model_dump(by_alias=False) for a in data.userAssignments],
+                actor_id=getattr(request.state, "user_id", None),
+            )
+        except ValueError as exc:
+            db.rollback()
+            from ....core.errors import ValidationError
+            raise ValidationError(str(exc)) from exc
     db.commit()
     from ....domain.vendors.vendor import Vendor
     domain = Vendor(
@@ -369,8 +424,11 @@ def update_vendor(
         phone_number=m.phone_number,
     )
     projects = _projects_by_vendor(db, [domain.id]).get(domain.id, [])
+    assignments = user_assignments_for_vendor(db, domain.id)
     return BaseController.stamp_deprecation(
-        BaseController.ok(data=_vendor_to_response(domain, projects)),
+        BaseController.ok(
+            data=_vendor_to_response(domain, projects, assignments),
+        ),
         successor_path=f"/api/v3/master/vendors/{domain.id}",
     )
 
