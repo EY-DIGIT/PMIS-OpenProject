@@ -1,6 +1,8 @@
+version: "3.9"
+
 services:
   backend:
-    image: ritamhudait/pmic-backend:${IMAGE_TAG}
+    image: ${DOCKER_USERNAME:+${DOCKER_USERNAME}/}pmic-backend:${IMAGE_TAG}
     container_name: pmis-backend
     restart: always
     extra_hosts:
