@@ -77,15 +77,6 @@ class UserCreateRequest(BaseModel):
         ),
     )
 
-    @field_validator("division")
-    @classmethod
-    def _validate_division(cls, v: str) -> str:
-        if v not in DIVISION_CHOICES:
-            raise ValueError(
-                f"Division must be one of: {', '.join(DIVISION_CHOICES)}."
-            )
-        return v
-
     @field_validator("phoneNumber", mode="before")
     @classmethod
     def _validate_phone(cls, v):
@@ -128,15 +119,6 @@ class UserUpdateRequest(BaseModel):
         if v is not None and v not in _USER_STATUS_CHOICES:
             raise ValueError(
                 f"Status must be one of: {', '.join(_USER_STATUS_CHOICES)}."
-            )
-        return v
-
-    @field_validator("division")
-    @classmethod
-    def _validate_division(cls, v):
-        if v is not None and v not in DIVISION_CHOICES:
-            raise ValueError(
-                f"Division must be one of: {', '.join(DIVISION_CHOICES)}."
             )
         return v
 
