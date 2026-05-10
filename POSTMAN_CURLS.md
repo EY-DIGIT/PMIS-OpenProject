@@ -7,12 +7,19 @@ Auto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. R
 
 ## How to use
 
-1. Replace `{{baseUrl}}` with the service URL — typically `http://10.1.131.199:8000` for the monolith or `http://10.1.131.199:8001` for user-mgmt.
-2. Replace `{{accessToken}}` with a bearer JWT from the user-mgmt login flow (Authenticate → Send OTP → Verify OTP). On the dev server the universal OTP is `000000`.
-3. Replace path placeholders like `:project_uuid`, `:vendor_id`, `:milestone_id` with real IDs.
-4. Replace empty body fields (`"name": ""` etc.) with your values before firing.
+Sample values are pre-filled — most curls run as-is once you paste a fresh `<ACCESS_TOKEN>`. Keep the placeholders below in mind:
 
-On Windows PowerShell, swap single-quoted bodies for double-quoted with escaped inner quotes, or run from Git Bash / WSL where the quoting works as written.
+- **`<ACCESS_TOKEN>`** — bearer JWT. Get one from the user-mgmt login flow (`POST :8001/api/v3/users/login` → `/login/send-otp` → `/login/verify-otp`). On the dev server the universal OTP is `000000`. Tokens last ~15 min.
+- **`<MILESTONE_ID>`** / **`<ACTIVITY_ID>`** / **`<TASK_ID>`** / **`<SUBTASK_ID>`** etc. — IDs the curl can't know up-front. Hit the relevant `GET .../tree` or list endpoint first and paste an ID from the response.
+- **`<COMMENT_ID>`**, **`<ATTACHMENT_ID>`**, etc. — same.
+
+Pre-filled sample IDs use real seeded data on the dev server (`http://10.1.131.199`):
+- bootstrap admin user `94eeede1-c925-44ad-8de6-416dc87b5999`,
+- vendor `7f9ec285-5a94-4d2f-9d2c-a248d302b1c5` ("role org"),
+- published project `a278f77b-a2ef-4797-b4fa-ac3fe82e7037` ("ey app"),
+- `admin` role id `12`.
+
+**Windows PowerShell**: swap single-quoted bodies for double-quoted with escaped inner quotes, or run the curls from Git Bash / WSL where the quoting works verbatim.
 
 ---
 
@@ -24,27 +31,25 @@ On Windows PowerShell, swap single-quoted bodies for double-quoted with escaped 
 Create an activity. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>/activities/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "ownerDivision": "",
-  "vendorId": "",
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "ownerDivision": "tmd1",
+  "vendorId": "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5",
   "concernedDivision": [
     ""
   ],
-  "priority": ""
+  "priority": "p2"
 }'
 ```
 
@@ -54,8 +59,8 @@ curl -X POST '{{baseUrl}}/api/v3/milestones/{milestone_id}/activities/create' \
 Get activity by id
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/activities/{activity_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List activities under milestone
@@ -64,8 +69,8 @@ curl -X GET '{{baseUrl}}/api/v3/activities/{activity_id}' \
 List activities under milestone
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/milestones/{milestone_id}/activities' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>/activities' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-deleted activity (admin)
@@ -74,8 +79,8 @@ curl -X GET '{{baseUrl}}/api/v3/milestones/{milestone_id}/activities' \
 Restore a soft-deleted activity (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/activities/{activity_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete activity (cascades)
@@ -84,8 +89,8 @@ curl -X POST '{{baseUrl}}/api/v3/activities/{activity_id}/restore' \
 Soft-delete activity (cascades)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/activities/{activity_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update activity
@@ -94,27 +99,25 @@ curl -X DELETE '{{baseUrl}}/api/v3/activities/{activity_id}' \
 Update activity
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/activities/{activity_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "ownerDivision": "",
-  "vendorId": "",
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "ownerDivision": "tmd1",
+  "vendorId": "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5",
   "concernedDivision": [
     ""
   ],
-  "priority": ""
+  "priority": "p2"
 }'
 ```
 
@@ -126,8 +129,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/activities/{activity_id}' \
 Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/activities/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/activities/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List standalone attachments under a milestone
@@ -136,8 +139,8 @@ curl -X GET '{{baseUrl}}/api/v3/activities/{target_id}/attachments' \
 Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/milestones/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/milestones/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List standalone attachments under a subtask
@@ -146,8 +149,8 @@ curl -X GET '{{baseUrl}}/api/v3/milestones/{target_id}/attachments' \
 Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/subtasks/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/subtasks/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List standalone attachments under a task
@@ -156,8 +159,8 @@ curl -X GET '{{baseUrl}}/api/v3/subtasks/{target_id}/attachments' \
 Doc 35: returns comments rows whose body is NULL (attachment-only sends), newest-first.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/tasks/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/tasks/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete an attachment (uploader or admin only)
@@ -166,8 +169,8 @@ curl -X GET '{{baseUrl}}/api/v3/tasks/{target_id}/attachments' \
 Doc 35: aliased to DELETE /comments/{id}. The id resolves to a comment row whose body is NULL. Bytes on disk are kept until the retention cron sweeps them.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/attachments/{attachment_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/attachments/<ATTACHMENT_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Upload a standalone attachment to a activity
@@ -176,8 +179,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/attachments/{attachment_id}' \
 Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/activities/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/activities/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Upload a standalone attachment to a milestone
@@ -186,8 +189,8 @@ curl -X POST '{{baseUrl}}/api/v3/activities/{target_id}/attachments' \
 Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/milestones/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/milestones/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Upload a standalone attachment to a subtask
@@ -196,8 +199,8 @@ curl -X POST '{{baseUrl}}/api/v3/milestones/{target_id}/attachments' \
 Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/subtasks/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/subtasks/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Upload a standalone attachment to a task
@@ -206,8 +209,8 @@ curl -X POST '{{baseUrl}}/api/v3/subtasks/{target_id}/attachments' \
 Upload a single file via multipart/form-data (field name ``file``). Doc 35: stored as a comment row with NULL body and one attachment entry on the JSON column. The response carries the file's public URL, fetched directly by the FE.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/tasks/{target_id}/attachments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/tasks/94eeede1-c925-44ad-8de6-416dc87b5999/attachments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Authentication & Users
@@ -218,8 +221,8 @@ curl -X POST '{{baseUrl}}/api/v3/tasks/{target_id}/attachments' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Authenticate user
@@ -228,11 +231,11 @@ curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/login' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/login' \
   -H 'Content-Type: application/json' \
   -d '{
-  "login": "",
-  "password": ""
+  "login": "your_login",
+  "password": "Pmis@1234"
 }'
 ```
 
@@ -242,12 +245,12 @@ curl -X POST '{{baseUrl}}/api/v3/users/login' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/reset-password' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/reset-password' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "token_or_code": "",
-  "new_password": ""
+  "token_or_code": "<TOKEN_OR_CODE>",
+  "new_password": "Pmis@1234"
 }'
 ```
 
@@ -257,23 +260,23 @@ curl -X POST '{{baseUrl}}/api/v3/users/reset-password' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "login": "",
+  "login": "your_login",
   "email": "user@example.com",
-  "password": "",
-  "firstName": "",
-  "lastName": "",
+  "password": "Pmis@1234",
+  "firstName": "John",
+  "lastName": "Doe",
   "admin": false,
-  "vendor_id": "",
-  "division": "",
-  "division_other": "",
+  "vendor_id": "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5",
+  "division": "tmd1",
+  "division_other": null,
   "project_ids": [
-    ""
+    "a278f77b-a2ef-4797-b4fa-ac3fe82e7037"
   ],
-  "phone_number": ""
+  "phone_number": "+919999999999"
 }'
 ```
 
@@ -283,8 +286,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/create' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Effective permissions for a user (role-derived ∪ direct)
@@ -293,8 +296,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users/{user_id}/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Effective permissions for the current user
@@ -303,8 +306,8 @@ curl -X GET '{{baseUrl}}/api/v3/users/{user_id}/permissions' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users/me/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users/me/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get current user
@@ -313,8 +316,8 @@ curl -X GET '{{baseUrl}}/api/v3/users/me/permissions' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users/me' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users/me' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get user
@@ -323,8 +326,8 @@ curl -X GET '{{baseUrl}}/api/v3/users/me' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users/{user_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Grant a direct permission to a user
@@ -333,8 +336,8 @@ curl -X GET '{{baseUrl}}/api/v3/users/{user_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Introspect tokens (RFC 7662 read-only metadata)
@@ -343,11 +346,11 @@ curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/introspect' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/introspect' \
   -H 'Content-Type: application/json' \
   -d '{
-  "access_token": "",
-  "refresh_token": ""
+  "access_token": "<ACCESS_TOKEN>",
+  "refresh_token": "<REFRESH_TOKEN>"
 }'
 ```
 
@@ -357,8 +360,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/introspect' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users/{user_id}/roles' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/roles' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List users
@@ -367,8 +370,8 @@ curl -X GET '{{baseUrl}}/api/v3/users/{user_id}/roles' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/users' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/users' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Logout
@@ -377,8 +380,8 @@ curl -X GET '{{baseUrl}}/api/v3/users' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/logout' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/logout' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Refresh access token (rotates the refresh token too)
@@ -387,11 +390,11 @@ curl -X POST '{{baseUrl}}/api/v3/users/logout' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/refresh' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/refresh' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "refresh_token": ""
+  "refresh_token": "<REFRESH_TOKEN>"
 }'
 ```
 
@@ -401,12 +404,12 @@ curl -X POST '{{baseUrl}}/api/v3/users/refresh' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/forgot-password' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/forgot-password' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "login_or_email": "",
-  "channel": ""
+  "login_or_email": "your_login",
+  "channel": "email"
 }'
 ```
 
@@ -416,8 +419,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/forgot-password' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Revoke a direct permission from a user
@@ -426,8 +429,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/{user_id}/restore' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Send OTP for 2FA login
@@ -436,12 +439,12 @@ curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}/permissions/{code}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/login/send-otp' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/login/send-otp' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "ephemeral_token": "",
-  "channel": ""
+  "ephemeral_token": "<EPHEMERAL_TOKEN>",
+  "channel": "email"
 }'
 ```
 
@@ -451,8 +454,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/login/send-otp' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update user
@@ -461,19 +464,19 @@ curl -X DELETE '{{baseUrl}}/api/v3/users/{user_id}/roles/{role_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/users/{user_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "email": "user@example.com",
-  "firstName": "",
-  "lastName": "",
+  "firstName": "John",
+  "lastName": "Doe",
   "admin": false,
-  "status": "",
-  "vendor_id": "",
-  "division": "",
-  "division_other": "",
-  "phone_number": ""
+  "status": "published",
+  "vendor_id": "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5",
+  "division": "tmd1",
+  "division_other": null,
+  "phone_number": "+919999999999"
 }'
 ```
 
@@ -483,11 +486,11 @@ curl -X PATCH '{{baseUrl}}/api/v3/users/{user_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/users/{user_id}/password' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/users/94eeede1-c925-44ad-8de6-416dc87b5999/password' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "password": ""
+  "password": "Pmis@1234"
 }'
 ```
 
@@ -497,12 +500,12 @@ curl -X PATCH '{{baseUrl}}/api/v3/users/{user_id}/password' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/users/login/verify-otp' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/users/login/verify-otp' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "ephemeral_token": "",
-  "code": ""
+  "ephemeral_token": "<EPHEMERAL_TOKEN>",
+  "code": "000000"
 }'
 ```
 
@@ -514,8 +517,8 @@ curl -X POST '{{baseUrl}}/api/v3/users/login/verify-otp' \
 Returns active priority entries (sorted by ``position``, then ``code``) that the FE renders in the activity priority dropdown. Each entry has a ``code`` (the wire value the API accepts in ``activities.priority``), a ``name`` (display label), and a ``description``. Same dataset as ``GET /api/v3/master/priorities`` but gated by simple authentication (no MASTER_DATA_VIEW required). Admin CRUD lives at /api/v3/master/priorities/*.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/priorities' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/priorities' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List divisions catalog (DEPRECATED — use /api/v3/master/divisions)
@@ -524,8 +527,8 @@ curl -X GET '{{baseUrl}}/api/v3/priorities' \
 Returns the active division entries. Each entry has a `code` (the wire value the API accepts in `owner` / `division` fields), a `label`, an `isBuiltin` flag, and a `requiresOther` flag (true on `others` — tells the FE to show the free-text 'Specify' input). DEPRECATED: use GET /api/v3/master/divisions which supports admin CRUD too.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/divisions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/divisions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List project status transition catalog (DEPRECATED — use /api/v3/master/project_status_transitions)
@@ -534,8 +537,8 @@ curl -X GET '{{baseUrl}}/api/v3/divisions' \
 Returns every active (from_status, to_status) edge plus the initial-status seed (from_status=null). DEPRECATED: use GET /api/v3/master/project_status_transitions which supports admin CRUD too.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/project_status_transitions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/project_status_transitions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Comments
@@ -546,8 +549,8 @@ curl -X GET '{{baseUrl}}/api/v3/project_status_transitions' \
 Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/activities/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/activities/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Create a comment on a milestone
@@ -556,8 +559,8 @@ curl -X POST '{{baseUrl}}/api/v3/activities/{target_id}/comments' \
 Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/milestones/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/milestones/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Create a comment on a subtask
@@ -566,8 +569,8 @@ curl -X POST '{{baseUrl}}/api/v3/milestones/{target_id}/comments' \
 Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/subtasks/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/subtasks/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Create a comment on a task
@@ -576,8 +579,8 @@ curl -X POST '{{baseUrl}}/api/v3/subtasks/{target_id}/comments' \
 Create a comment with optional file attachments via multipart/form-data. Either a non-empty body or at least one file is required.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/tasks/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/tasks/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List comments under a activity (newest first)
@@ -586,8 +589,8 @@ curl -X POST '{{baseUrl}}/api/v3/tasks/{target_id}/comments' \
 List comments under a activity (newest first)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/activities/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/activities/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List comments under a milestone (newest first)
@@ -596,8 +599,8 @@ curl -X GET '{{baseUrl}}/api/v3/activities/{target_id}/comments' \
 List comments under a milestone (newest first)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/milestones/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/milestones/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List comments under a subtask (newest first)
@@ -606,8 +609,8 @@ curl -X GET '{{baseUrl}}/api/v3/milestones/{target_id}/comments' \
 List comments under a subtask (newest first)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/subtasks/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/subtasks/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List comments under a task (newest first)
@@ -616,8 +619,8 @@ curl -X GET '{{baseUrl}}/api/v3/subtasks/{target_id}/comments' \
 List comments under a task (newest first)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/tasks/{target_id}/comments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/tasks/94eeede1-c925-44ad-8de6-416dc87b5999/comments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a comment (author or admin only)
@@ -626,8 +629,8 @@ curl -X GET '{{baseUrl}}/api/v3/tasks/{target_id}/comments' \
 Soft-delete a comment (author or admin only)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/comments/{comment_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/comments/<COMMENT_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Dashboard
@@ -638,8 +641,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/comments/{comment_id}' \
 Drill-down for KPI clicks. Returns milestone and / or activity rows under a project. Filters: `kind` (milestone | activity), `bucket` (ontrack | delayed | completed), `milestoneId` (only rows under one milestone), `minDelay` (days).
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}/items' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/items' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Organization view grid + active/inactive vendor pie
@@ -648,8 +651,8 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}/items' \
 Vendor cards for the Organization view top page. Each card carries the vendor's project count split by bucket. The pie block at the top shows vendor catalog distribution by `active` flag.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/organisations' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/organisations' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Project View payload (header + 5 KPIs + pie + delayed track)
@@ -658,8 +661,8 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/organisations' \
 Single payload for the Project View screen. Includes the project header card, 5 KPI tiles (Overall Progress, Milestones, Activities, Pending Approvals — static 0 in v1, Delayed), pie counts over M/A items, and delayed-track rows for items above `delayMinDays`.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Project cards listing with filters
@@ -668,8 +671,8 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/projects/{project_uuid}' \
 Returns project cards (id, name, vendor list, division, lifecycle status, bucket, progress %, item counters) with optional filters: `bucket` (total / active / ontrack / delayed / completed), free-text `q` over id / code / name / division / vendor names, `vendorId`, `division` code. Paginated — default 200 rows.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/projects' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/projects' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Summary view payload (KPIs + pie + delayed track + top org/division)
@@ -678,8 +681,8 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/projects' \
 Single payload that powers the Summary screen. Returns global project bucket counts (ontrack / delayed / completed; the 'Active' KPI tile is FE-derived as `total - completed`), the top-N delayed projects with their item delay info, the top-N vendor cards by project count, and the top-N division cards. Admin-only.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/summary' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/summary' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Vendor detail page (KPI counts + project pie + project list)
@@ -688,8 +691,8 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/summary' \
 Drill-down when a vendor card is clicked. Returns the vendor's project list as cards, KPI counts (total / completed / ontrack / delayed), and the corresponding pie counts.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/dashboard/organisations/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/dashboard/organisations/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Files
@@ -700,7 +703,7 @@ curl -X GET '{{baseUrl}}/api/v3/dashboard/organisations/{vendor_id}' \
 Fallback route that serves the bytes of an attachment file from local storage. Auth-free — URLs embed an unguessable UUID prefix and the route is mounted only when ``FILE_SERVER_LOCAL_FALLBACK_ENABLED`` is true. In production deployments with ``FILE_SERVER_PUBLIC_BASE_URL`` set to an external file server, the FE fetches bytes directly from there and this route is unused.
 
 ```bash
-curl -X GET '{{baseUrl}}/files/{storage_key}'
+curl -X GET 'http://10.1.131.199:8000/files/{storage_key}'
 ```
 
 ## Health & Root
@@ -711,7 +714,7 @@ curl -X GET '{{baseUrl}}/files/{storage_key}'
 Health check endpoint.
 
 ```bash
-curl -X GET '{{baseUrl}}/health'
+curl -X GET 'http://10.1.131.199:8000/health'
 ```
 
 ## Master Data
@@ -722,14 +725,14 @@ curl -X GET '{{baseUrl}}/health'
 Add a new (from_status, to_status) edge (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/project_status_transitions/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/project_status_transitions/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "fromStatus": "",
   "toStatus": "",
   "requiresAdmin": false,
-  "description": ""
+  "description": "Sample description"
 }'
 ```
 
@@ -739,13 +742,13 @@ curl -X POST '{{baseUrl}}/api/v3/master/project_status_transitions/create' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/permissions/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/permissions/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "name": "",
-  "description": ""
+  "code": "000000",
+  "name": "Sample Name",
+  "description": "Sample description"
 }'
 ```
 
@@ -755,15 +758,15 @@ curl -X POST '{{baseUrl}}/api/v3/master/permissions/create' \
 Create a division (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/divisions/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/divisions/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
-  "code": "",
+  "label": "Sample Label",
+  "code": "000000",
   "requiresOther": false,
   "email": "user@example.com",
-  "phone_number": ""
+  "phone_number": "+919999999999"
 }'
 ```
 
@@ -773,13 +776,13 @@ curl -X POST '{{baseUrl}}/api/v3/master/divisions/create' \
 Create a milestone status (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/milestone_statuses/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/milestone_statuses/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "label": "",
-  "description": "",
+  "code": "000000",
+  "label": "Sample Label",
+  "description": "Sample description",
   "active": true,
   "isTerminal": false
 }'
@@ -791,16 +794,16 @@ curl -X POST '{{baseUrl}}/api/v3/master/milestone_statuses/create' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/notification_templates/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/notification_templates/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "template_kind": "",
-  "channel": "",
+  "channel": "email",
   "subject": "",
-  "body": "",
+  "body": "Sample comment text.",
   "is_html": false,
-  "description": "",
+  "description": "Sample description",
   "active": true
 }'
 ```
@@ -811,14 +814,14 @@ curl -X POST '{{baseUrl}}/api/v3/master/notification_templates/create' \
 Create a priority (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/priorities/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/priorities/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "name": "",
-  "description": "",
-  "position": 0,
+  "code": "000000",
+  "name": "Sample Name",
+  "description": "Sample description",
+  "position": 1,
   "active": true
 }'
 ```
@@ -829,13 +832,13 @@ curl -X POST '{{baseUrl}}/api/v3/master/priorities/create' \
 Create a project category (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/project_categories/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/project_categories/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "label": "",
-  "description": "",
+  "code": "000000",
+  "label": "Sample Label",
+  "description": "Sample description",
   "active": true,
   "requiresOther": false
 }'
@@ -847,12 +850,12 @@ curl -X POST '{{baseUrl}}/api/v3/master/project_categories/create' \
 Create a resource type (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/resource_types/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/resource_types/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "name": "",
+  "code": "000000",
+  "name": "Sample Name",
   "active": true
 }'
 ```
@@ -863,14 +866,14 @@ curl -X POST '{{baseUrl}}/api/v3/master/resource_types/create' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/roles/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/roles/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "permissions": [
-    ""
+    "users:read"
   ],
   "builtin": false
 }'
@@ -882,25 +885,25 @@ curl -X POST '{{baseUrl}}/api/v3/master/roles/create' \
 Create a vendor (delegates)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/vendors/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/vendors/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "active": true,
   "email": "user@example.com",
-  "contact_person": "",
-  "phone_number": "",
+  "contact_person": "Jane Doe",
+  "phone_number": "+919999999999",
   "project_ids": [
-    ""
+    "a278f77b-a2ef-4797-b4fa-ac3fe82e7037"
   ],
   "user_assignments": [
     {
-      "project_id": "",
-      "role": "",
+      "project_id": "a278f77b-a2ef-4797-b4fa-ac3fe82e7037",
+      "role": "project_member",
       "user_ids": [
-        ""
+        "94eeede1-c925-44ad-8de6-416dc87b5999"
       ]
     }
   ]
@@ -913,13 +916,13 @@ curl -X POST '{{baseUrl}}/api/v3/master/vendors/create' \
 Create an activity status (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/activity_statuses/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/activity_statuses/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "label": "",
-  "description": "",
+  "code": "000000",
+  "label": "Sample Label",
+  "description": "Sample description",
   "active": true,
   "isTerminal": false
 }'
@@ -931,13 +934,13 @@ curl -X POST '{{baseUrl}}/api/v3/master/activity_statuses/create' \
 Create an activity type (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/activity_types/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/activity_types/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "label": "",
-  "description": "",
+  "code": "000000",
+  "label": "Sample Label",
+  "description": "Sample description",
   "active": true
 }'
 ```
@@ -948,8 +951,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/activity_types/create' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Delete a role (delegates; built-in 'admin' role protected)
@@ -958,8 +961,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/permissions/{code}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Edit a permission's name/description (delegates)
@@ -968,12 +971,12 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/roles/{role_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": ""
+  "name": "Sample Name",
+  "description": "Sample description"
 }'
 ```
 
@@ -983,8 +986,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/permissions/{code}' \
 Get a milestone status by code
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/milestone_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get a notification template (admin)
@@ -993,8 +996,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/notification_templates/{template_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get a permission row (delegates)
@@ -1003,8 +1006,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get a priority by code
@@ -1013,8 +1016,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/permissions/{code}' \
 Get a priority by code
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/priorities/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/priorities/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get a project category by code
@@ -1023,8 +1026,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/priorities/{code}' \
 Get a project category by code
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/project_categories/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/project_categories/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get a role (delegates to GET /api/v3/roles/{id})
@@ -1033,8 +1036,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/project_categories/{code}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get an activity status by code
@@ -1043,8 +1046,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/roles/{role_id}' \
 Get an activity status by code
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/activity_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get an activity type by code
@@ -1053,8 +1056,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
 Get an activity type by code
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/activity_types/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/activity_types/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get vendor detail (delegates to GET /api/v3/vendors/{id})
@@ -1063,8 +1066,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/activity_types/{code}' \
 Get vendor detail (delegates to GET /api/v3/vendors/{id})
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Grant a permission to a role (delegates)
@@ -1073,8 +1076,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/roles/12/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List a role's permissions (delegates)
@@ -1083,8 +1086,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/roles/12/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List activity statuses
@@ -1093,8 +1096,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions' \
 List activity statuses
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/activity_statuses' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/activity_statuses' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List activity types
@@ -1103,8 +1106,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/activity_statuses' \
 List activity types
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/activity_types' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/activity_types' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List divisions (admin view shows soft-disabled rows too)
@@ -1113,8 +1116,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/activity_types' \
 Returns the divisions catalog. By default only active rows are returned (matches the FE picker's filter). Pass ``?include_inactive=true`` to include soft-disabled rows for admin curation views.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/divisions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/divisions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List live vendors (delegates to GET /api/v3/vendors)
@@ -1123,8 +1126,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/divisions' \
 List live vendors (delegates to GET /api/v3/vendors)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/vendors' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/vendors' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List milestone statuses
@@ -1133,8 +1136,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/vendors' \
 List milestone statuses
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/milestone_statuses' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/milestone_statuses' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List notification templates (admin view shows soft-disabled rows too)
@@ -1143,8 +1146,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/milestone_statuses' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/notification_templates' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/notification_templates' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List priorities (sorted by position)
@@ -1153,8 +1156,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/notification_templates' \
 List priorities (sorted by position)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/priorities' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/priorities' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List project categories (admin view shows soft-disabled rows too)
@@ -1163,8 +1166,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/priorities' \
 List project categories (admin view shows soft-disabled rows too)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/project_categories' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/project_categories' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List project status transitions (admin view shows inactive too)
@@ -1173,8 +1176,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/project_categories' \
 List project status transitions (admin view shows inactive too)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/project_status_transitions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/project_status_transitions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List projects mapped to a vendor (delegates)
@@ -1183,8 +1186,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/project_status_transitions' \
 List projects mapped to a vendor (delegates)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/vendors/{vendor_id}/projects' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5/projects' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List resource types (admin view shows inactive too)
@@ -1193,8 +1196,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/vendors/{vendor_id}/projects' \
 List resource types (admin view shows inactive too)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/resource_types' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/resource_types' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List roles (delegates to GET /api/v3/roles)
@@ -1203,8 +1206,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/resource_types' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/roles' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/roles' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List the permission catalog (delegates)
@@ -1213,8 +1216,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/roles' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List the permission catalog grouped by module
@@ -1223,8 +1226,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/permissions' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/master/permissions/by-module' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/master/permissions/by-module' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Re-activate a soft-disabled notification template (admin)
@@ -1233,8 +1236,8 @@ curl -X GET '{{baseUrl}}/api/v3/master/permissions/by-module' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/notification_templates/{template_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/notification_templates/{template_id}/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PUT — Replace a role's permission set (delegates)
@@ -1243,12 +1246,12 @@ curl -X POST '{{baseUrl}}/api/v3/master/notification_templates/{template_id}/res
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PUT '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PUT 'http://10.1.131.199:8000/api/v3/master/roles/12/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "permissions": [
-    ""
+    "users:read"
   ]
 }'
 ```
@@ -1259,8 +1262,8 @@ curl -X PUT '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions' \
 Restore a soft-deleted vendor (delegates)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/vendors/{vendor_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled activity status (admin)
@@ -1269,8 +1272,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/vendors/{vendor_id}/restore' \
 Restore a soft-disabled activity status (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/activity_statuses/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/activity_statuses/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled activity type (admin)
@@ -1279,8 +1282,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/activity_statuses/{code}/restore' \
 Restore a soft-disabled activity type (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/activity_types/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/activity_types/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled division (admin)
@@ -1289,8 +1292,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/activity_types/{code}/restore' \
 Restore a soft-disabled division (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/divisions/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/divisions/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled milestone status (admin)
@@ -1299,8 +1302,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/divisions/{code}/restore' \
 Restore a soft-disabled milestone status (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/milestone_statuses/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/milestone_statuses/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled priority (admin)
@@ -1309,8 +1312,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/milestone_statuses/{code}/restore' \
 Restore a soft-disabled priority (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/priorities/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/priorities/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled project category (admin)
@@ -1319,8 +1322,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/priorities/{code}/restore' \
 Restore a soft-disabled project category (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/project_categories/{code}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/project_categories/users:read/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled resource type (admin)
@@ -1329,8 +1332,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/project_categories/{code}/restore' \
 Restore a soft-disabled resource type (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/resource_types/{rt_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/resource_types/{rt_id}/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-disabled transition (admin)
@@ -1339,8 +1342,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/resource_types/{rt_id}/restore' \
 Restore a soft-disabled transition (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/master/project_status_transitions/{row_id}/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Revoke a permission from a role (delegates)
@@ -1349,8 +1352,8 @@ curl -X POST '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}/rest
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/roles/12/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate a milestone status (admin)
@@ -1359,8 +1362,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/roles/{role_id}/permissions/{code}' \
 Soft-deactivate a milestone status (admin)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/milestone_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate a notification template (admin)
@@ -1369,8 +1372,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/notification_templates/{template_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate a priority (admin)
@@ -1379,8 +1382,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' 
 Soft-deactivate a priority (admin)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/priorities/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/priorities/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate a project category (admin)
@@ -1389,8 +1392,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/priorities/{code}' \
 Soft-deactivate a project category (admin)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/project_categories/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/project_categories/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate an activity status (admin)
@@ -1399,8 +1402,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/project_categories/{code}' \
 Soft-deactivate an activity status (admin)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/activity_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-deactivate an activity type (admin)
@@ -1409,8 +1412,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
 Soft-deactivate an activity type (admin)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/activity_types/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/activity_types/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a division (admin) — sets active=false
@@ -1419,8 +1422,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/activity_types/{code}' \
 Soft delete: the row stays in the DB so existing projects / users / activity_resources referencing this code keep rendering. The picker hides it for new selections. Restore via PATCH-isn't-quite-right (active isn't on the patch schema); use POST /divisions/{code}/restore.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/divisions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/divisions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a resource type (admin) — sets active=false
@@ -1429,8 +1432,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/divisions/{code}' \
 Soft-delete a resource type (admin) — sets active=false
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/resource_types/{rt_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/resource_types/{rt_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a transition (admin) — sets active=false
@@ -1439,8 +1442,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/resource_types/{rt_id}' \
 Soft-delete a transition (admin) — sets active=false
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/project_status_transitions/{row_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a vendor (delegates)
@@ -1449,8 +1452,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}' \
 Soft-delete a vendor (delegates)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/master/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update a division (admin)
@@ -1459,14 +1462,14 @@ curl -X DELETE '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
 Patch ``label`` / ``requiresOther`` / ``email`` / ``phoneNumber``. ``code`` is NOT patchable — every project's ``owner`` column references it; renaming would break existing rows. Built-in rows (``tmd1`` / ``tmd2`` / ``others``) accept ``email`` / ``phoneNumber`` updates so admins can attach contact details to the seeded divisions, but reject ``label`` / ``requiresOther`` changes with 403.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/divisions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/divisions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
+  "label": "Sample Label",
   "requiresOther": false,
   "email": "user@example.com",
-  "phone_number": ""
+  "phone_number": "+919999999999"
 }'
 ```
 
@@ -1476,13 +1479,13 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/divisions/{code}' \
 Update a milestone status (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/milestone_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
-  "description": "",
-  "active": false,
+  "label": "Sample Label",
+  "description": "Sample description",
+  "active": true,
   "isTerminal": false
 }'
 ```
@@ -1493,15 +1496,15 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/milestone_statuses/{code}' \
 **Delegated to notification-service (port 8002)** when `NOTIFICATION_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/notification_templates/{template_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "subject": "",
-  "body": "",
+  "body": "Sample comment text.",
   "is_html": false,
-  "description": "",
-  "active": false
+  "description": "Sample description",
+  "active": true
 }'
 ```
 
@@ -1511,14 +1514,14 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/notification_templates/{template_id}' \
 Update a priority (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/priorities/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/priorities/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
-  "position": 0,
-  "active": false
+  "name": "Sample Name",
+  "description": "Sample description",
+  "position": 1,
+  "active": true
 }'
 ```
 
@@ -1528,13 +1531,13 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/priorities/{code}' \
 Update a project category (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/project_categories/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/project_categories/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
-  "description": "",
-  "active": false,
+  "label": "Sample Label",
+  "description": "Sample description",
+  "active": true,
   "requiresOther": false
 }'
 ```
@@ -1545,11 +1548,11 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/project_categories/{code}' \
 Update a resource type's name (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/resource_types/{rt_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/resource_types/{rt_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": ""
+  "name": "Sample Name"
 }'
 ```
 
@@ -1559,14 +1562,14 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/resource_types/{rt_id}' \
 **Delegated to user-service (port 8001)** when `USER_SERVICE_PROXY_ENABLED=true` on this monolith. The path here is kept as the rollback safety net; runs locally when the flag is off.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "permissions": [
-    ""
+    "users:read"
   ]
 }'
 ```
@@ -1577,12 +1580,12 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/roles/{role_id}' \
 Update a transition's policy flags / description (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/project_status_transitions/{row_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "requiresAdmin": false,
-  "description": ""
+  "description": "Sample description"
 }'
 ```
 
@@ -1592,25 +1595,25 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/project_status_transitions/{row_id}' \
 Update a vendor (delegates)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
-  "active": false,
+  "name": "Sample Name",
+  "description": "Sample description",
+  "active": true,
   "email": "user@example.com",
-  "contact_person": "",
-  "phone_number": "",
+  "contact_person": "Jane Doe",
+  "phone_number": "+919999999999",
   "project_ids": [
-    ""
+    "a278f77b-a2ef-4797-b4fa-ac3fe82e7037"
   ],
   "user_assignments": [
     {
-      "project_id": "",
-      "role": "",
+      "project_id": "a278f77b-a2ef-4797-b4fa-ac3fe82e7037",
+      "role": "project_member",
       "user_ids": [
-        ""
+        "94eeede1-c925-44ad-8de6-416dc87b5999"
       ]
     }
   ]
@@ -1623,13 +1626,13 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/vendors/{vendor_id}' \
 Update an activity status (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/activity_statuses/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
-  "description": "",
-  "active": false,
+  "label": "Sample Label",
+  "description": "Sample description",
+  "active": true,
   "isTerminal": false
 }'
 ```
@@ -1640,13 +1643,13 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/activity_statuses/{code}' \
 Update an activity type (admin)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/master/activity_types/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/master/activity_types/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "label": "",
-  "description": "",
-  "active": false
+  "label": "Sample Label",
+  "description": "Sample description",
+  "active": true
 }'
 ```
 
@@ -1658,8 +1661,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/master/activity_types/{code}' \
 Add a participant to a meeting
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}/participants/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "user_id": 42
@@ -1672,8 +1675,8 @@ curl -X POST '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants/create' \
 Create an agenda item for a meeting
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/meetings/{meeting_id}/agenda_items/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}/agenda_items/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "description": "Review Q1 budget allocation",
@@ -1688,8 +1691,8 @@ curl -X POST '{{baseUrl}}/api/v3/meetings/{meeting_id}/agenda_items/create' \
 Create a new meeting in a project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/meetings/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/meetings/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "description": "Quarterly planning session",
@@ -1706,8 +1709,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/meetings/create' \
 Delete an agenda item
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/meetings/agenda_items/{agenda_item_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Delete meeting
@@ -1716,8 +1719,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
 Delete a meeting
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get agenda item
@@ -1726,8 +1729,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
 Get an agenda item by ID
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/meetings/agenda_items/{agenda_item_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get meeting
@@ -1736,8 +1739,8 @@ curl -X GET '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
 Get a meeting by ID
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List agenda items
@@ -1746,8 +1749,8 @@ curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
 List agenda items for a meeting
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}/agenda_items' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}/agenda_items' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List meetings
@@ -1756,8 +1759,8 @@ curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}/agenda_items' \
 List meetings in a project
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/meetings' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/meetings' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List participants
@@ -1766,8 +1769,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/meetings' \
 List participants in a meeting
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}/participants' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Remove participant
@@ -1776,8 +1779,8 @@ curl -X GET '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants' \
 Remove a participant from a meeting
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants/{user_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}/participants/94eeede1-c925-44ad-8de6-416dc87b5999' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update agenda item
@@ -1786,8 +1789,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/meetings/{meeting_id}/participants/{user_id}'
 Update an agenda item
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/meetings/agenda_items/{agenda_item_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "position": 2
@@ -1800,8 +1803,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/meetings/agenda_items/{agenda_item_id}' \
 Update a meeting
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/meetings/{meeting_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "location": "Conference Room B",
@@ -1817,22 +1820,20 @@ curl -X PATCH '{{baseUrl}}/api/v3/meetings/{meeting_id}' \
 Create a milestone. Accepts EITHER ``application/json`` (legacy shape — milestone fields only) OR ``multipart/form-data`` (doc 30 — milestone fields as form fields, plus optional ``body`` (comment text) and ``files`` (file uploads). When attachments are present, the milestone + comment + attachments are persisted in the same request. Array-typed fields (``dependsOn``, ``vendors``) are JSON-encoded strings inside multipart.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/milestones/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/milestones/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "priority": ""
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "priority": "p2"
 }'
 ```
 
@@ -1842,8 +1843,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/milestones/create' \
 Get milestone by id
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List milestones under project
@@ -1852,8 +1853,8 @@ curl -X GET '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
 List milestones under project
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/milestones' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/milestones' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-deleted milestone (admin)
@@ -1862,8 +1863,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/milestones' \
 Restore a soft-deleted milestone (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/milestones/{milestone_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete milestone (cascades to descendants)
@@ -1872,8 +1873,8 @@ curl -X POST '{{baseUrl}}/api/v3/milestones/{milestone_id}/restore' \
 Soft-delete milestone (cascades to descendants)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update milestone
@@ -1882,22 +1883,20 @@ curl -X DELETE '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
 Update milestone
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/milestones/<MILESTONE_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "priority": ""
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "priority": "p2"
 }'
 ```
 
@@ -1909,13 +1908,13 @@ curl -X PATCH '{{baseUrl}}/api/v3/milestones/{milestone_id}' \
 Create a custom permission (DEPRECATED — use POST /api/v3/master/permissions/create)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "name": "",
-  "description": ""
+  "code": "000000",
+  "name": "Sample Name",
+  "description": "Sample description"
 }'
 ```
 
@@ -1925,8 +1924,8 @@ curl -X POST '{{baseUrl}}/api/v3/permissions' \
 Delete a permission (DEPRECATED — use DELETE /api/v3/master/permissions/{code})
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})
@@ -1935,12 +1934,12 @@ curl -X DELETE '{{baseUrl}}/api/v3/permissions/{code}' \
 Edit name/description of a permission (DEPRECATED — use PATCH /api/v3/master/permissions/{code})
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": ""
+  "name": "Sample Name",
+  "description": "Sample description"
 }'
 ```
 
@@ -1950,8 +1949,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/permissions/{code}' \
 Get a permission row (DEPRECATED — use GET /api/v3/master/permissions/{code})
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)
@@ -1960,8 +1959,8 @@ curl -X GET '{{baseUrl}}/api/v3/permissions/{code}' \
 List permission catalog (DEPRECATED — use GET /api/v3/master/permissions)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Project Members
@@ -1972,8 +1971,8 @@ curl -X GET '{{baseUrl}}/api/v3/permissions' \
 Add a user to a project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/memberships/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/memberships/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "roles": [
@@ -1996,8 +1995,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/memberships/create' \
 List members of a project with pagination
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/memberships' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/memberships' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Remove project member
@@ -2006,8 +2005,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/memberships' \
 Remove a user from a project
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/memberships/{membership_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/memberships/<MEMBERSHIP_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update project member
@@ -2016,8 +2015,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/memberships/{membership_id}' \
 Update member roles
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/memberships/{membership_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/memberships/<MEMBERSHIP_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "roles": [
@@ -2039,8 +2038,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/memberships/{membership_id}' \
 Returns the full project tree in one call: milestones → activities → tasks → subtasks, with resource details inlined for resource-type entities. Soft-deleted rows are filtered by default; pass `includeDeleted=true` to include them (admin-only in practice).
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/tree' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/tree' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Projects
@@ -2051,8 +2050,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/tree' \
 Close project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/close' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/close' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "reason": ""
@@ -2065,20 +2064,20 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/close' \
 Idempotent create-or-update of a project keyed by uuid. Used by multi-step creation wizards — re-submitting the same uuid updates the existing row rather than creating a duplicate. Returns 201 on first call, 200 on subsequent calls; on the update path, caller must own the project (or be admin). The frontend generates the uuid via crypto.randomUUID() once per wizard session. The server auto-generates projectCode on insert and preserves it on update.
 
 ```bash
-curl -X PUT '{{baseUrl}}/api/v3/projects/{project_uuid}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PUT 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "active": true,
   "status_explanation": "",
-  "parent_id": "",
+  "parent_id": null,
   "status": "new",
-  "owner": "",
-  "owner_other": "",
+  "owner": "tmd1",
+  "owner_other": null,
   "vendor_ids": [
-    ""
+    "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5"
   ],
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z"
@@ -2091,20 +2090,20 @@ curl -X PUT '{{baseUrl}}/api/v3/projects/{project_uuid}' \
 Create project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "active": true,
   "status_explanation": "",
-  "parent_id": "",
+  "parent_id": null,
   "status": "new",
-  "owner": "",
-  "owner_other": "",
+  "owner": "tmd1",
+  "owner_other": null,
   "vendor_ids": [
-    ""
+    "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5"
   ],
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z"
@@ -2117,8 +2116,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/create' \
 Get project
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List all projects including soft-deleted
@@ -2127,8 +2126,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}' \
 Admin / audit view. Returns every project row, including those that have been soft-deleted. Each row carries a `deletedAt` field — NULL for live projects, populated for deleted ones. Sort order is the same newest-first ordering used by GET /projects.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/all' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/all' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List live projects (excludes soft-deleted)
@@ -2137,8 +2136,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/all' \
 Default Search Project listing. Soft-deleted projects are filtered out; results are newest-first (createdAt descending). For the admin view that includes deleted rows, see GET /projects/all.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Per-project role assignments grouped by role
@@ -2147,8 +2146,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects' \
 Doc 44 round 8: monolith mirror of the user-mgmt route at the same path. Returns the users assigned to this project, grouped by the doc-41 scoped role they hold (project_admin / project_member / division_member). Powers the project-opened User Management view so the FE can avoid a cross-service call to user-mgmt for this read.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/role-assignments' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/role-assignments' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Publish project
@@ -2157,8 +2156,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/role-assignments' \
 Publish project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/publish' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/publish' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Save project setup (new -> draft if milestones exist)
@@ -2167,8 +2166,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/publish' \
 Maps to the 'Save Project' button in the Step-1 wizard. Flips status from 'new' to 'draft' when at least one live milestone exists on the project. Adding a milestone alone does NOT change status — only this explicit save call does. Idempotent: a no-op once past 'new'.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/save' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/save' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete project
@@ -2177,8 +2176,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/save' \
 Soft-delete project
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/projects/{project_uuid}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update project
@@ -2187,20 +2186,20 @@ curl -X DELETE '{{baseUrl}}/api/v3/projects/{project_uuid}' \
 Update project
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/projects/{project_uuid}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
-  "active": false,
+  "name": "Sample Name",
+  "description": "Sample description",
+  "active": true,
   "status_explanation": "",
-  "parent_id": "",
-  "status": "",
-  "owner": "",
-  "owner_other": "",
+  "parent_id": null,
+  "status": "published",
+  "owner": "tmd1",
+  "owner_other": null,
   "vendor_ids": [
-    ""
+    "7f9ec285-5a94-4d2f-9d2c-a248d302b1c5"
   ],
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
@@ -2217,12 +2216,12 @@ curl -X PATCH '{{baseUrl}}/api/v3/projects/{project_uuid}' \
 Create a resource type (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/resource_types/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/resource_types/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "code": "",
-  "name": "",
+  "code": "000000",
+  "name": "Sample Name",
   "active": true
 }'
 ```
@@ -2233,8 +2232,8 @@ curl -X POST '{{baseUrl}}/api/v3/resource_types/create' \
 List active resource types
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/resource_types' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/resource_types' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ## Roles
@@ -2245,14 +2244,14 @@ curl -X GET '{{baseUrl}}/api/v3/resource_types' \
 Create role (DEPRECATED — use POST /api/v3/master/roles/create)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/roles/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/roles/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "permissions": [
-    ""
+    "users:read"
   ],
   "builtin": false
 }'
@@ -2264,8 +2263,8 @@ curl -X POST '{{baseUrl}}/api/v3/roles/create' \
 Delete role (DEPRECATED — use DELETE /api/v3/master/roles/{id})
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get role (DEPRECATED — use GET /api/v3/master/roles/{id})
@@ -2274,8 +2273,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/roles/{role_id}' \
 Get role (DEPRECATED — use GET /api/v3/master/roles/{id})
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})
@@ -2284,8 +2283,8 @@ curl -X GET '{{baseUrl}}/api/v3/roles/{role_id}' \
 Grant a single permission to a role (DEPRECATED — use POST /api/v3/master/roles/{id}/permissions/{code})
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/roles/12/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)
@@ -2294,8 +2293,8 @@ curl -X POST '{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}' \
 List a role's permissions (DEPRECATED — use GET /api/v3/master/roles/{id}/permissions)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/roles/{role_id}/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/roles/12/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List roles (DEPRECATED — use GET /api/v3/master/roles)
@@ -2304,8 +2303,8 @@ curl -X GET '{{baseUrl}}/api/v3/roles/{role_id}/permissions' \
 List roles (DEPRECATED — use GET /api/v3/master/roles)
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/roles' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/roles' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PUT — Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)
@@ -2314,12 +2313,12 @@ curl -X GET '{{baseUrl}}/api/v3/roles' \
 Replace a role's permission set (DEPRECATED — use PUT /api/v3/master/roles/{id}/permissions)
 
 ```bash
-curl -X PUT '{{baseUrl}}/api/v3/roles/{role_id}/permissions' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PUT 'http://10.1.131.199:8000/api/v3/roles/12/permissions' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "permissions": [
-    ""
+    "users:read"
   ]
 }'
 ```
@@ -2330,8 +2329,8 @@ curl -X PUT '{{baseUrl}}/api/v3/roles/{role_id}/permissions' \
 Revoke a single permission from a role (DEPRECATED — use DELETE /api/v3/master/roles/{id}/permissions/{code})
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/roles/12/permissions/users:read' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})
@@ -2340,14 +2339,14 @@ curl -X DELETE '{{baseUrl}}/api/v3/roles/{role_id}/permissions/{code}' \
 Update role (DEPRECATED — use PATCH /api/v3/master/roles/{id})
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/roles/{role_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/roles/12' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "permissions": [
-    ""
+    "users:read"
   ]
 }'
 ```
@@ -2360,7 +2359,7 @@ curl -X PATCH '{{baseUrl}}/api/v3/roles/{role_id}' \
 Root endpoint.
 
 ```bash
-curl -X GET '{{baseUrl}}/'
+curl -X GET 'http://10.1.131.199:8000/'
 ```
 
 ## Subtasks
@@ -2371,22 +2370,20 @@ curl -X GET '{{baseUrl}}/'
 Create a subtask nested under another subtask. Same body as the task-scoped create endpoint. Accepts JSON or multipart (same fields plus optional ``body`` (comment text) and ``files`` (uploads)).
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/subtasks/{parent_subtask_id}/subtasks/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/subtasks/<PARENT_SUBTASK_ID>/subtasks/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "priority": "",
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "priority": "p2",
   "assignedTo": ""
 }'
 ```
@@ -2397,22 +2394,20 @@ curl -X POST '{{baseUrl}}/api/v3/subtasks/{parent_subtask_id}/subtasks/create' \
 Create a task-scoped subtask. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/tasks/{task_id}/subtasks/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>/subtasks/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "priority": "",
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "priority": "p2",
   "assignedTo": ""
 }'
 ```
@@ -2423,8 +2418,8 @@ curl -X POST '{{baseUrl}}/api/v3/tasks/{task_id}/subtasks/create' \
 Get subtask by id
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/subtasks/<SUBTASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List subtasks under task
@@ -2433,8 +2428,8 @@ curl -X GET '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
 List subtasks under task
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/tasks/{task_id}/subtasks' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>/subtasks' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-deleted subtask (admin)
@@ -2443,8 +2438,8 @@ curl -X GET '{{baseUrl}}/api/v3/tasks/{task_id}/subtasks' \
 Restore a soft-deleted subtask (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/subtasks/{subtask_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/subtasks/<SUBTASK_ID>/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete subtask
@@ -2453,8 +2448,8 @@ curl -X POST '{{baseUrl}}/api/v3/subtasks/{subtask_id}/restore' \
 Soft-delete subtask
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/subtasks/<SUBTASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update subtask (handles type transitions + resource upsert)
@@ -2463,22 +2458,20 @@ curl -X DELETE '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
 Update subtask (handles type transitions + resource upsert)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/subtasks/<SUBTASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "dependsOn": [
-    ""
-  ],
-  "status": "",
-  "priority": "",
+  "position": 1,
+  "dependsOn": [],
+  "status": "published",
+  "priority": "p2",
   "assignedTo": ""
 }'
 ```
@@ -2491,22 +2484,20 @@ curl -X PATCH '{{baseUrl}}/api/v3/subtasks/{subtask_id}' \
 Create a task. Accepts EITHER ``application/json`` (legacy) OR ``multipart/form-data`` (doc 30 — same fields plus optional ``body`` (comment text) and ``files`` (uploads)).
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/activities/{activity_id}/tasks/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>/tasks/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "status": "",
-  "dependsOn": [
-    ""
-  ],
-  "priority": "",
+  "position": 1,
+  "status": "published",
+  "dependsOn": [],
+  "priority": "p2",
   "assignedTo": ""
 }'
 ```
@@ -2517,8 +2508,8 @@ curl -X POST '{{baseUrl}}/api/v3/activities/{activity_id}/tasks/create' \
 Get task by id
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/tasks/{task_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List tasks under activity
@@ -2527,8 +2518,8 @@ curl -X GET '{{baseUrl}}/api/v3/tasks/{task_id}' \
 List tasks under activity
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/activities/{activity_id}/tasks' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/activities/<ACTIVITY_ID>/tasks' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-deleted task (admin)
@@ -2537,8 +2528,8 @@ curl -X GET '{{baseUrl}}/api/v3/activities/{activity_id}/tasks' \
 Restore a soft-deleted task (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/tasks/{task_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete task (cascades to subtasks)
@@ -2547,8 +2538,8 @@ curl -X POST '{{baseUrl}}/api/v3/tasks/{task_id}/restore' \
 Soft-delete task (cascades to subtasks)
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/tasks/{task_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update task (handles type transitions + resource upsert)
@@ -2557,22 +2548,20 @@ curl -X DELETE '{{baseUrl}}/api/v3/tasks/{task_id}' \
 Update task (handles type transitions + resource upsert)
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/tasks/{task_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/tasks/<TASK_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "startDate": "2026-01-01T00:00:00Z",
   "endDate": "2026-01-01T00:00:00Z",
   "actualStartDate": "2026-01-01T00:00:00Z",
   "actualEndDate": "2026-01-01T00:00:00Z",
-  "position": 0,
-  "dependsOn": [
-    ""
-  ],
-  "status": "",
-  "priority": "",
+  "position": 1,
+  "dependsOn": [],
+  "status": "published",
+  "priority": "p2",
   "assignedTo": ""
 }'
 ```
@@ -2585,25 +2574,25 @@ curl -X PATCH '{{baseUrl}}/api/v3/tasks/{task_id}' \
 Create a vendor (admin)
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/vendors/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/vendors/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
+  "name": "Sample Name",
+  "description": "Sample description",
   "active": true,
   "email": "user@example.com",
-  "contact_person": "",
-  "phone_number": "",
+  "contact_person": "Jane Doe",
+  "phone_number": "+919999999999",
   "project_ids": [
-    ""
+    "a278f77b-a2ef-4797-b4fa-ac3fe82e7037"
   ],
   "user_assignments": [
     {
-      "project_id": "",
-      "role": "",
+      "project_id": "a278f77b-a2ef-4797-b4fa-ac3fe82e7037",
+      "role": "project_member",
       "user_ids": [
-        ""
+        "94eeede1-c925-44ad-8de6-416dc87b5999"
       ]
     }
   ]
@@ -2616,8 +2605,8 @@ curl -X POST '{{baseUrl}}/api/v3/vendors/create' \
 Returns full vendor detail — name, description, email, contact person, phone number, soft-delete metadata — plus the list of projects this vendor is mapped to AND the per-(project, role) user assignments matrix (doc 44 round 6). Closed/completed/soft-deleted projects are filtered out (same rule as GET /vendors). 404 on soft-deleted vendors; admins can see them by hitting GET /vendors/{id}/projects (which already accepts deleted vendors).
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List live vendors (newest first)
@@ -2626,8 +2615,8 @@ curl -X GET '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
 Returns vendors that are not soft-deleted, ordered by createdAt descending so the latest vendor is row 0 in Search Vendor. Active and inactive vendors are returned by default so the FE Search Vendor / management view can show the active toggle on every row. Pass ``?active_only=true`` (used by picker dropdowns) to filter the list down to active vendors only.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/vendors' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/vendors' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List projects mapped to this vendor (excluding closed/completed)
@@ -2636,8 +2625,8 @@ curl -X GET '{{baseUrl}}/api/v3/vendors' \
 Returns the live, non-deleted, non-closed projects associated with this vendor. Closed/completed projects are filtered out — they're preserved on disk but no longer presented in the vendor's project list per product rule.
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/vendors/{vendor_id}/projects' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5/projects' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### POST — Restore a soft-deleted vendor (admin)
@@ -2646,8 +2635,8 @@ curl -X GET '{{baseUrl}}/api/v3/vendors/{vendor_id}/projects' \
 Clears deletedAt and flips active=True. All previously-existing project / milestone associations are preserved on disk and re-surface automatically. Note: the vendor's projects list (GET /vendors/{id}/projects) filters out closed/completed projects.
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/vendors/{vendor_id}/restore' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X POST 'http://10.1.131.199:8000/api/v3/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5/restore' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### DELETE — Soft-delete a vendor (admin)
@@ -2656,8 +2645,8 @@ curl -X POST '{{baseUrl}}/api/v3/vendors/{vendor_id}/restore' \
 Marks the vendor as deleted (stamps deletedAt, flips active=False). The vendor disappears from GET /vendors and from picker validation, but its project_vendors / milestone_vendors mapping rows are kept so a later restore brings the associations back.
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update a vendor (admin / org_admin / project_admin per body-shape gate)
@@ -2666,25 +2655,25 @@ curl -X DELETE '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
 Doc 44 round 9: body-shape-aware permission gate, tier-scoped. Bodies that touch ``name``/``description``/``active`` require ``vendors:manage`` (admin / super_admin only). org_admin (with ``rbac:assign`` + same-vendor) may edit ``email`` / ``contact_person`` / ``phone_number`` / ``project_ids`` / ``user_assignments``. project_admin (with ``rbac:assign`` + same-vendor) may edit only ``user_assignments``. Per-(project, role) tuples in ``user_assignments`` are validated against the caller's scope by ``apply_vendor_user_assignments``.
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/vendors/7f9ec285-5a94-4d2f-9d2c-a248d302b1c5' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
-  "description": "",
-  "active": false,
+  "name": "Sample Name",
+  "description": "Sample description",
+  "active": true,
   "email": "user@example.com",
-  "contact_person": "",
-  "phone_number": "",
+  "contact_person": "Jane Doe",
+  "phone_number": "+919999999999",
   "project_ids": [
-    ""
+    "a278f77b-a2ef-4797-b4fa-ac3fe82e7037"
   ],
   "user_assignments": [
     {
-      "project_id": "",
-      "role": "",
+      "project_id": "a278f77b-a2ef-4797-b4fa-ac3fe82e7037",
+      "role": "project_member",
       "user_ids": [
-        ""
+        "94eeede1-c925-44ad-8de6-416dc87b5999"
       ]
     }
   ]
@@ -2699,15 +2688,15 @@ curl -X PATCH '{{baseUrl}}/api/v3/vendors/{vendor_id}' \
 Create work package type
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/work_package_types/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/work_package_types/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
+  "name": "Sample Name",
   "internalName": "",
   "isBuiltin": false,
   "isActive": true,
-  "position": 0
+  "position": 1
 }'
 ```
 
@@ -2717,8 +2706,8 @@ curl -X POST '{{baseUrl}}/api/v3/work_package_types/create' \
 Delete work package type
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/work_package_types/{type_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get work package type
@@ -2727,8 +2716,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
 Get work package type
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/work_package_types/{type_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List work package types
@@ -2737,8 +2726,8 @@ curl -X GET '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
 List work package types
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/work_package_types' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/work_package_types' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update work package type
@@ -2747,13 +2736,13 @@ curl -X GET '{{baseUrl}}/api/v3/work_package_types' \
 Update work package type
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/work_package_types/{type_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
-  "name": "",
+  "name": "Sample Name",
   "isActive": false,
-  "position": 0
+  "position": 1
 }'
 ```
 
@@ -2765,8 +2754,8 @@ curl -X PATCH '{{baseUrl}}/api/v3/work_package_types/{type_id}' \
 Create a new work package in a project
 
 ```bash
-curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/work_packages/create' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X POST 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/work_packages/create' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "assigneeId": 5,
@@ -2785,8 +2774,8 @@ curl -X POST '{{baseUrl}}/api/v3/projects/{project_uuid}/work_packages/create' \
 Delete a work package
 
 ```bash
-curl -X DELETE '{{baseUrl}}/api/v3/work_packages/{work_package_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X DELETE 'http://10.1.131.199:8000/api/v3/work_packages/{work_package_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get work package
@@ -2795,8 +2784,8 @@ curl -X DELETE '{{baseUrl}}/api/v3/work_packages/{work_package_id}' \
 Get work package by ID
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/work_packages/{work_package_id}' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/work_packages/{work_package_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — Get work package tree
@@ -2805,8 +2794,8 @@ curl -X GET '{{baseUrl}}/api/v3/work_packages/{work_package_id}' \
 Get a work package with its full nested subtree
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/work_packages/{work_package_id}/children' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/work_packages/{work_package_id}/children' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### GET — List work packages
@@ -2815,8 +2804,8 @@ curl -X GET '{{baseUrl}}/api/v3/work_packages/{work_package_id}/children' \
 List work packages in a project with pagination
 
 ```bash
-curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/work_packages' \
-  -H 'Authorization: Bearer {{accessToken}}'
+curl -X GET 'http://10.1.131.199:8000/api/v3/projects/a278f77b-a2ef-4797-b4fa-ac3fe82e7037/work_packages' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
 ```
 
 ### PATCH — Update work package
@@ -2825,8 +2814,8 @@ curl -X GET '{{baseUrl}}/api/v3/projects/{project_uuid}/work_packages' \
 Update a work package
 
 ```bash
-curl -X PATCH '{{baseUrl}}/api/v3/work_packages/{work_package_id}' \
-  -H 'Authorization: Bearer {{accessToken}}' \
+curl -X PATCH 'http://10.1.131.199:8000/api/v3/work_packages/{work_package_id}' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
   "doneRatio": 50,
