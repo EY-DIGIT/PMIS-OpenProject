@@ -191,10 +191,23 @@ def apply_vendor_user_assignments(
 def user_assignments_for_vendor(
     db: Session, vendor_id: str,
 ) -> List[Dict[str, Any]]:
-    """Read-side: return ``[{project_id, role, user_ids[]}]`` for
-    every (project, role) tuple with at least one user assigned on
-    a project owned by ``vendor_id``. Roles use FE display labels
-    so the response shape mirrors the create/update body.
+    """Read-side: return the per-(project, role) user matrix for every
+    project owned by ``vendor_id``. Roles use FE display labels so the
+    response shape mirrors the create/update body.
+
+    Per entry the response carries:
+
+      * ``project_id`` (uuid)
+      * ``role``       (FE display label)
+      * ``user_ids[]`` — list of user UUIDs (legacy, kept for the
+        round-6 wire contract)
+      * ``users[]``    — parallel list of ``{id, login, firstName,
+        lastName, email}`` so the FE can render the user picker
+        without an extra ``GET /users`` round-trip per id (doc 46
+        round 10c).
+
+    The two arrays are guaranteed to be the same length and ordered
+    identically — ``users[i].id == user_ids[i]``.
     """
     project_ids = _vendor_project_ids(db, vendor_id)
     if not project_ids:
@@ -205,25 +218,41 @@ def user_assignments_for_vendor(
             UserRoleAssignmentModel.project_id,
             RoleModel.name,
             UserRoleAssignmentModel.user_id,
+            UserModel.login,
+            UserModel.first_name,
+            UserModel.last_name,
+            UserModel.email,
         )
         .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+        .join(UserModel, UserModel.id == UserRoleAssignmentModel.user_id)
         .filter(
             UserRoleAssignmentModel.project_id.in_(project_ids),
             RoleModel.name.in_(_PROJECT_TIER_ROLES),
+            UserModel.deleted_at.is_(None),
         )
-        .order_by(UserRoleAssignmentModel.project_id, RoleModel.name)
+        .order_by(UserRoleAssignmentModel.project_id, RoleModel.name, UserModel.login)
         .all()
     )
-    grouped: Dict[tuple, List[str]] = {}
-    for project_id, role_name, user_id in rows:
+    grouped: Dict[tuple, List[Dict[str, Any]]] = {}
+    for project_id, role_name, user_id, login, first_name, last_name, email in rows:
         key = (project_id, role_name)
-        grouped.setdefault(key, []).append(user_id)
+        grouped.setdefault(key, []).append({
+            "id": user_id,
+            "login": login,
+            "firstName": first_name,
+            "lastName": last_name,
+            "email": email,
+        })
 
     return [
         {
             "project_id": pid,
             "role": _NAME_TO_LABEL.get(role_name, role_name),
-            "user_ids": sorted(users),
+            # ``user_ids`` kept for backwards-compat with the round-6
+            # wire shape. ``users`` is the new parallel-with-context
+            # array — same order, fully-hydrated per row.
+            "user_ids": [u["id"] for u in users],
+            "users": users,
         }
         for (pid, role_name), users in grouped.items()
     ]

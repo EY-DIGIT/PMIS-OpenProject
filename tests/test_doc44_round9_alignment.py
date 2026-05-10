@@ -250,6 +250,47 @@ class TestOrgAdminCanEditAllowedVendorFields:
         # name unchanged
         assert body["name"] == v.name
 
+    def test_user_assignments_response_includes_users_array(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Doc 46 round 10c — the FE wants login + name alongside
+        each user_id in the user_assignments response so it can render
+        the picker without per-id /users lookups. The new ``users``
+        array is parallel to ``user_ids`` (same order, same length).
+        """
+        v = _make_vendor(db_session, "VendorWithUsers")
+        p = _make_project(db_session, "ProjForUsers", status="published")
+        _link_vendor_project(db_session, v, p)
+        u_a = _make_user(db_session, "ua-alpha", vendor_id=v.id)
+        u_b = _make_user(db_session, "ua-beta", vendor_id=v.id)
+        _grant(db_session, u_a, "project_admin", project_id=p.id)
+        _grant(db_session, u_b, "project_admin", project_id=p.id)
+
+        resp = client.get(f"/api/v3/vendors/{v.id}", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        ua_rows = [
+            ua for ua in resp.json()["data"]["user_assignments"]
+            if ua["project_id"] == p.id and ua["role"] == "Project Admin"
+        ]
+        assert len(ua_rows) == 1
+        row = ua_rows[0]
+
+        # Backwards-compat: user_ids array still present.
+        assert set(row["user_ids"]) == {u_a.id, u_b.id}
+
+        # New: parallel users array with login + name + email.
+        assert "users" in row
+        assert len(row["users"]) == len(row["user_ids"])
+        for entry, expected_id in zip(row["users"], row["user_ids"]):
+            assert entry["id"] == expected_id
+            assert "login" in entry
+            assert "firstName" in entry
+            assert "lastName" in entry
+            assert "email" in entry
+        # Sanity — logins match what we created.
+        logins = {e["login"] for e in row["users"]}
+        assert logins == {u_a.login, u_b.login}
+
     def test_oa_full_roundtrip_with_changed_name_still_rejected(
         self, client, admin_user, db_session,
     ):
