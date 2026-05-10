@@ -1,6 +1,6 @@
 """doc 45 round 9b: add users.org_role tier column
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: e9f1c3a5b704
 Revises: d6b9c4f8a3e1
 Create Date: 2026-05-10
 
@@ -18,6 +18,14 @@ row matches. Authorization is unchanged — permissions are still
 sourced exclusively from ``user_role_assignments`` / ``user_roles``.
 
 Idempotent. Re-running on an already-migrated DB is a no-op.
+
+Round 10 hotfix: the original revision ID ``a1b2c3d4e5f6`` collided
+with ``a1b2c3d4e5f6_add_milestone_dependencies_table`` already in
+the chain — ``alembic upgrade head`` crashed with a duplicate
+revision error and the deploy script bailed before bringing the
+service up. Renamed to ``e9f1c3a5b704`` (kept the same
+``down_revision`` since ``d6b9c4f8a3e1`` is the actual live head
+post the existing milestone_deps → rbac → ... chain).
 """
 from typing import Sequence, Union
 
@@ -25,7 +33,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "a1b2c3d4e5f6"
+revision: str = "e9f1c3a5b704"
 down_revision: Union[str, Sequence[str], None] = "d6b9c4f8a3e1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
