@@ -21,8 +21,12 @@ class Settings(BaseSettings):
         description="Secret key for JWT encoding"
     )
     ALGORITHM: str = "HS256"
-    # Access token TTL (minutes) - 15 minutes per token rules
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    # Round 11 hotfix — bumped from 15 → 60 while the FE refresh-token
+    # rotation is investigated. Tester reports session drops mid-flow;
+    # longer access-token TTL is a temporary stop-gap so users don't
+    # hit silent 401s. Both services bumped in lockstep so monolith-
+    # issued and user-mgmt-issued tokens have the same lifetime.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     # Refresh token TTL (days)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     # Grace window (seconds) during which the just-rotated-out refresh token

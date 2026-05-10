@@ -56,6 +56,28 @@ router = APIRouter(prefix="/vendors", tags=["vendors"])
 _HIDDEN_PROJECT_STATUSES = {"closed", "completed"}
 
 
+def _vendor_email_taken(
+    db: Session, email: str, *, exclude_vendor_id: str = None,
+) -> bool:
+    """Round 11 — case-insensitive email-already-in-use check across
+    all vendor rows (including soft-deleted). When ``exclude_vendor_id``
+    is supplied, that vendor's own row is ignored — used by PATCH so a
+    no-op email update doesn't trip the check.
+    """
+    from ....infrastructure.db.models.vendor import VendorModel
+    from sqlalchemy import func
+
+    if not email:
+        return False
+    q = (
+        db.query(VendorModel.id)
+        .filter(func.lower(VendorModel.email) == email.lower())
+    )
+    if exclude_vendor_id is not None:
+        q = q.filter(VendorModel.id != exclude_vendor_id)
+    return q.first() is not None
+
+
 def _vendor_to_response(
     v,
     projects: List[Dict[str, Any]] | None = None,
@@ -347,6 +369,13 @@ def create_vendor(
         raise AlreadyExistsError(
             f"A vendor named '{data.name}' already exists."
         )
+    # Round 11 — email uniqueness across vendors. Same contact email
+    # cannot belong to two different organizations. Soft-deleted rows
+    # are checked too: tombstoned email is reserved (restore-aware).
+    if data.email and _vendor_email_taken(db, str(data.email)):
+        raise AlreadyExistsError(
+            f"A vendor with email '{data.email}' already exists."
+        )
     # Validate projectIds BEFORE inserting the vendor row so we don't
     # leave a half-committed vendor when an id is bad. ValidationError
     # bubbles up to a 422.
@@ -535,7 +564,15 @@ def update_vendor(
     if data.active is not None:
         m.active = data.active
     if data.email is not None:
-        m.email = str(data.email)
+        new_email = str(data.email)
+        # Round 11 — email uniqueness across vendors. Only check when
+        # the value is actually changing (no-op self-match exempt).
+        if (m.email or "").lower() != new_email.lower():
+            if _vendor_email_taken(db, new_email, exclude_vendor_id=m.id):
+                raise AlreadyExistsError(
+                    f"A vendor with email '{new_email}' already exists."
+                )
+        m.email = new_email
     if data.contactPerson is not None:
         m.contact_person = data.contactPerson
     if data.phoneNumber is not None:

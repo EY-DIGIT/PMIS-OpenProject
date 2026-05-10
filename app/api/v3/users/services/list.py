@@ -15,11 +15,15 @@ def list_users(
     status: Optional[str] = None,
     is_admin: bool = False,
     include_deleted: bool = False,
+    vendor_id_filter: Optional[str] = None,
+    exclude_admin_tier: bool = False,
 ) -> ServiceResult[PaginatedResult]:
     """List users with pagination, newest first.
 
-    Soft-deleted rows are hidden by default. Admin can request them via
-    ``include_deleted=True`` (e.g. for an audit view).
+    Mirror of user-mgmt's service. Round 7 added the vendor scope
+    filter; round 10 added admin-tier exclusion. Both default-off so
+    legacy callers see no behaviour change. The controller wires the
+    filters from caller context.
     """
     if page < 1:
         return ServiceResult.fail(
@@ -55,6 +59,8 @@ def list_users(
             limit=page_size,
             status=status,
             include_deleted=include_deleted,
+            vendor_id=vendor_id_filter,
+            exclude_admin_tier=exclude_admin_tier,
         )
         return ServiceResult.ok(PaginatedResult(
             items=users, total=total, page=page, page_size=page_size,

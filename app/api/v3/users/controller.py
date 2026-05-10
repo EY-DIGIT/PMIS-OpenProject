@@ -1,6 +1,8 @@
 """
 User controller - orchestrates requests and responses.
 """
+from typing import Optional
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -242,6 +244,25 @@ class UserController:
             JSONResponse
         """
         is_admin = getattr(request.state, "is_admin", False)
+        # Round 7 / round 10 mirror — non-admin callers must see only
+        # their own vendor's users AND must NOT see admin / super_admin
+        # candidates. The user-mgmt service has had this since round 7+10;
+        # round 10b mirrors it into the monolith's legacy ``GET /users``
+        # so deployments where the proxy isn't intercepting still apply
+        # the filters.
+        vendor_id_filter: Optional[str] = None
+        if not is_admin:
+            caller_id = get_current_user_id(request)
+            caller = (
+                UserRepository(db).get_by_id(caller_id)
+                if caller_id else None
+            )
+            if caller is not None and getattr(caller, "vendor_id", None):
+                vendor_id_filter = caller.vendor_id
+            else:
+                # Non-admin caller without a vendor mapping → empty
+                # listing (matches user-mgmt's sentinel behaviour).
+                vendor_id_filter = "__no_vendor_assigned__"
 
         result = list_users(
             db=db,
@@ -250,6 +271,8 @@ class UserController:
             status=query.status,
             is_admin=is_admin,
             include_deleted=getattr(query, "includeDeleted", False),
+            vendor_id_filter=vendor_id_filter,
+            exclude_admin_tier=not is_admin,
         )
 
         if result.is_success():

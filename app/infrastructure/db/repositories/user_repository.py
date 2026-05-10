@@ -39,6 +39,7 @@ def _utcnow() -> datetime:
 _HIDDEN_PROJECT_STATUSES = ("closed",)
 
 _ADMIN_ROLE_NAME = "admin"
+_SUPER_ADMIN_ROLE_NAME = "super_admin"
 
 
 def _user_holds_admin_role(db: Session, user_id: str) -> bool:
@@ -342,13 +343,46 @@ class UserRepository:
         status: Optional[str] = None,
         *,
         include_deleted: bool = False,
+        vendor_id: Optional[str] = None,
+        exclude_admin_tier: bool = False,
     ) -> Tuple[List[User], int]:
-        """List users — newest first, soft-deleted hidden by default."""
+        """List users — newest first, soft-deleted hidden by default.
+
+        Mirror of the user-mgmt repo's filter set so the monolith's
+        legacy ``GET /api/v3/users`` matches behaviour when the proxy
+        isn't intercepting. Round 7 added ``vendor_id`` (non-admin
+        callers see only their own vendor's users); round 10 added
+        ``exclude_admin_tier`` (non-admin callers don't see admin /
+        super_admin candidates in their User Mgmt list / dropdowns).
+        Both filters off-by-default so admin and legacy code paths
+        keep the unfiltered behaviour.
+        """
+        from ..models.user_role import UserRoleModel
+        from ..models.user_role_assignment import UserRoleAssignmentModel
         query = self.db.query(UserModel)
         if not include_deleted:
             query = query.filter(UserModel.deleted_at.is_(None))
         if status:
             query = query.filter(UserModel.status == status)
+        if vendor_id is not None:
+            query = query.filter(UserModel.vendor_id == vendor_id)
+        if exclude_admin_tier:
+            admin_tier_names = (_ADMIN_ROLE_NAME, _SUPER_ADMIN_ROLE_NAME)
+            legacy_holder = (
+                self.db.query(UserRoleModel.user_id)
+                .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+                .filter(UserRoleModel.user_id == UserModel.id)
+                .filter(RoleModel.name.in_(admin_tier_names))
+                .exists()
+            )
+            scoped_holder = (
+                self.db.query(UserRoleAssignmentModel.user_id)
+                .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+                .filter(UserRoleAssignmentModel.user_id == UserModel.id)
+                .filter(RoleModel.name.in_(admin_tier_names))
+                .exists()
+            )
+            query = query.filter(~legacy_holder).filter(~scoped_holder)
 
         total = query.count()
 
