@@ -250,6 +250,69 @@ class TestOrgAdminCanEditAllowedVendorFields:
         # name unchanged
         assert body["name"] == v.name
 
+    def test_user_assignments_always_emits_pa_pm_buckets_per_project(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Round 11d — every project owned by the vendor surfaces a
+        Project Admin AND a Project Member row in user_assignments,
+        even when no users hold that role yet. Closes the FE bug
+        where the PA bucket visually 'disappeared' after a PATCH that
+        only modified the PM row, because the response previously
+        omitted empty buckets."""
+        v = _make_vendor(db_session, "AlwaysEmit")
+        p = _make_project(db_session, "AlwaysEmitP", status="published")
+        _link_vendor_project(db_session, v, p)
+        pa = _make_user(db_session, "ae-pa", vendor_id=v.id)
+        _grant(db_session, pa, "project_admin", project_id=p.id)
+        # PM has zero users — the bucket should still surface.
+
+        resp = client.get(f"/api/v3/vendors/{v.id}", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        ua = [
+            u for u in resp.json()["data"]["user_assignments"]
+            if u["project_id"] == p.id
+        ]
+        roles = {u["role"]: len(u["user_ids"]) for u in ua}
+        assert "Project Admin" in roles
+        assert "Project Member" in roles
+        assert roles["Project Admin"] == 1
+        assert roles["Project Member"] == 0  # empty bucket but present
+
+    def test_user_vendor_id_set_when_newly_granted(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Round 11c — when a user is newly granted a project-tier
+        role via PATCH /vendors/{id} user_assignments, their
+        users.vendor_id is updated to the assigning vendor (if
+        currently NULL or different). Ensures downstream vendor-
+        scoped lookups (round-7 GET /users filter, Org Mgmt list)
+        find the user under the right vendor."""
+        v = _make_vendor(db_session, "BindV")
+        p = _make_project(db_session, "BindP", status="published")
+        _link_vendor_project(db_session, v, p)
+        # User created with NO vendor_id — would otherwise be invisible
+        # to OA's GET /users.
+        u = _make_user(db_session, "bindee", vendor_id=None)
+        assert u.vendor_id is None  # baseline
+
+        resp = client.patch(
+            f"/api/v3/vendors/{v.id}",
+            json={
+                "user_assignments": [{
+                    "project_id": p.id,
+                    "role": "project_member",
+                    "user_ids": [u.id],
+                }],
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+
+        # vendor_id has been set on the user record.
+        db_session.expire_all()
+        refreshed = db_session.query(UserModel).filter_by(id=u.id).one()
+        assert refreshed.vendor_id == v.id
+
     def test_user_assignments_response_includes_users_array(
         self, client, admin_user, admin_headers, db_session,
     ):

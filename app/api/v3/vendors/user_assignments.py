@@ -151,6 +151,9 @@ def apply_vendor_user_assignments(
     }
 
     # For each (project, role) tuple, diff existing-vs-desired.
+    # Track users who get a NEW assignment in this PATCH so we can
+    # update their users.vendor_id afterwards (round 11c).
+    newly_granted_user_ids: set = set()
     for (pid, role_name), wanted_users in desired.items():
         role_id = role_id_by_name.get(role_name)
         if role_id is None:
@@ -184,6 +187,25 @@ def apply_vendor_user_assignments(
                     organization_id=None,
                     created_by=actor_id,
                 ))
+                newly_granted_user_ids.add(uid)
+
+    # Round 11c — bind newly-granted users to this vendor when they
+    # don't already have a vendor mapping OR have a stale one. Tester
+    # flagged that users assigned via this matrix were appearing with
+    # no primary vendor (or a wrong one), which broke downstream
+    # vendor-scoped lookups (round-7 GET /users filter, the FE's
+    # Org Mgmt user list, etc.). Pre-existing assignments are left
+    # alone so a user who was already correctly bound stays bound.
+    if newly_granted_user_ids:
+        users_to_bind = (
+            db.query(UserModel)
+            .filter(UserModel.id.in_(newly_granted_user_ids))
+            .all()
+        )
+        for u in users_to_bind:
+            current = getattr(u, "vendor_id", None)
+            if current is None or current != vendor_id:
+                u.vendor_id = vendor_id
 
     db.flush()
 
@@ -244,15 +266,39 @@ def user_assignments_for_vendor(
             "email": email,
         })
 
-    return [
-        {
-            "project_id": pid,
-            "role": _NAME_TO_LABEL.get(role_name, role_name),
-            # ``user_ids`` kept for backwards-compat with the round-6
-            # wire shape. ``users`` is the new parallel-with-context
-            # array — same order, fully-hydrated per row.
-            "user_ids": [u["id"] for u in users],
-            "users": users,
-        }
-        for (pid, role_name), users in grouped.items()
-    ]
+    # Round 11d — always emit a row for every (project, role) combo
+    # the FE renders (Project Admin + Project Member) for every project
+    # owned by the vendor, even when no users hold that role yet.
+    # Tester observed that adding the first PM to a project visually
+    # "deleted" the PA row because the FE only rendered roles present
+    # in the response — and a project that previously had only PA rows
+    # would lose its bucket schema after a PATCH that only changed PM.
+    # Returning empty buckets keeps the FE state stable across edits.
+    # ``division_member`` is omitted from the always-emit set because
+    # the FE doesn't render it on the Project Mapping screen.
+    _ALWAYS_EMIT = ("project_admin", "project_member")
+    out: List[Dict[str, Any]] = []
+    for pid in sorted(project_ids):
+        for role_name in _ALWAYS_EMIT:
+            users = grouped.get((pid, role_name), [])
+            out.append({
+                "project_id": pid,
+                "role": _NAME_TO_LABEL.get(role_name, role_name),
+                # ``user_ids`` kept for backwards-compat with the round-6
+                # wire shape. ``users`` is the new parallel-with-context
+                # array — same order, fully-hydrated per row.
+                "user_ids": [u["id"] for u in users],
+                "users": users,
+            })
+    # Surface any division_member rows that DO have users (even though
+    # not auto-emitted when empty) so the legacy wire contract stays
+    # honoured for callers that do read DM assignments.
+    for (pid, role_name), users in grouped.items():
+        if role_name == "division_member" and users:
+            out.append({
+                "project_id": pid,
+                "role": _NAME_TO_LABEL.get(role_name, role_name),
+                "user_ids": [u["id"] for u in users],
+                "users": users,
+            })
+    return out
