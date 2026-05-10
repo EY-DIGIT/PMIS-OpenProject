@@ -435,6 +435,13 @@ def update_vendor(
     has_vendors_manage = Permission.VENDORS_MANAGE.value in held or "vendors:manage" in held
     has_rbac_assign = RBAC_ASSIGN in held
 
+    # Load the vendor up-front so the body-shape gate can short-circuit
+    # no-op fields (round 10b — see below).
+    repo = VendorRepository(db)
+    m = repo.get_model_by_id_or_code(vendor_id)
+    if m is None:
+        raise NotFoundError("Vendor not found.")
+
     # Doc 44 round 9 — tier-scoped body-shape gate. Determine the
     # widest set of fields the caller may legally mutate based on
     # their role; reject the request if the body asks for more.
@@ -460,17 +467,40 @@ def update_vendor(
         )
 
     if allowed_fields is not None:
-        excess = requested_fields - allowed_fields
+        # Doc 46 round 10b — FE round-trips the full vendor object on
+        # every PATCH (typical edit-form behaviour), which means the
+        # body always contains ``name`` / ``description`` / ``active``
+        # even when the user only edited Contact / Email / Mobile /
+        # Project Mapping. Filter out fields whose body value matches
+        # the current DB row before the allowlist check — those are
+        # no-ops and shouldn't trigger 403. Empty string vs None on
+        # the description field is treated as equivalent.
+        _SCALAR_FIELD_TO_ATTR = {
+            "name": "name",
+            "description": "description",
+            "active": "active",
+            "email": "email",
+            "contact_person": "contact_person",
+            "phone_number": "phone_number",
+        }
+        def _is_noop(field: str) -> bool:
+            attr = _SCALAR_FIELD_TO_ATTR.get(field)
+            if attr is None:
+                return False  # complex fields (project_ids / user_assignments) — let the apply layer decide
+            current = getattr(m, attr, None)
+            new = body_set.get(field)
+            if (current is None and new == "") or (current == "" and new is None):
+                return True
+            return current == new
+
+        no_ops = {f for f in requested_fields if _is_noop(f)}
+        effective_fields = requested_fields - no_ops
+        excess = effective_fields - allowed_fields
         if excess:
             raise AuthorizationError(
                 "Insufficient permissions to edit "
                 f"{', '.join(sorted(excess))}. Required: vendors:manage",
             )
-
-    repo = VendorRepository(db)
-    m = repo.get_model_by_id_or_code(vendor_id)
-    if m is None:
-        raise NotFoundError("Vendor not found.")
 
     # Doc 44 round 8 — vendor-scope guard for non-admin callers using
     # the user_assignments carve-out. Without ``vendors:manage`` the

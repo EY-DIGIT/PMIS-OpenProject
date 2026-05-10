@@ -197,8 +197,8 @@ class TestOrgAdminCanEditAllowedVendorFields:
         self, client, admin_user, db_session,
     ):
         """If the body mixes an allowed field (email) with a forbidden
-        field (name), the whole request is rejected — name still
-        requires vendors:manage."""
+        field (name) THAT DIFFERS FROM CURRENT, the whole request is
+        rejected — name still requires vendors:manage."""
         v = _make_vendor(db_session, "OA-MixedBody")
         oa = _make_user(db_session, "oa-mixed", vendor_id=v.id)
         _grant(db_session, oa, "org_admin", organization_id=v.id)
@@ -209,6 +209,66 @@ class TestOrgAdminCanEditAllowedVendorFields:
             headers=_headers(oa),
         )
         assert resp.status_code == 403, resp.text
+
+    def test_oa_full_roundtrip_body_with_unchanged_name_passes(
+        self, client, admin_user, db_session,
+    ):
+        """Doc 46 round 10b — the FE round-trips the entire vendor object
+        on PATCH (typical edit-form behaviour). When the body includes
+        ``name`` / ``description`` / ``active`` matching the current
+        state, those fields are no-ops and must NOT trigger 403. Only
+        actual mutations to forbidden fields are rejected."""
+        v = _make_vendor(db_session, "OA-FullRoundtrip")
+        # Anchor description to a known value so we can echo it.
+        v.description = "Original description"
+        v.active = True
+        db_session.commit()
+        db_session.refresh(v)
+
+        oa = _make_user(db_session, "oa-roundtrip", vendor_id=v.id)
+        _grant(db_session, oa, "org_admin", organization_id=v.id)
+
+        # Body includes every vendor field. name/description/active
+        # match current state (no-ops); contact_person / email /
+        # phone_number are actual edits in OA's allowlist.
+        resp = client.patch(
+            f"/api/v3/vendors/{v.id}",
+            json={
+                "name": v.name,                       # no-op
+                "description": v.description,        # no-op
+                "active": v.active,                  # no-op
+                "email": "updated@org.example",      # OA-allowed edit
+                "contact_person": "Updated Person",  # OA-allowed edit
+                "phone_number": "9999000099",        # OA-allowed edit
+            },
+            headers=_headers(oa),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        assert body["email"] == "updated@org.example"
+        assert body["contactPerson"] == "Updated Person"
+        # name unchanged
+        assert body["name"] == v.name
+
+    def test_oa_full_roundtrip_with_changed_name_still_rejected(
+        self, client, admin_user, db_session,
+    ):
+        """Sanity — the no-op tolerance only fires when the value
+        equals current. A genuine name change still 403s."""
+        v = _make_vendor(db_session, "OA-FullRoundtripChange")
+        oa = _make_user(db_session, "oa-roundtrip-2", vendor_id=v.id)
+        _grant(db_session, oa, "org_admin", organization_id=v.id)
+
+        resp = client.patch(
+            f"/api/v3/vendors/{v.id}",
+            json={
+                "name": "DifferentName",  # genuine change
+                "email": "ok@org.example",
+            },
+            headers=_headers(oa),
+        )
+        assert resp.status_code == 403, resp.text
+        assert "name" in resp.text.lower()
 
 
 # ---------------------------------------------------------------------------
