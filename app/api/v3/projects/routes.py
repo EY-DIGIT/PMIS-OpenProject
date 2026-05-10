@@ -275,3 +275,120 @@ def list_project_role_assignments(
         "projectName": project.name,
         "roles": list(buckets.values()),
     })
+
+
+@router.get(
+    "/{project_uuid}/assignable-users",
+    dependencies=[require_permission(PROJECT_MEMBERS_READ)],
+    summary="Users that can be assigned a Task / Sub-Task on this project",
+    description=(
+        "Round 11b: returns the union of (a) every user with a "
+        "project-tier role assignment on this project (project_admin, "
+        "project_member, division_member) AND (b) every user with an "
+        "org_admin role assignment on the project's owning vendor(s). "
+        "OAs are included so a project_admin can assign tasks up to an "
+        "org admin per spec. The set is de-duplicated by user id. "
+        "Each entry carries id / login / firstName / lastName / email / "
+        "orgRole so the FE picker can render names without a per-id "
+        "/users round-trip."
+    ),
+)
+def list_project_assignable_users(
+    project_uuid: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    from ....infrastructure.db.models.project_vendor import ProjectVendorModel
+
+    # Round-9b: round-trippable orgRole from the column when no role
+    # assignment matches. derive_org_role lives in user-mgmt — inline
+    # the simple per-user lookup here so the monolith doesn't depend
+    # on that helper.
+    _ORG_ROLE_PRIORITY = (
+        "super_admin", "admin", "org_admin",
+        "project_admin", "project_member",
+    )
+    def _derive(user_obj):
+        # Highest-tier role from any assignment row + fall back to
+        # users.org_role column (round 9b).
+        held = {n for (n,) in (
+            db.query(RoleModel.name)
+            .join(
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.role_id == RoleModel.id,
+            )
+            .filter(UserRoleAssignmentModel.user_id == user_obj.id)
+            .distinct().all()
+        )}
+        for tier in _ORG_ROLE_PRIORITY:
+            if tier in held:
+                return tier
+        col = getattr(user_obj, "org_role", None)
+        return col if col in _ORG_ROLE_PRIORITY else None
+
+    project = (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .first()
+    )
+    if project is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+
+    # (a) Users with a project-scoped role on this project.
+    project_scoped_rows = (
+        db.query(UserModel)
+        .join(
+            UserRoleAssignmentModel,
+            UserRoleAssignmentModel.user_id == UserModel.id,
+        )
+        .join(
+            RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id,
+        )
+        .filter(UserRoleAssignmentModel.project_id == project_uuid)
+        .filter(UserModel.deleted_at.is_(None))
+        .all()
+    )
+
+    # (b) Vendors that own this project → org_admin holders for those
+    #     vendor(s). Project may be linked to >1 vendor via project_vendors.
+    vendor_ids = [
+        row[0] for row in
+        db.query(ProjectVendorModel.vendor_id)
+        .filter(ProjectVendorModel.project_id == project_uuid)
+        .all()
+    ]
+    org_admin_rows: list = []
+    if vendor_ids:
+        org_admin_rows = (
+            db.query(UserModel)
+            .join(
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.user_id == UserModel.id,
+            )
+            .join(
+                RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id,
+            )
+            .filter(UserRoleAssignmentModel.organization_id.in_(vendor_ids))
+            .filter(RoleModel.name == "org_admin")
+            .filter(UserModel.deleted_at.is_(None))
+            .all()
+        )
+
+    # De-dup by user id; render with the round-9b orgRole projection.
+    seen: Dict[str, Dict[str, Any]] = {}
+    for u in list(project_scoped_rows) + list(org_admin_rows):
+        if u.id in seen:
+            continue
+        seen[u.id] = {
+            "id": u.id,
+            "login": u.login,
+            "email": u.email,
+            "firstName": u.first_name,
+            "lastName": u.last_name,
+            "orgRole": _derive(u),
+        }
+
+    return BaseController.ok(data={
+        "projectId": project_uuid,
+        "projectName": project.name,
+        "users": sorted(seen.values(), key=lambda x: (x["login"] or "")),
+    })
