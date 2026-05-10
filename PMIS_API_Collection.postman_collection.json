@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "ab558953-cdae-4159-8763-dfeb871efec5",
+    "_postman_id": "b5188a6c-669d-42bf-997e-0d6f352c2746",
     "name": "PMIS API",
     "description": "PMIS API. Some paths are proxied to standalone services when the relevant proxy flag is enabled \u2014 see the per-path description for the delegation target.\n\nAuto-generated from FastAPI OpenAPI by scripts/generate_postman_collection.py. Re-run that script after API changes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -8142,7 +8142,7 @@
           "response": []
         },
         {
-          "name": "Update a vendor (admin or org_admin for user_assignments only)",
+          "name": "Update a vendor (admin / org_admin / project_admin per body-shape gate)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -8176,7 +8176,7 @@
                 }
               ]
             },
-            "description": "Doc 44 round 8: body-shape-aware permission gate. Bodies that touch any vendor field (name, description, active, email, contactPerson, phoneNumber, projectIds) require ``vendors:manage`` (admin / super_admin only). Bodies that ONLY supply ``user_assignments`` may pass with ``rbac:assign`` (org_admin) \u2014 the per-(project, role) tuples are validated against the caller's scope by the existing ``apply_vendor_user_assignments`` helper.",
+            "description": "Doc 44 round 9: body-shape-aware permission gate, tier-scoped. Bodies that touch ``name``/``description``/``active`` require ``vendors:manage`` (admin / super_admin only). org_admin (with ``rbac:assign`` + same-vendor) may edit ``email`` / ``contact_person`` / ``phone_number`` / ``project_ids`` / ``user_assignments``. project_admin (with ``rbac:assign`` + same-vendor) may edit only ``user_assignments``. Per-(project, role) tuples in ``user_assignments`` are validated against the caller's scope by ``apply_vendor_user_assignments``.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"active\": false,\n  \"email\": \"user@example.com\",\n  \"contact_person\": \"\",\n  \"phone_number\": \"\",\n  \"project_ids\": [\n    \"\"\n  ],\n  \"user_assignments\": [\n    {\n      \"project_id\": \"\",\n      \"role\": \"\",\n      \"user_ids\": [\n        \"\"\n      ]\n    }\n  ]\n}",

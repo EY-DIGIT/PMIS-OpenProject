@@ -27,9 +27,14 @@ from ....core.errors import AlreadyExistsError, AuthorizationError, NotFoundErro
 from ....core.middleware.rbac import require_authenticated, require_permission
 from ....core.permissions import RBAC_ASSIGN
 from ....core.rbac import Permission
+from ....core.permissions import ORG_ADMIN_ROLE_NAME
 from ....infrastructure.db.models.project import ProjectModel
 from ....infrastructure.db.models.project_vendor import ProjectVendorModel
+from ....infrastructure.db.models.role import RoleModel
 from ....infrastructure.db.models.user import UserModel
+from ....infrastructure.db.models.user_role_assignment import (
+    UserRoleAssignmentModel,
+)
 from ....infrastructure.db.repositories.rbac_repository import RbacRepository
 from ....infrastructure.db.repositories.vendor_repository import VendorRepository
 from ....infrastructure.db.session import get_db
@@ -381,18 +386,40 @@ def create_vendor(
     )
 
 
+_OA_EDITABLE_FIELDS = frozenset({
+    # Doc 44 round 9 — fields an org_admin may edit on their own
+    # vendor without holding ``vendors:manage``. Spec:
+    #   "Org Admins should only be able to edit:
+    #    Contact Person, Email, Mobile Number, Project Mapping."
+    # plus the ``user_assignments`` matrix from round 6 — that's
+    # the FE Project Mapping → user-role surface.
+    "email", "contact_person", "phone_number",
+    "project_ids", "user_assignments",
+})
+
+_PA_EDITABLE_FIELDS = frozenset({
+    # Doc 44 round 9 — project_admin's vendor PATCH surface is
+    # strictly the user-role matrix on projects they administer.
+    # Spec: "Project Admins should only be able to manage Project
+    # Mapping for adding, editing, or deleting Project Members."
+    "user_assignments",
+})
+
+
 @router.patch(
     "/{vendor_id}",
     dependencies=[require_authenticated()],
-    summary="Update a vendor (admin or org_admin for user_assignments only)",
+    summary="Update a vendor (admin / org_admin / project_admin per body-shape gate)",
     description=(
-        "Doc 44 round 8: body-shape-aware permission gate. Bodies that "
-        "touch any vendor field (name, description, active, email, "
-        "contactPerson, phoneNumber, projectIds) require ``vendors:manage`` "
-        "(admin / super_admin only). Bodies that ONLY supply "
-        "``user_assignments`` may pass with ``rbac:assign`` (org_admin) — "
-        "the per-(project, role) tuples are validated against the caller's "
-        "scope by the existing ``apply_vendor_user_assignments`` helper."
+        "Doc 44 round 9: body-shape-aware permission gate, tier-scoped. "
+        "Bodies that touch ``name``/``description``/``active`` require "
+        "``vendors:manage`` (admin / super_admin only). org_admin (with "
+        "``rbac:assign`` + same-vendor) may edit ``email`` / ``contact_person`` "
+        "/ ``phone_number`` / ``project_ids`` / ``user_assignments``. "
+        "project_admin (with ``rbac:assign`` + same-vendor) may edit only "
+        "``user_assignments``. Per-(project, role) tuples in "
+        "``user_assignments`` are validated against the caller's scope "
+        "by ``apply_vendor_user_assignments``."
     ),
 )
 def update_vendor(
@@ -402,26 +429,42 @@ def update_vendor(
     db: Session = Depends(get_db),
 ) -> JSONResponse:
     """Path param accepts UUID or ``VN-...`` code (doc 25)."""
-    # Doc 44 round 8 — body-shape-aware perm split. Determine which
-    # fields the caller is actually trying to mutate (Pydantic
-    # exclude_unset semantics) and gate accordingly.
     body_set = data.model_dump(exclude_unset=True, by_alias=True)
-    user_assignments_only = (
-        "user_assignments" in body_set
-        and not (set(body_set.keys()) - {"user_assignments"})
-    )
+    requested_fields = set(body_set.keys())
     held = getattr(request.state, "user_permissions", set()) or set()
     has_vendors_manage = Permission.VENDORS_MANAGE.value in held or "vendors:manage" in held
     has_rbac_assign = RBAC_ASSIGN in held
-    if user_assignments_only:
-        if not (has_vendors_manage or has_rbac_assign):
-            raise AuthorizationError(
-                "Insufficient permissions. Required: vendors:manage or rbac:assign",
-            )
+
+    # Doc 44 round 9 — tier-scoped body-shape gate. Determine the
+    # widest set of fields the caller may legally mutate based on
+    # their role; reject the request if the body asks for more.
+    if has_vendors_manage:
+        allowed_fields = None  # admin tier — no field restrictions
+    elif has_rbac_assign:
+        caller_id = get_current_user_id(request)
+        caller_holds_org_admin = (
+            caller_id is not None
+            and db.query(UserRoleAssignmentModel)
+            .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+            .filter(UserRoleAssignmentModel.user_id == caller_id)
+            .filter(RoleModel.name == ORG_ADMIN_ROLE_NAME)
+            .first()
+            is not None
+        )
+        allowed_fields = (
+            _OA_EDITABLE_FIELDS if caller_holds_org_admin else _PA_EDITABLE_FIELDS
+        )
     else:
-        if not has_vendors_manage:
+        raise AuthorizationError(
+            "Insufficient permissions. Required: vendors:manage or rbac:assign",
+        )
+
+    if allowed_fields is not None:
+        excess = requested_fields - allowed_fields
+        if excess:
             raise AuthorizationError(
-                "Insufficient permissions. Required: vendors:manage",
+                "Insufficient permissions to edit "
+                f"{', '.join(sorted(excess))}. Required: vendors:manage",
             )
 
     repo = VendorRepository(db)
