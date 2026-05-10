@@ -98,6 +98,14 @@ class UserModel(Base):
     # leave the existing value alone unless the caller sends one.
     phone_number = Column(String(50), nullable=True)
 
+    # Doc 45 round 9b: stored copy of the user's intended orgRole tier
+    # (FE label). Mirror of the user-mgmt column. ``derive_org_role``
+    # falls back to it when no row in ``user_role_assignments`` matches
+    # — fixes orgRole=null when a project-tier user is created without
+    # project_ids. Authorization is still driven entirely by role
+    # assignments (this column grants nothing).
+    org_role = Column(String(50), nullable=True)
+
     # Doc 33 change 3: per-user 2FA opt-in. Default True (mandatory by
     # default per Q3a.4); admins can flip individual users to False via
     # PATCH /users/{id} when ``REQUIRE_2FA=true`` globally would be too
