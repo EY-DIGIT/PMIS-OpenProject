@@ -165,3 +165,35 @@ class TestProjectAssignableUsers:
         )
         ids = {u["id"] for u in resp.json()["data"]["users"]}
         assert admin_user_2.id not in ids
+
+    def test_admin_tier_user_with_project_assignment_also_excluded(
+        self, client, admin_user, admin_headers, db_session,
+    ):
+        """Round 11b hotfix — even if an admin-tier user ALSO holds a
+        project_admin assignment on this project (e.g. a PMIS Admin
+        was incidentally added as PA somewhere), they must still be
+        excluded from /assignable-users. Tester observed this leak
+        live on the deployed monolith."""
+        v = _vendor(db_session, "DualAdm")
+        p = _project(db_session, "DualAdmP")
+        _link(db_session, v, p)
+        u = _user(db_session, "dual-adm", vendor_id=v.id)
+        # admin globally (legacy table)
+        rid_admin = db_session.query(RoleModel).filter(
+            RoleModel.name == "admin"
+        ).one().id
+        from app.infrastructure.db.models.user_role import UserRoleModel
+        db_session.add(UserRoleModel(user_id=u.id, role_id=rid_admin))
+        # AND project_admin scoped to this project
+        _grant(db_session, u, "project_admin", project_id=p.id)
+        db_session.commit()
+
+        resp = client.get(
+            f"/api/v3/projects/{p.id}/assignable-users",
+            headers=admin_headers,
+        )
+        ids = {x["id"] for x in resp.json()["data"]["users"]}
+        assert u.id not in ids, (
+            "admin-tier user must be excluded from assignable-users "
+            "even when they also hold a project-tier assignment"
+        )

@@ -373,10 +373,37 @@ def list_project_assignable_users(
             .all()
         )
 
+    # Round 11b hotfix — exclude users who hold admin / super_admin
+    # in any form (legacy user_roles row OR scoped user_role_assignments
+    # global row). Spec (round 10): admin / super_admin must not appear
+    # in project pickers, even if they happen to also hold a project-
+    # tier assignment on this project. Tester observed an `admin`-tier
+    # entry in the response on the live server.
+    from ....infrastructure.db.models.user_role import UserRoleModel
+    admin_tier_user_ids = {
+        uid for (uid,) in (
+            db.query(UserRoleAssignmentModel.user_id)
+            .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+            .filter(RoleModel.name.in_(("admin", "super_admin")))
+            .filter(UserRoleAssignmentModel.organization_id.is_(None))
+            .filter(UserRoleAssignmentModel.project_id.is_(None))
+            .distinct().all()
+        )
+    } | {
+        uid for (uid,) in (
+            db.query(UserRoleModel.user_id)
+            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+            .filter(RoleModel.name.in_(("admin", "super_admin")))
+            .distinct().all()
+        )
+    }
+
     # De-dup by user id; render with the round-9b orgRole projection.
     seen: Dict[str, Dict[str, Any]] = {}
     for u in list(project_scoped_rows) + list(org_admin_rows):
         if u.id in seen:
+            continue
+        if u.id in admin_tier_user_ids:
             continue
         seen[u.id] = {
             "id": u.id,
