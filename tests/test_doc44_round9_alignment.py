@@ -250,6 +250,66 @@ class TestOrgAdminCanEditAllowedVendorFields:
         # name unchanged
         assert body["name"] == v.name
 
+    def test_pa_get_vendor_scopes_projects_and_user_assignments(
+        self, client, admin_user, db_session,
+    ):
+        """Round 12 — when a project_admin reads their own vendor, the
+        ``projects[]`` and ``user_assignments[]`` arrays are filtered
+        down to the project(s) the PA is actually assigned to. The
+        rest of the vendor's projects + cross-project assignments are
+        hidden. Closes the tester complaint where a PA mapped to one
+        project saw the full vendor view including out-of-scope
+        projects + members."""
+        v = _make_vendor(db_session, "PaScope")
+        # Two projects in the vendor; PA only on one of them.
+        p_assigned = _make_project(db_session, "pa-on", status="published")
+        p_other = _make_project(db_session, "pa-off", status="published")
+        for p in (p_assigned, p_other):
+            _link_vendor_project(db_session, v, p)
+        pa = _make_user(db_session, "pa-scope-caller", vendor_id=v.id)
+        # Other-project member to make sure the user_assignments
+        # response would NORMALLY surface them.
+        bystander = _make_user(db_session, "pa-scope-bystander", vendor_id=v.id)
+        _grant(db_session, pa, "project_admin", project_id=p_assigned.id)
+        _grant(db_session, bystander, "project_admin", project_id=p_other.id)
+
+        resp = client.get(
+            f"/api/v3/vendors/{v.id}", headers=_headers(pa),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+
+        # projects[] filtered to PA's assigned set.
+        pids = {p["id"] for p in data["projects"]}
+        assert pids == {p_assigned.id}, (
+            f"PA saw out-of-scope projects: {pids}"
+        )
+
+        # user_assignments[] only references PA's projects.
+        ua_pids = {u["project_id"] for u in data["user_assignments"]}
+        assert ua_pids.issubset({p_assigned.id}), (
+            f"PA saw cross-project user_assignments: {ua_pids - {p_assigned.id}}"
+        )
+
+    def test_oa_get_vendor_unaffected_by_pa_scope_filter(
+        self, client, admin_user, db_session,
+    ):
+        """Sanity — OA still sees the full vendor view (all projects +
+        all user_assignments). The round-12 PA scope only fires when
+        the caller doesn't hold org_admin in this vendor."""
+        v = _make_vendor(db_session, "OaUnchanged")
+        p1 = _make_project(db_session, "oa-p1", status="published")
+        p2 = _make_project(db_session, "oa-p2", status="published")
+        for p in (p1, p2):
+            _link_vendor_project(db_session, v, p)
+        oa = _make_user(db_session, "oa-unchanged", vendor_id=v.id)
+        _grant(db_session, oa, "org_admin", organization_id=v.id)
+
+        resp = client.get(f"/api/v3/vendors/{v.id}", headers=_headers(oa))
+        assert resp.status_code == 200, resp.text
+        pids = {p["id"] for p in resp.json()["data"]["projects"]}
+        assert pids == {p1.id, p2.id}
+
     def test_user_assignments_always_emits_pa_pm_buckets_per_project(
         self, client, admin_user, admin_headers, db_session,
     ):

@@ -342,6 +342,43 @@ def get_vendor(
 
     projects = _projects_by_vendor(db, [vendor.id]).get(vendor.id, [])
     assignments = user_assignments_for_vendor(db, vendor.id)
+
+    # Round 12 — project_admin scope. A PA who isn't also an OA / admin
+    # / super_admin sees only the projects in this vendor that they
+    # have a project_admin role assignment on, plus only the
+    # user_assignments rows for those projects. Tester reported PAs
+    # seeing the vendor's full project list + cross-project user
+    # assignments, which violates the project-scoped contract.
+    if caller_id is not None and not RbacRepository(db).user_has_admin_role(caller_id):
+        caller_holds_org_admin_here = (
+            db.query(UserRoleAssignmentModel)
+            .join(RoleModel, RoleModel.id == UserRoleAssignmentModel.role_id)
+            .filter(UserRoleAssignmentModel.user_id == caller_id)
+            .filter(RoleModel.name == "org_admin")
+            .filter(UserRoleAssignmentModel.organization_id == vendor.id)
+            .first()
+            is not None
+        )
+        if not caller_holds_org_admin_here:
+            # Caller is project_admin / project_member tier in this
+            # vendor (or has no assignment here). Find their assigned
+            # project_ids in THIS vendor and use that as the scope.
+            scoped_pids = {
+                pid for (pid,) in (
+                    db.query(UserRoleAssignmentModel.project_id)
+                    .filter(UserRoleAssignmentModel.user_id == caller_id)
+                    .filter(UserRoleAssignmentModel.project_id.isnot(None))
+                    .filter(UserRoleAssignmentModel.project_id.in_(
+                        [p["id"] for p in projects]
+                    ))
+                    .all()
+                )
+            }
+            projects = [p for p in projects if p["id"] in scoped_pids]
+            assignments = [
+                a for a in assignments if a["project_id"] in scoped_pids
+            ]
+
     return BaseController.stamp_deprecation(
         BaseController.ok(
             data=_vendor_to_response(vendor, projects, assignments),
