@@ -419,3 +419,77 @@ def list_project_assignable_users(
         "projectName": project.name,
         "users": sorted(seen.values(), key=lambda x: (x["login"] or "")),
     })
+
+
+@router.get(
+    "/{project_uuid}/audit-logs",
+    dependencies=[require_project_permission(PROJECTS_READ)],
+    summary="Project audit logs (doc 47)",
+    description=(
+        "Returns the recorded audit events for ``project_uuid`` — every "
+        "state change, M/A/T/S subtree edit, vendor/member association, "
+        "and dependency tweak that ``record_audit`` captured. Newest "
+        "row first. Each entry carries the snapshotted ``actorLogin`` / "
+        "``actorRole`` / ``projectName`` / ``projectStatus`` / ``owner`` "
+        "at write time so the log row stays meaningful even if the "
+        "source user / project rows later mutate. Authorization: any "
+        "caller with PROJECTS_READ on this project."
+    ),
+)
+def list_project_audit_logs(
+    project_uuid: str,
+    offset: int = Query(1, ge=1, description="Page number (1-indexed)."),
+    pageSize: int = Query(50, ge=1, le=200, description="Items per page (max 200)."),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    from ....infrastructure.db.repositories.project_audit_log_repository import (
+        ProjectAuditLogRepository,
+    )
+
+    project = (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .first()
+    )
+    if project is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+
+    db_offset = (offset - 1) * pageSize
+    rows, total = ProjectAuditLogRepository(db).list_for_project(
+        project_id=project_uuid,
+        offset=db_offset,
+        limit=pageSize,
+    )
+
+    def _to_response(entry) -> Dict[str, Any]:
+        d = entry.to_dict()
+        # Convert snake_case to the camelCase shape the FE expects.
+        return {
+            "id": d["id"],
+            "projectId": d["project_id"],
+            "projectName": d["project_name"],
+            "projectStatus": d["project_status"],
+            "owner": d["owner"],
+            "actorId": d["actor_id"],
+            "actorLogin": d["actor_login"],
+            "actorRole": d["actor_role"],
+            "action": d["action"],
+            "before": d["before"],
+            "after": d["after"],
+            "createdAt": d["created_at"],
+        }
+
+    return BaseController.ok(data={
+        "_type": "Collection",
+        "_links": {
+            "self": {
+                "href": f"/api/v3/projects/{project_uuid}/audit-logs"
+                        f"?offset={offset}&pageSize={pageSize}"
+            },
+        },
+        "total": total,
+        "count": len(rows),
+        "offset": offset,
+        "pageSize": pageSize,
+        "_embedded": {"elements": [_to_response(r) for r in rows]},
+    })

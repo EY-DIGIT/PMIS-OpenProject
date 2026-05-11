@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from .....domain.projects.project import Project
+from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.models.user import UserModel
 from .....infrastructure.db.repositories.project_audit_log_repository import (
     ProjectAuditLogRepository,
 )
@@ -77,6 +79,50 @@ def project_snapshot(project: Project) -> Dict[str, Any]:
     }
 
 
+def _resolve_actor_login(db: Session, actor_id: Optional[str]) -> str:
+    """Look up the user's login or fall back to 'system' for unauth actions."""
+    if not actor_id:
+        return "system"
+    row = (
+        db.query(UserModel.login)
+        .filter(UserModel.id == actor_id)
+        .first()
+    )
+    return row[0] if row else "system"
+
+
+def _resolve_project_snapshot_fields(
+    db: Session, project_id: str
+) -> Dict[str, str]:
+    """Snapshot name / status / owner from the project row at write time.
+
+    These get persisted on the audit row so the log stays meaningful
+    even if the project is later renamed, closed, or has its owner
+    flipped. Returns '(unknown)' for missing values so the NOT NULL
+    columns are always populated.
+    """
+    row = (
+        db.query(
+            ProjectModel.name,
+            ProjectModel.status,
+            ProjectModel.owner,
+        )
+        .filter(ProjectModel.id == project_id)
+        .first()
+    )
+    if row is None:
+        return {
+            "project_name": "(unknown)",
+            "project_status": "(unknown)",
+            "owner": "(unknown)",
+        }
+    return {
+        "project_name": row[0] or "(unknown)",
+        "project_status": row[1] or "(unknown)",
+        "owner": row[2] or "(unknown)",
+    }
+
+
 def record_audit(
     db: Session,
     project_id: str,
@@ -84,11 +130,27 @@ def record_audit(
     action: str,
     before: Optional[Dict[str, Any]] = None,
     after: Optional[Dict[str, Any]] = None,
+    actor_role: Optional[str] = None,
 ) -> None:
+    """Persist one audit log row.
+
+    Doc 47: in addition to the original (project_id, actor_id, action,
+    before, after) tuple, the row now carries denormalized snapshots
+    of the project's name/status/owner and the actor's login —
+    captured at write time so the log row stays correct even if those
+    source rows mutate afterwards. All four are NOT NULL on the table;
+    we resolve them here so call sites don't have to know.
+    """
+    proj_fields = _resolve_project_snapshot_fields(db, project_id)
     ProjectAuditLogRepository(db).add(
         project_id=project_id,
         actor_id=actor_id,
         action=action,
         before=before,
         after=after,
+        actor_role=actor_role or "system",
+        actor_login=_resolve_actor_login(db, actor_id),
+        project_name=proj_fields["project_name"],
+        project_status=proj_fields["project_status"],
+        owner=proj_fields["owner"],
     )
