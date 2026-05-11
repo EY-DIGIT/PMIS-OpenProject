@@ -30,6 +30,7 @@ class ProjectAuditLogRepository:
             owner=getattr(model, "owner", None),
             actor_id=model.actor_id,
             actor_login=getattr(model, "actor_login", None),
+            actor_code=getattr(model, "actor_code", None),
             actor_role=getattr(model, "actor_role", None),
             action=model.action,
             before=model.before,
@@ -46,6 +47,7 @@ class ProjectAuditLogRepository:
         after: Optional[Dict[str, Any]] = None,
         actor_role: Optional[str] = None,
         actor_login: Optional[str] = None,
+        actor_code: Optional[str] = None,
         project_name: Optional[str] = None,
         project_status: Optional[str] = None,
         owner: Optional[str] = None,
@@ -61,10 +63,14 @@ class ProjectAuditLogRepository:
         always be populated, even for legacy direct callers that pre-
         dated doc 47.
         """
-        if actor_login is None or project_name is None or project_status is None or owner is None:
+        if (actor_login is None or actor_code is None
+                or project_name is None or project_status is None
+                or owner is None):
             resolved = self._resolve_denormalized(project_id, actor_id)
             if actor_login is None:
                 actor_login = resolved.get("actor_login") or "system"
+            if actor_code is None:
+                actor_code = resolved.get("actor_code") or "system"
             if project_name is None:
                 project_name = resolved.get("project_name") or "(unknown)"
             if project_status is None:
@@ -81,6 +87,7 @@ class ProjectAuditLogRepository:
             owner=owner,
             actor_id=actor_id,
             actor_login=actor_login,
+            actor_code=actor_code,
             actor_role=actor_role,
             action=action,
             before=before,
@@ -104,6 +111,7 @@ class ProjectAuditLogRepository:
             "project_status": None,
             "owner": None,
             "actor_login": None,
+            "actor_code": None,
         }
         if project_id:
             row = (
@@ -121,12 +129,13 @@ class ProjectAuditLogRepository:
                 out["owner"] = row[2]
         if actor_id:
             row = (
-                self.db.query(UserModel.login)
+                self.db.query(UserModel.login, UserModel.user_code)
                 .filter(UserModel.id == actor_id)
                 .first()
             )
             if row is not None:
                 out["actor_login"] = row[0]
+                out["actor_code"] = row[1]
         return out
 
     def list_for_project(

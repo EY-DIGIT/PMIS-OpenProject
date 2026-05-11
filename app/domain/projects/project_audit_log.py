@@ -23,6 +23,7 @@ class ProjectAuditLog:
     # time. Optional on the dataclass so older test fixtures keep
     # compiling; the persistence layer guarantees them NOT NULL.
     actor_login: Optional[str] = None
+    actor_code: Optional[str] = None
     project_name: Optional[str] = None
     project_status: Optional[str] = None
     owner: Optional[str] = None
@@ -36,6 +37,7 @@ class ProjectAuditLog:
             "owner": self.owner,
             "actor_id": self.actor_id,
             "actor_login": self.actor_login,
+            "actor_code": self.actor_code,
             "actor_role": self.actor_role,
             "action": self.action,
             "before": self.before,

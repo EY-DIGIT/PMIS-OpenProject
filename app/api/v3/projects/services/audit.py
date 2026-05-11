@@ -79,16 +79,22 @@ def project_snapshot(project: Project) -> Dict[str, Any]:
     }
 
 
-def _resolve_actor_login(db: Session, actor_id: Optional[str]) -> str:
-    """Look up the user's login or fall back to 'system' for unauth actions."""
+def _resolve_actor_login(db: Session, actor_id: Optional[str]) -> Dict[str, str]:
+    """Look up the user's login + user_code for snapshotting.
+
+    Returns a two-key dict. For unauth/system actions both fall back
+    to 'system'.
+    """
     if not actor_id:
-        return "system"
+        return {"login": "system", "user_code": "system"}
     row = (
-        db.query(UserModel.login)
+        db.query(UserModel.login, UserModel.user_code)
         .filter(UserModel.id == actor_id)
         .first()
     )
-    return row[0] if row else "system"
+    if not row:
+        return {"login": "system", "user_code": "system"}
+    return {"login": row[0] or "system", "user_code": row[1] or "system"}
 
 
 def _resolve_project_snapshot_fields(
@@ -142,6 +148,7 @@ def record_audit(
     we resolve them here so call sites don't have to know.
     """
     proj_fields = _resolve_project_snapshot_fields(db, project_id)
+    actor_fields = _resolve_actor_login(db, actor_id)
     ProjectAuditLogRepository(db).add(
         project_id=project_id,
         actor_id=actor_id,
@@ -149,7 +156,8 @@ def record_audit(
         before=before,
         after=after,
         actor_role=actor_role or "system",
-        actor_login=_resolve_actor_login(db, actor_id),
+        actor_login=actor_fields["login"],
+        actor_code=actor_fields["user_code"],
         project_name=proj_fields["project_name"],
         project_status=proj_fields["project_status"],
         owner=proj_fields["owner"],

@@ -577,6 +577,7 @@ def list_project_audit_logs(
         return {
             "id": d["id"],
             "actorId": d["actor_id"],
+            "actorCode": d["actor_code"],
             "actorLogin": d["actor_login"],
             "actorRole": d["actor_role"],
             "action": d["action"],

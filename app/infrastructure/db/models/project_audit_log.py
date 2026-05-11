@@ -46,6 +46,10 @@ class ProjectAuditLogModel(Base):
     # Doc 47: actor_login is the snapshotted username at write time.
     # NOT NULL — for system actions the writer passes 'system'.
     actor_login = Column(String(50), nullable=False, index=True)
+    # Doc 47: actor_code mirrors users.user_code (e.g. US-CHIN-...).
+    # Snapshotted at write time + NOT NULL with 'system' fallback for
+    # actions where there's no real user (boot seeds, jobs).
+    actor_code = Column(String(40), nullable=False)
     # Doc 47: actor_role flipped to NOT NULL with 'system' fallback so
     # every row identifies the role bucket of the actor.
     actor_role = Column(String(50), nullable=False, index=True)
