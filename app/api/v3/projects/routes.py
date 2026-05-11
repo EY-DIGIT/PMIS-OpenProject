@@ -463,13 +463,12 @@ def list_project_audit_logs(
 
     def _to_response(entry) -> Dict[str, Any]:
         d = entry.to_dict()
-        # Convert snake_case to the camelCase shape the FE expects.
+        # Per-entry payload — only the audit-event-specific fields.
+        # Project identity (id / code / name / status / owner) is the
+        # same for every row in this collection so it lives at the
+        # top-level ``project`` key instead of being repeated.
         return {
             "id": d["id"],
-            "projectId": d["project_id"],
-            "projectName": d["project_name"],
-            "projectStatus": d["project_status"],
-            "owner": d["owner"],
             "actorId": d["actor_id"],
             "actorLogin": d["actor_login"],
             "actorRole": d["actor_role"],
@@ -486,6 +485,13 @@ def list_project_audit_logs(
                 "href": f"/api/v3/projects/{project_uuid}/audit-logs"
                         f"?offset={offset}&pageSize={pageSize}"
             },
+        },
+        "project": {
+            "projectId": project.id,
+            "projectCode": project.project_code,
+            "projectName": project.name,
+            "projectStatus": project.status,
+            "owner": project.owner,
         },
         "total": total,
         "count": len(rows),
