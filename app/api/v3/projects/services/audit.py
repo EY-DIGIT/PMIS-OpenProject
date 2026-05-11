@@ -11,9 +11,26 @@ from sqlalchemy.orm import Session
 
 from .....domain.projects.project import Project
 from .....infrastructure.db.models.project import ProjectModel
+from .....infrastructure.db.models.role import RoleModel
 from .....infrastructure.db.models.user import UserModel
+from .....infrastructure.db.models.user_role_assignment import (
+    UserRoleAssignmentModel,
+)
 from .....infrastructure.db.repositories.project_audit_log_repository import (
     ProjectAuditLogRepository,
+)
+
+
+# Highest-tier wins. Mirrors the priority list used by
+# /api/v3/projects/{id}/assignable-users so the audit role bucket is
+# consistent with what the FE picker shows for the same user.
+_ROLE_PRIORITY = (
+    "super_admin",
+    "admin",
+    "org_admin",
+    "project_admin",
+    "project_member",
+    "division_member",
 )
 
 
@@ -97,6 +114,58 @@ def _resolve_actor_login(db: Session, actor_id: Optional[str]) -> Dict[str, str]
     return {"login": row[0] or "system", "user_code": row[1] or "system"}
 
 
+def _resolve_actor_role(db: Session, actor_id: Optional[str]) -> str:
+    """Derive the role bucket the actor currently holds.
+
+    Mirrors the same logic the /projects/{id}/assignable-users endpoint
+    uses: pick the highest tier in :data:`_ROLE_PRIORITY` that appears
+    in the user's ``user_role_assignments`` rows; fall back to the
+    denormalized ``users.org_role`` column (round 9b); fall back to
+    ``'user'`` for an authenticated user with no role grants at all;
+    only return ``'system'`` when there's literally no actor.
+
+    Resolution happens at audit-write time, which captures the user's
+    effective role bucket inside the same transaction as the change
+    being audited. If you need request-time fidelity instead (e.g.
+    capture the role the auth middleware actually granted for THIS
+    request rather than the user's current grants), pass
+    ``actor_role`` explicitly into :func:`record_audit` from the
+    handler.
+    """
+    if not actor_id:
+        return "system"
+
+    # 1) Highest-tier scoped role assignment.
+    held = {
+        n for (n,) in (
+            db.query(RoleModel.name)
+            .join(
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.role_id == RoleModel.id,
+            )
+            .filter(UserRoleAssignmentModel.user_id == actor_id)
+            .distinct()
+            .all()
+        )
+    }
+    for tier in _ROLE_PRIORITY:
+        if tier in held:
+            return tier
+
+    # 2) Round-9b denormalized column on users.
+    org_role = (
+        db.query(UserModel.org_role)
+        .filter(UserModel.id == actor_id)
+        .scalar()
+    )
+    if org_role and org_role in _ROLE_PRIORITY:
+        return org_role
+
+    # 3) Authenticated, but no role bucket on file — distinguish from
+    #    system actions so the audit reader can tell them apart.
+    return "user"
+
+
 def _resolve_project_snapshot_fields(
     db: Session, project_id: str
 ) -> Dict[str, str]:
@@ -149,13 +218,17 @@ def record_audit(
     """
     proj_fields = _resolve_project_snapshot_fields(db, project_id)
     actor_fields = _resolve_actor_login(db, actor_id)
+    # actor_role: callers can pass it explicitly (request-time role
+    # bucket); otherwise we derive at audit-write time from the user's
+    # role assignments. 'system' is reserved for actor_id=None.
+    resolved_role = actor_role if actor_role else _resolve_actor_role(db, actor_id)
     ProjectAuditLogRepository(db).add(
         project_id=project_id,
         actor_id=actor_id,
         action=action,
         before=before,
         after=after,
-        actor_role=actor_role or "system",
+        actor_role=resolved_role,
         actor_login=actor_fields["login"],
         actor_code=actor_fields["user_code"],
         project_name=proj_fields["project_name"],
