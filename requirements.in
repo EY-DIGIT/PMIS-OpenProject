@@ -1,0 +1,10 @@
+fastapi[standard]
+# uvicorn[standard]==0.27.0
+sqlalchemy
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[argon2]
+python-multipart
+email-validator
+pytest

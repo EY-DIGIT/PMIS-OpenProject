@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pmis-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ritamhudait/pmic-backend:${IMAGE_TAG}
+    container_name: pmis-backend
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ATTACHMENTS_STORAGE_BASE_PATH: ${ATTACHMENTS_STORAGE_BASE_PATH}
+      ATTACHMENTS_NFS_SERVER: ${ATTACHMENTS_NFS_SERVER}
+      ATTACHMENTS_NFS_EXPORT: ${ATTACHMENTS_NFS_EXPORT}
+      ATTACHMENTS_MAX_BYTES: ${ATTACHMENTS_MAX_BYTES}
+      ATTACHMENTS_ALLOWED_EXTENSIONS: ${ATTACHMENTS_ALLOWED_EXTENSIONS}
+      ATTACHMENTS_SUBDIR_STRATEGY: ${ATTACHMENTS_SUBDIR_STRATEGY}
+      ATTACHMENTS_RETENTION_DAYS: ${ATTACHMENTS_RETENTION_DAYS}
+      ATTACHMENTS_ON_UNAVAILABLE: ${ATTACHMENTS_ON_UNAVAILABLE}
+    volumes:
+      - /mnt/pmis_files:/mnt/pmis_files:rw
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
