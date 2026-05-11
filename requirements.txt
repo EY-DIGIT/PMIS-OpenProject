@@ -187,3 +187,9 @@ websockets==16.0
 
 psycopg2-binary==2.9.9
 alembic==1.18.4
+
+# Content-type sniffing for file uploads (magic-byte based). Pure-Python,
+# no libmagic system dependency. Used by app/shared/file_signature.py to
+# reject files whose binary content doesn't match their declared
+# extension — security guard against ``evil.exe → evil.pdf`` disguises.
+filetype==1.2.0

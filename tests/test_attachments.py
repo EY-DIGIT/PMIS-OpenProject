@@ -28,6 +28,9 @@ from app.infrastructure.storage.file_storage import FileStorage
 from app.infrastructure.storage import reset_file_client_for_tests
 
 
+_PDF_BYTES = b"%PDF-1.4 test"  # valid PDF magic for content-sniff check
+
+
 # ---------------------------------------------------------------------------
 # Shared fixtures — temp storage + sample milestone target
 # ---------------------------------------------------------------------------
@@ -104,7 +107,7 @@ class TestUploadAttachment:
         resp = client.post(
             f"/api/v3/milestones/{uuid4()}/attachments",
             headers=admin_headers,
-            files={"file": ("x.pdf", b"ok", "application/pdf")},
+            files={"file": ("x.pdf", _PDF_BYTES, "application/pdf")},
         )
         assert resp.status_code == 404
 
@@ -122,7 +125,7 @@ class TestUploadAttachment:
     def test_upload_unauthenticated(self, client, sample_milestone, temp_storage):
         resp = client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
-            files={"file": ("a.pdf", b"x", "application/pdf")},
+            files={"file": ("a.pdf", _PDF_BYTES, "application/pdf")},
         )
         assert resp.status_code == 401
 
@@ -152,7 +155,7 @@ class TestListStandaloneAttachments:
         client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
-            files={"file": ("standalone.pdf", b"a", "application/pdf")},
+            files={"file": ("standalone.pdf", _PDF_BYTES, "application/pdf")},
         )
         # Post a comment WITH a file (body present + files): goes into
         # the same comments table but with body, so it's filtered out
@@ -161,7 +164,7 @@ class TestListStandaloneAttachments:
             f"/api/v3/milestones/{sample_milestone.id}/comments",
             headers=admin_headers,
             data={"body": "with file"},
-            files=[("files", ("via_comment.pdf", b"b", "application/pdf"))],
+            files=[("files", ("via_comment.pdf", _PDF_BYTES, "application/pdf"))],
         )
         resp = client.get(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
@@ -203,7 +206,7 @@ class TestDownloadEndpointRemoved:
         up = client.post(
             f"/api/v3/milestones/{sample_milestone.id}/attachments",
             headers=admin_headers,
-            files={"file": ("hello.pdf", b"hello world", "application/pdf")},
+            files={"file": ("hello.pdf", _PDF_BYTES, "application/pdf")},
         )
         url = up.json()["data"]["attachments"][0]["url"]
         # The URL is a relative storage_key in the local-fallback case
@@ -215,7 +218,7 @@ class TestDownloadEndpointRemoved:
             fetch_url = url
         resp = client.get(fetch_url)
         assert resp.status_code == 200
-        assert resp.content == b"hello world"
+        assert resp.content == _PDF_BYTES
 
 
 # ===========================================================================
@@ -230,7 +233,7 @@ class TestDeleteAttachment:
         r = client.post(
             f"/api/v3/milestones/{milestone_id}/attachments",
             headers=headers,
-            files={"file": ("f.pdf", b"x", "application/pdf")},
+            files={"file": ("f.pdf", _PDF_BYTES, "application/pdf")},
         )
         assert r.status_code == 201
         return r.json()["data"]["id"]
