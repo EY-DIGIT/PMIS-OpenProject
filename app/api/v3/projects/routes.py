@@ -67,6 +67,88 @@ router = APIRouter(prefix="/projects", tags=["projects"])
         "``GET /projects/{id}/attachments``."
     ),
     status_code=201,
+    # Route signature is ``Request`` (so we can dispatch on Content-Type),
+    # which means FastAPI can't auto-generate the request-body OpenAPI
+    # schema. Declare it explicitly so Swagger UI renders body input
+    # fields for both shapes. JSON schema comes from the Pydantic model
+    # so Swagger stays in sync with the validators.
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": ProjectCreateRequest.model_json_schema(
+                        by_alias=True,
+                    ),
+                },
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["name"],
+                        "properties": {
+                            "name": {
+                                "type": "string", "minLength": 1, "maxLength": 255,
+                            },
+                            "description": {
+                                "type": "string", "maxLength": 5000,
+                            },
+                            "statusExplanation": {
+                                "type": "string", "maxLength": 5000,
+                            },
+                            "parentId": {
+                                "type": "string",
+                                "description": "Parent project UUID (optional).",
+                            },
+                            "status": {
+                                "type": "string",
+                                "description": "Project lifecycle status (new/draft/published/closed).",
+                            },
+                            "owner": {
+                                "type": "string",
+                                "description": "Division code: tmd1 / tmd2 / others.",
+                            },
+                            "ownerOther": {
+                                "type": "string",
+                                "description": (
+                                    "Required (non-empty) when ``owner == 'others'``. "
+                                    "Omit / null for other owner values."
+                                ),
+                            },
+                            "vendorIds": {
+                                "type": "string",
+                                "description": (
+                                    "JSON-encoded array of vendor UUIDs or vendor codes "
+                                    "(e.g. ``[\"VN-ACME-...\"]``). Multipart can't carry "
+                                    "typed arrays natively so the FE JSON-encodes them."
+                                ),
+                            },
+                            "startDate": {
+                                "type": "string", "format": "date-time",
+                                "description": "ISO 8601, e.g. 2026-07-01T00:00:00+05:30",
+                            },
+                            "endDate": {
+                                "type": "string", "format": "date-time",
+                            },
+                            "files": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": (
+                                    "Optional file uploads. Each file is stored as a "
+                                    "comment row with ``body=NULL`` and "
+                                    "``target_kind=\"project\"``. Allowed extensions "
+                                    "and per-file size cap apply (see "
+                                    "ATTACHMENTS_ALLOWED_EXTENSIONS, "
+                                    "ATTACHMENTS_MAX_BYTES). Disguised binaries "
+                                    "(e.g. .exe renamed to .pdf) are rejected by the "
+                                    "magic-byte content sniff."
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
 )
 async def create_project(
     request: Request,
