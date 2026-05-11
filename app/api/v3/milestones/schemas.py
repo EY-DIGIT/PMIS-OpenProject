@@ -78,9 +78,12 @@ class MilestoneCreateRequest(BaseModel):
     @field_validator("priority", mode="before")
     @classmethod
     def _normalize_priority(cls, v):
-        # Lowercase + strip; live catalog validation in the service layer.
+        # Uppercase + strip; live catalog validation in the service
+        # layer. Persisted canonical form is UPPERCASE (P1/P2/P3) —
+        # lowercase input is accepted for back-compat and uppercased
+        # here before storage.
         if isinstance(v, str):
-            v = v.strip().lower()
+            v = v.strip().upper()
         return v
 
 
@@ -132,7 +135,7 @@ class MilestoneUpdateRequest(BaseModel):
         if v is None:
             return v
         if isinstance(v, str):
-            v = v.strip().lower()
+            v = v.strip().upper()
         return v
 
 

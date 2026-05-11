@@ -5,10 +5,10 @@ This file extends the same coverage to M/T/S/nested-S:
 
   - REQUIRED on create at all four levels (omission → 422)
   - validates against the live priorities catalog (unknown → 422)
-  - admin-added codes (e.g. p4) immediately accepted at every level
+  - admin-added codes (e.g. P4) immediately accepted at every level
   - PATCH /{kind}/{id} updates priority independently
-  - the four levels are INDEPENDENT — a milestone with priority p1
-    can have an activity p2, task p3, subtask p1, nested subtask p2,
+  - the four levels are INDEPENDENT — a milestone with priority P1
+    can have an activity P2, task P3, subtask P1, nested subtask P2,
     and none of them constrain each other (no parent-child rule)
   - tree endpoint surfaces priority on every node (M/A/T/S/nested-S)
 """
@@ -43,7 +43,7 @@ def _setup(client, admin_headers):
     return pid, vid
 
 
-def _make_milestone(client, headers, pid, *, priority="p1", name="M1"):
+def _make_milestone(client, headers, pid, *, priority="P1", name="M1"):
     return client.post(
         f"/api/v3/projects/{pid}/milestones/create",
         headers=headers,
@@ -55,7 +55,7 @@ def _make_milestone(client, headers, pid, *, priority="p1", name="M1"):
     )
 
 
-def _make_activity(client, headers, mid, vid, *, priority="p1", name="A1"):
+def _make_activity(client, headers, mid, vid, *, priority="P1", name="A1"):
     return client.post(
         f"/api/v3/milestones/{mid}/activities/create",
         headers=headers,
@@ -75,7 +75,7 @@ def _publish(client, headers, pid):
     assert pub.status_code in (200, 201), pub.text
 
 
-def _make_task(client, headers, aid, *, priority="p1", name="T1"):
+def _make_task(client, headers, aid, *, priority="P1", name="T1"):
     return client.post(
         f"/api/v3/activities/{aid}/tasks/create",
         headers=headers,
@@ -87,7 +87,7 @@ def _make_task(client, headers, aid, *, priority="p1", name="T1"):
     )
 
 
-def _make_subtask(client, headers, tid, *, priority="p1", name="S1"):
+def _make_subtask(client, headers, tid, *, priority="P1", name="S1"):
     return client.post(
         f"/api/v3/tasks/{tid}/subtasks/create",
         headers=headers,
@@ -99,7 +99,7 @@ def _make_subtask(client, headers, tid, *, priority="p1", name="S1"):
     )
 
 
-def _make_nested_subtask(client, headers, sid, *, priority="p1", name="S1.1"):
+def _make_nested_subtask(client, headers, sid, *, priority="P1", name="S1.1"):
     return client.post(
         f"/api/v3/subtasks/{sid}/subtasks/create",
         headers=headers,
@@ -219,30 +219,30 @@ class TestCatalogValidation:
         rv = client.post(
             "/api/v3/master/priorities/create",
             headers=admin_headers,
-            json={"code": "p9", "name": "Critical", "description": "test"},
+            json={"code": "P9", "name": "Critical", "description": "test"},
         )
         assert rv.status_code in (200, 201), rv.text
 
         pid, vid = _setup(client, admin_headers)
-        m = _make_milestone(client, admin_headers, pid, priority="p9").json()["data"]
-        assert m["priority"] == "p9"
+        m = _make_milestone(client, admin_headers, pid, priority="P9").json()["data"]
+        assert m["priority"] == "P9"
         a = _make_activity(
-            client, admin_headers, m["id"], vid, priority="p9",
+            client, admin_headers, m["id"], vid, priority="P9",
         ).json()["data"]
-        assert a["priority"] == "p9"
+        assert a["priority"] == "P9"
         _publish(client, admin_headers, pid)
         t = _make_task(
-            client, admin_headers, a["id"], priority="p9",
+            client, admin_headers, a["id"], priority="P9",
         ).json()["data"]
-        assert t["priority"] == "p9"
+        assert t["priority"] == "P9"
         s = _make_subtask(
-            client, admin_headers, t["id"], priority="p9",
+            client, admin_headers, t["id"], priority="P9",
         ).json()["data"]
-        assert s["priority"] == "p9"
+        assert s["priority"] == "P9"
         n = _make_nested_subtask(
-            client, admin_headers, s["id"], priority="p9",
+            client, admin_headers, s["id"], priority="P9",
         ).json()["data"]
-        assert n["priority"] == "p9"
+        assert n["priority"] == "P9"
 
 
 # ---------------------------------------------------------------------------
@@ -255,19 +255,19 @@ class TestIndependence:
         Build a hierarchy where every level has a different priority and
         confirm all 5 round-trip correctly."""
         pid, vid = _setup(client, admin_headers)
-        m = _make_milestone(client, admin_headers, pid, priority="p1").json()["data"]
-        a = _make_activity(client, admin_headers, m["id"], vid, priority="p2").json()["data"]
+        m = _make_milestone(client, admin_headers, pid, priority="P1").json()["data"]
+        a = _make_activity(client, admin_headers, m["id"], vid, priority="P2").json()["data"]
         _publish(client, admin_headers, pid)
-        t = _make_task(client, admin_headers, a["id"], priority="p3").json()["data"]
-        s = _make_subtask(client, admin_headers, t["id"], priority="p1").json()["data"]
-        n = _make_nested_subtask(client, admin_headers, s["id"], priority="p2").json()["data"]
+        t = _make_task(client, admin_headers, a["id"], priority="P3").json()["data"]
+        s = _make_subtask(client, admin_headers, t["id"], priority="P1").json()["data"]
+        n = _make_nested_subtask(client, admin_headers, s["id"], priority="P2").json()["data"]
 
         # Each level kept its own priority.
-        assert m["priority"] == "p1"
-        assert a["priority"] == "p2"
-        assert t["priority"] == "p3"
-        assert s["priority"] == "p1"
-        assert n["priority"] == "p2"
+        assert m["priority"] == "P1"
+        assert a["priority"] == "P2"
+        assert t["priority"] == "P3"
+        assert s["priority"] == "P1"
+        assert n["priority"] == "P2"
 
 
 # ---------------------------------------------------------------------------
@@ -277,26 +277,26 @@ class TestIndependence:
 class TestPatchUpdatesPriority:
     def test_milestone_patch_changes_priority(self, client, admin_user, admin_headers):
         pid, _vid = _setup(client, admin_headers)
-        m = _make_milestone(client, admin_headers, pid, priority="p1").json()["data"]
+        m = _make_milestone(client, admin_headers, pid, priority="P1").json()["data"]
         r = client.patch(
             f"/api/v3/milestones/{m['id']}",
-            headers=admin_headers, json={"priority": "p2"},
+            headers=admin_headers, json={"priority": "P2"},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["data"]["priority"] == "p2"
+        assert r.json()["data"]["priority"] == "P2"
 
     def test_task_patch_changes_priority(self, client, admin_user, admin_headers):
         pid, vid = _setup(client, admin_headers)
         m = _make_milestone(client, admin_headers, pid).json()["data"]
         a = _make_activity(client, admin_headers, m["id"], vid).json()["data"]
         _publish(client, admin_headers, pid)
-        t = _make_task(client, admin_headers, a["id"], priority="p1").json()["data"]
+        t = _make_task(client, admin_headers, a["id"], priority="P1").json()["data"]
         r = client.patch(
             f"/api/v3/tasks/{t['id']}",
-            headers=admin_headers, json={"priority": "p3"},
+            headers=admin_headers, json={"priority": "P3"},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["data"]["priority"] == "p3"
+        assert r.json()["data"]["priority"] == "P3"
 
     def test_subtask_patch_changes_priority(self, client, admin_user, admin_headers):
         pid, vid = _setup(client, admin_headers)
@@ -304,19 +304,19 @@ class TestPatchUpdatesPriority:
         a = _make_activity(client, admin_headers, m["id"], vid).json()["data"]
         _publish(client, admin_headers, pid)
         t = _make_task(client, admin_headers, a["id"]).json()["data"]
-        s = _make_subtask(client, admin_headers, t["id"], priority="p1").json()["data"]
+        s = _make_subtask(client, admin_headers, t["id"], priority="P1").json()["data"]
         r = client.patch(
             f"/api/v3/subtasks/{s['id']}",
-            headers=admin_headers, json={"priority": "p2"},
+            headers=admin_headers, json={"priority": "P2"},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["data"]["priority"] == "p2"
+        assert r.json()["data"]["priority"] == "P2"
 
     def test_milestone_patch_unknown_priority_rejected(
         self, client, admin_user, admin_headers,
     ):
         pid, _vid = _setup(client, admin_headers)
-        m = _make_milestone(client, admin_headers, pid, priority="p1").json()["data"]
+        m = _make_milestone(client, admin_headers, pid, priority="P1").json()["data"]
         r = client.patch(
             f"/api/v3/milestones/{m['id']}",
             headers=admin_headers, json={"priority": "zz9"},
@@ -331,19 +331,19 @@ class TestPatchUpdatesPriority:
 class TestTreeSurfacesPriorityEverywhere:
     def test_tree_emits_priority_on_M_A_T_S_nested(self, client, admin_user, admin_headers):
         pid, vid = _setup(client, admin_headers)
-        m = _make_milestone(client, admin_headers, pid, priority="p1").json()["data"]
-        a = _make_activity(client, admin_headers, m["id"], vid, priority="p2").json()["data"]
+        m = _make_milestone(client, admin_headers, pid, priority="P1").json()["data"]
+        a = _make_activity(client, admin_headers, m["id"], vid, priority="P2").json()["data"]
         _publish(client, admin_headers, pid)
-        t = _make_task(client, admin_headers, a["id"], priority="p3").json()["data"]
-        s = _make_subtask(client, admin_headers, t["id"], priority="p1").json()["data"]
-        n = _make_nested_subtask(client, admin_headers, s["id"], priority="p2").json()["data"]
+        t = _make_task(client, admin_headers, a["id"], priority="P3").json()["data"]
+        s = _make_subtask(client, admin_headers, t["id"], priority="P1").json()["data"]
+        n = _make_nested_subtask(client, admin_headers, s["id"], priority="P2").json()["data"]
 
         tree = client.get(
             f"/api/v3/projects/{pid}/tree", headers=admin_headers,
         ).json()["data"]
         # Walk: project -> milestones -> activities -> tasks -> subtasks -> subtasks
-        assert tree["milestones"][0]["priority"] == "p1"
-        assert tree["milestones"][0]["activities"][0]["priority"] == "p2"
-        assert tree["milestones"][0]["activities"][0]["tasks"][0]["priority"] == "p3"
-        assert tree["milestones"][0]["activities"][0]["tasks"][0]["subtasks"][0]["priority"] == "p1"
-        assert tree["milestones"][0]["activities"][0]["tasks"][0]["subtasks"][0]["subtasks"][0]["priority"] == "p2"
+        assert tree["milestones"][0]["priority"] == "P1"
+        assert tree["milestones"][0]["activities"][0]["priority"] == "P2"
+        assert tree["milestones"][0]["activities"][0]["tasks"][0]["priority"] == "P3"
+        assert tree["milestones"][0]["activities"][0]["tasks"][0]["subtasks"][0]["priority"] == "P1"
+        assert tree["milestones"][0]["activities"][0]["tasks"][0]["subtasks"][0]["subtasks"][0]["priority"] == "P2"

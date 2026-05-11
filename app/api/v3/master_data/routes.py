@@ -1950,6 +1950,7 @@ def list_master_priorities(
 def get_master_priority(
     request: Request, code: str, db: Session = Depends(get_db),
 ) -> JSONResponse:
+    code = (code or "").strip().upper()
     row = db.query(PriorityModel).filter(PriorityModel.code == code).first()
     if row is None:
         raise NotFoundError(f"No priority with code '{code}'.")
@@ -1967,7 +1968,7 @@ def create_master_priority(
     data: PriorityCreateRequest,
     db: Session = Depends(get_db),
 ) -> JSONResponse:
-    code = data.code.strip()
+    code = data.code.strip().upper()
     existing = (
         db.query(PriorityModel).filter(PriorityModel.code == code).first()
     )
@@ -2001,6 +2002,7 @@ def update_master_priority(
     data: PriorityUpdateRequest,
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    code = (code or "").strip().upper()
     row = db.query(PriorityModel).filter(PriorityModel.code == code).first()
     if row is None:
         raise NotFoundError(f"No priority with code '{code}'.")
@@ -2029,6 +2031,7 @@ def update_master_priority(
 def delete_master_priority(
     request: Request, code: str, db: Session = Depends(get_db),
 ) -> JSONResponse:
+    code = (code or "").strip().upper()
     row = db.query(PriorityModel).filter(PriorityModel.code == code).first()
     if row is None:
         raise NotFoundError(f"No priority with code '{code}'.")
@@ -2050,6 +2053,7 @@ def delete_master_priority(
 def restore_master_priority(
     request: Request, code: str, db: Session = Depends(get_db),
 ) -> JSONResponse:
+    code = (code or "").strip().upper()
     row = db.query(PriorityModel).filter(PriorityModel.code == code).first()
     if row is None:
         raise NotFoundError(f"No priority with code '{code}'.")
