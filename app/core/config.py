@@ -26,7 +26,11 @@ class Settings(BaseSettings):
     # longer access-token TTL is a temporary stop-gap so users don't
     # hit silent 401s. Both services bumped in lockstep so monolith-
     # issued and user-mgmt-issued tokens have the same lifetime.
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # Bumped 60 → 120 (2 h) as a wider workaround while the FE
+    # `client.js:285` token-clear-on-failed-refresh bug is being
+    # diagnosed — fewer refresh attempts per session = fewer chances
+    # to hit a transient blip.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     # Refresh token TTL (days)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     # Grace window (seconds) during which the just-rotated-out refresh token
