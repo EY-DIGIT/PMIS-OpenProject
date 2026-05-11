@@ -25,6 +25,11 @@ from ....infrastructure.db.models.user_role_assignment import (
     UserRoleAssignmentModel,
 )
 
+from fastapi import File, UploadFile
+from typing import List
+
+from .._inline_attachments import dispatch_create, pre_validate_files
+from ..comments.services import create_comment, list_comments
 from .controller import ProjectController
 from .permissions import (
     PROJECTS_CLOSE,
@@ -41,6 +46,9 @@ from .schemas import (
     ProjectUpdateRequest,
     ProjectUpsertRequest,
 )
+from ....core.permissions import COMMENTS_CREATE
+from ....core.errors import ValidationError as CoreValidationError
+from ....core.response import format_error_response
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -48,15 +56,32 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 @router.post(
     "/create",
     dependencies=[require_permission(PROJECTS_CREATE)],
-    summary="Create project",
+    summary="Create project (JSON or multipart with optional file attachments)",
+    description=(
+        "Dual-mode dispatch: ``application/json`` keeps the legacy "
+        "behaviour; ``multipart/form-data`` accepts the same project "
+        "fields PLUS optional ``files[]`` for documents (project "
+        "charter, RFP, scope notes etc.). Attached files land in the "
+        "shared comments table with ``body=NULL`` and "
+        "``target_kind=\"project\"`` — exposed back through "
+        "``GET /projects/{id}/attachments``."
+    ),
     status_code=201,
 )
-def create_project(
+async def create_project(
     request: Request,
-    data: ProjectCreateRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    return ProjectController.create(request, data, db)
+    return await dispatch_create(
+        request,
+        schema_cls=ProjectCreateRequest,
+        json_handler=lambda req, db, data:
+            ProjectController.create(req, data, db),
+        multipart_handler=lambda req, db:
+            ProjectController.create_multipart(req, db),
+        json_args=(db,),
+        multipart_args=(db,),
+    )
 
 
 @router.put(
@@ -498,4 +523,160 @@ def list_project_audit_logs(
         "offset": offset,
         "pageSize": pageSize,
         "_embedded": {"elements": [_to_response(r) for r in rows]},
+    })
+
+
+# ---------------------------------------------------------------------------
+# Project attachments (project-honest URL surface; storage is the
+# shared comments table — see app/api/v3/comments/_target_helper.py
+# for the polymorphism whitelist).
+# ---------------------------------------------------------------------------
+
+def _list_project_attachments_rows(db: Session, project_uuid: str) -> List[Dict[str, Any]]:
+    """Slim attachment rows for the GET endpoint. Each entry is one
+    file, carrying the parent comment row id (use it with DELETE
+    ``/api/v3/comments/{id}`` to soft-delete the attachment)."""
+    from ....infrastructure.db.models.comment import CommentModel
+    rows = (
+        db.query(CommentModel)
+        .filter(CommentModel.target_kind == "project")
+        .filter(CommentModel.target_id == project_uuid)
+        .filter(CommentModel.deleted_at.is_(None))
+        .order_by(CommentModel.created_at.asc())
+        .all()
+    )
+    out: List[Dict[str, Any]] = []
+    for c in rows:
+        for att in (c.attachments or []):
+            # JSON column persists camelCase keys (see
+            # ``AttachmentInfo.to_dict``).
+            out.append({
+                "id": c.id,
+                "filename": att.get("filename"),
+                "url": att.get("url"),
+                "mimeType": att.get("mimeType") or att.get("mime_type"),
+                "sizeBytes": att.get("sizeBytes") or att.get("size_bytes"),
+                "uploadedAt": att.get("uploadedAt") or att.get("uploaded_at"),
+                "createdAt": c.created_at.isoformat() if c.created_at else None,
+                "createdBy": c.author_user_id,
+            })
+    return out
+
+
+@router.get(
+    "/{project_uuid}/attachments",
+    dependencies=[require_permission(PROJECTS_READ)],
+    summary="List attachments uploaded against this project",
+)
+def list_project_attachments(
+    request: Request,
+    project_uuid: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    if (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .filter(ProjectModel.deleted_at.is_(None))
+        .first()
+    ) is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+    items = _list_project_attachments_rows(db, project_uuid)
+    return BaseController.ok(data={
+        "_type": "Collection",
+        "total": len(items),
+        "count": len(items),
+        "_embedded": {"elements": items},
+    })
+
+
+@router.post(
+    "/{project_uuid}/attachments",
+    dependencies=[require_permission(COMMENTS_CREATE)],
+    summary="Upload more attachments to an existing project (multipart)",
+    description=(
+        "Multipart-only endpoint for adding files to a project after "
+        "create. Accepts ``files[]`` repeated; no comment body — "
+        "projects do not surface a comment-text field on this URL. "
+        "Files land in the comments table with ``body=NULL`` and "
+        "``target_kind=\"project\"`` for storage; the response carries "
+        "the FE-facing flat attachment shape."
+    ),
+    status_code=201,
+)
+async def upload_project_attachments(
+    request: Request,
+    project_uuid: str,
+    files: Optional[List[UploadFile]] = File(None),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    if (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .filter(ProjectModel.deleted_at.is_(None))
+        .first()
+    ) is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+    files = files or []
+    if not files:
+        return BaseController.error(
+            format_error_response(
+                error_type="validation_error",
+                message="At least one file is required.",
+            ),
+            status=422,
+        )
+    # Pre-validate (size + extension + magic-byte content sniff).
+    file_err = pre_validate_files(files)
+    if file_err is not None:
+        return BaseController.error(
+            format_error_response(
+                error_type=file_err["error_type"],
+                message=file_err["message"],
+                details=file_err["details"],
+            ),
+            status=422,
+        )
+    current_user_id = getattr(request.state, "user_id", None)
+    result = create_comment(
+        db=db,
+        target_kind="project",
+        target_id=project_uuid,
+        body=None,
+        files=files,
+        author_user_id=current_user_id,
+    )
+    if not result.is_success():
+        return BaseController.error(
+            format_error_response(
+                error_type=result.error_type or "internal_error",
+                message=result.error or "Failed to attach files.",
+                details=result.details,
+            ),
+            status=422,
+        )
+    # Emit the slim attachment shape for these freshly-uploaded rows
+    # only (caller wants "what just got created", not the full project
+    # attachment listing).
+    comment = result.data
+    new_rows: List[Dict[str, Any]] = []
+    for att in (comment.attachments or []):
+        new_rows.append({
+            "id": comment.id,
+            "filename": att.filename if hasattr(att, "filename") else att.get("filename"),
+            "url": att.url if hasattr(att, "url") else att.get("url"),
+            "mimeType": att.mime_type if hasattr(att, "mime_type") else att.get("mime_type"),
+            "sizeBytes": att.size_bytes if hasattr(att, "size_bytes") else att.get("size_bytes"),
+            "uploadedAt": (
+                att.uploaded_at.isoformat()
+                if hasattr(att, "uploaded_at") and att.uploaded_at
+                else att.get("uploaded_at") if isinstance(att, dict) else None
+            ),
+            "createdAt": comment.created_at.isoformat() if comment.created_at else None,
+            "createdBy": comment.author_user_id,
+        })
+    return BaseController.created(data={
+        "_type": "Collection",
+        "total": len(new_rows),
+        "count": len(new_rows),
+        "_embedded": {"elements": new_rows},
     })
