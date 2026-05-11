@@ -763,3 +763,175 @@ async def upload_project_attachments(
         "count": len(new_rows),
         "_embedded": {"elements": new_rows},
     })
+
+
+# ---------------------------------------------------------------------------
+# Discussion feed — unified view of every comment row tied to the project
+# tree (the project itself + every milestone / activity / task / subtask
+# under it). Each row carries body (optional) AND attachments JSON list
+# (optional), so the response captures both written discussion and
+# shared files in one collated, time-ordered feed.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{project_uuid}/discussion-feed",
+    dependencies=[require_permission(PROJECTS_READ)],
+    summary="Unified discussion + attachments feed for the project tree",
+    description=(
+        "Returns every comment row attached to this project OR any of "
+        "its descendants (milestones / activities / tasks / subtasks) "
+        "in a single flat, paginated, newest-first feed. Each row "
+        "carries ``body`` (optional comment text) AND ``attachments`` "
+        "(JSON list of file metadata) so a single response captures "
+        "both written discussion and shared files. Each row also "
+        "carries ``targetKind`` / ``targetId`` / ``targetName`` so the "
+        "FE can render which entity in the tree the entry belongs to. "
+        "Soft-deleted rows (and soft-deleted target entities) are "
+        "filtered out."
+    ),
+)
+def list_project_discussion_feed(
+    project_uuid: str,
+    offset: int = Query(1, ge=1, description="Page number (1-indexed)."),
+    pageSize: int = Query(50, ge=1, le=200, description="Items per page (max 200)."),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    from sqlalchemy import and_, or_
+
+    from ....infrastructure.db.models.activity import ActivityModel
+    from ....infrastructure.db.models.comment import CommentModel
+    from ....infrastructure.db.models.milestone import MilestoneModel
+    from ....infrastructure.db.models.subtask import SubtaskModel
+    from ....infrastructure.db.models.task import TaskModel
+
+    project = (
+        db.query(ProjectModel)
+        .filter(ProjectModel.id == project_uuid)
+        .filter(ProjectModel.deleted_at.is_(None))
+        .first()
+    )
+    if project is None:
+        raise NotFoundError(f"Project {project_uuid} not found.")
+
+    # Walk the tree once — get the live ids for every kind. Each
+    # entity model carries a denormalized ``project_id`` column for
+    # exactly this kind of query (M/A/T/S create paths populate it on
+    # insert), so each scan is a single indexed lookup.
+    milestone_id_to_name: Dict[str, str] = {
+        mid: mname for (mid, mname) in (
+            db.query(MilestoneModel.id, MilestoneModel.name)
+            .filter(MilestoneModel.project_id == project_uuid)
+            .filter(MilestoneModel.deleted_at.is_(None))
+            .all()
+        )
+    }
+    activity_id_to_name: Dict[str, str] = {
+        aid: aname for (aid, aname) in (
+            db.query(ActivityModel.id, ActivityModel.name)
+            .filter(ActivityModel.project_id == project_uuid)
+            .filter(ActivityModel.deleted_at.is_(None))
+            .all()
+        )
+    }
+    task_id_to_name: Dict[str, str] = {
+        tid: tname for (tid, tname) in (
+            db.query(TaskModel.id, TaskModel.name)
+            .filter(TaskModel.project_id == project_uuid)
+            .filter(TaskModel.deleted_at.is_(None))
+            .all()
+        )
+    }
+    subtask_id_to_name: Dict[str, str] = {
+        sid: sname for (sid, sname) in (
+            db.query(SubtaskModel.id, SubtaskModel.name)
+            .filter(SubtaskModel.project_id == project_uuid)
+            .filter(SubtaskModel.deleted_at.is_(None))
+            .all()
+        )
+    }
+
+    # Build the OR clause matching any (target_kind, target_id) pair
+    # in the project tree. Each kind's id-set is excluded from the
+    # clause entirely if empty so the SQL ``IN ()`` collapse doesn't
+    # become a trivially-false branch.
+    clauses = [
+        and_(
+            CommentModel.target_kind == "project",
+            CommentModel.target_id == project_uuid,
+        ),
+    ]
+    if milestone_id_to_name:
+        clauses.append(and_(
+            CommentModel.target_kind == "milestone",
+            CommentModel.target_id.in_(milestone_id_to_name.keys()),
+        ))
+    if activity_id_to_name:
+        clauses.append(and_(
+            CommentModel.target_kind == "activity",
+            CommentModel.target_id.in_(activity_id_to_name.keys()),
+        ))
+    if task_id_to_name:
+        clauses.append(and_(
+            CommentModel.target_kind == "task",
+            CommentModel.target_id.in_(task_id_to_name.keys()),
+        ))
+    if subtask_id_to_name:
+        clauses.append(and_(
+            CommentModel.target_kind == "subtask",
+            CommentModel.target_id.in_(subtask_id_to_name.keys()),
+        ))
+
+    base_q = (
+        db.query(CommentModel)
+        .filter(or_(*clauses))
+        .filter(CommentModel.deleted_at.is_(None))
+    )
+    total = base_q.count()
+    db_offset = (offset - 1) * pageSize
+    rows = (
+        # Tie-break on ``id`` so pagination is stable when multiple
+        # comments share a ``created_at`` (common in same-second
+        # bursts; SQLite truncates fractional seconds in tests).
+        base_q.order_by(CommentModel.created_at.desc(), CommentModel.id.desc())
+        .offset(db_offset)
+        .limit(pageSize)
+        .all()
+    )
+
+    name_resolvers: Dict[str, Dict[str, str]] = {
+        "project": {project_uuid: project.name},
+        "milestone": milestone_id_to_name,
+        "activity": activity_id_to_name,
+        "task": task_id_to_name,
+        "subtask": subtask_id_to_name,
+    }
+
+    def _shape(c: "CommentModel") -> Dict[str, Any]:
+        return {
+            "id": c.id,
+            "targetKind": c.target_kind,
+            "targetId": c.target_id,
+            "targetName": name_resolvers.get(c.target_kind, {}).get(c.target_id),
+            "body": c.body,
+            "attachments": c.attachments or [],
+            "createdAt": c.created_at.isoformat() if c.created_at else None,
+            "createdBy": c.author_user_id,
+        }
+
+    return BaseController.ok(data={
+        "_type": "Collection",
+        "_links": {
+            "self": {
+                "href": (
+                    f"/api/v3/projects/{project_uuid}/discussion-feed"
+                    f"?offset={offset}&pageSize={pageSize}"
+                ),
+            },
+        },
+        "project": {"id": project_uuid, "name": project.name},
+        "total": total,
+        "count": len(rows),
+        "offset": offset,
+        "pageSize": pageSize,
+        "_embedded": {"elements": [_shape(c) for c in rows]},
+    })
