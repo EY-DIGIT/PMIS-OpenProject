@@ -685,6 +685,40 @@ def list_project_attachments(
         "the FE-facing flat attachment shape."
     ),
     status_code=201,
+    # FastAPI auto-generates a Swagger schema using OpenAPI-3.1's
+    # ``contentMediaType: application/octet-stream`` for ``UploadFile``,
+    # which Swagger UI 5.x doesn't render as a file picker (it falls
+    # back to a plain text input). Override with the older
+    # ``format: binary`` convention so the docs page shows a real
+    # "Add string item" + Choose-File widget for multi-file selection.
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "files": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": (
+                                    "One or more files to attach to the "
+                                    "project. Repeated form key ``files``; "
+                                    "Swagger UI's \"Add string item\" "
+                                    "button adds another picker. Allowed "
+                                    "extensions + per-file size cap apply; "
+                                    "disguised binaries (e.g. .exe renamed "
+                                    "to .pdf) are rejected by the magic-"
+                                    "byte content sniff."
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
 )
 async def upload_project_attachments(
     request: Request,
