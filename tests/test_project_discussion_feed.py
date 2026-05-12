@@ -243,6 +243,29 @@ class TestDiscussionFeedAggregation:
         assert len(row["attachments"]) == 1
         assert row["attachments"][0]["filename"] == "a.pdf"
 
+    def test_each_row_carries_created_by_login(
+        self, client, admin_user, admin_headers, sample_project,
+        db_session, temp_storage,
+    ):
+        """Each row should carry both ``createdBy`` (UUID) and
+        ``createdByLogin`` (username) so the FE can render the
+        author without a second /users lookup."""
+        m = _make_milestone(db_session, sample_project.id, name="Author M")
+        client.post(
+            f"/api/v3/milestones/{m.id}/comments",
+            headers=admin_headers,
+            data={"body": "by admin"},
+        )
+        r = client.get(
+            f"/api/v3/projects/{sample_project.id}/discussion-feed",
+            headers=admin_headers,
+        )
+        rows = r.json()["data"]["_embedded"]["elements"]
+        assert rows
+        row = rows[0]
+        assert row["createdBy"] == admin_user.id
+        assert row["createdByLogin"] == admin_user.login
+
 
 class TestDiscussionFeedFiltering:
     def test_soft_deleted_comment_excluded(

@@ -941,6 +941,21 @@ def list_project_discussion_feed(
         "subtask": subtask_id_to_name,
     }
 
+    # Bulk-resolve author logins so each row can carry the username
+    # next to the raw ``createdBy`` UUID. Single query per page.
+    # Soft-deleted users still resolve so historical comments don't
+    # render with a missing login. Comments with NULL author (system
+    # inserts) map to None.
+    author_ids = {c.author_user_id for c in rows if c.author_user_id}
+    author_login_by_id: Dict[str, str] = {}
+    if author_ids:
+        for uid, login in (
+            db.query(UserModel.id, UserModel.login)
+            .filter(UserModel.id.in_(author_ids))
+            .all()
+        ):
+            author_login_by_id[uid] = login
+
     def _shape(c: "CommentModel") -> Dict[str, Any]:
         return {
             "id": c.id,
@@ -951,6 +966,7 @@ def list_project_discussion_feed(
             "attachments": c.attachments or [],
             "createdAt": c.created_at.isoformat() if c.created_at else None,
             "createdBy": c.author_user_id,
+            "createdByLogin": author_login_by_id.get(c.author_user_id),
         }
 
     return BaseController.ok(data={
