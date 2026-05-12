@@ -378,14 +378,20 @@ def update_task(
                 f"Priority must be one of: {', '.join(valid)}."
             )
 
-    # Doc 41 follow-up: assignee — only validate / write when the caller
-    # explicitly sent the field (sentinel != ...). When the value is a
-    # UUID, validate it points to a live, active user. When it's None,
-    # no validation needed (we're just clearing the column).
+    # Doc 41 follow-up + doc 54: assignee — only validate / write when
+    # the caller explicitly sent the field (sentinel != ...). When the
+    # value is a UUID, validate it points to a live, active user; for
+    # non-admin callers also enforce same-vendor + project-tier-on-this-
+    # project. When it's None, no validation needed (we're just
+    # clearing the column).
     if assigned_to is not ...:
         if assigned_to is not None:
             from .....shared.assignee import validate_assignable_user_id
-            validate_assignable_user_id(db, assigned_to)
+            validate_assignable_user_id(
+                db, assigned_to,
+                project_id=model.project_id,
+                caller_user_id=current_user_id,
+            )
 
     updates: Dict[str, Any] = {}
     if name is not None: updates["name"] = name.strip()
