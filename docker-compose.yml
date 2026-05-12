@@ -22,6 +22,7 @@ services:
       NOTIFICATION_CLIENT: ${NOTIFICATION_CLIENT}
       UNIVERSAL_OTP_ENABLED: ${UNIVERSAL_OTP_ENABLED}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      TZ: Asia/Kolkata
     volumes:
       - /mnt/pmis_files:/mnt/pmis_files:rw
     ports:
