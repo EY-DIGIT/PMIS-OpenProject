@@ -82,6 +82,20 @@ def create_user(
         )
 
     # ---- Division ------------------------------------------------------
+    # Doc 49: must be an active row in the ``divisions`` master table.
+    # Built-ins (tmd1/tmd2/others) are seeded by init_db; admin-added
+    # rows extend the accepted set.
+    from .....infrastructure.db.repositories.division_repository import (
+        DivisionRepository,
+    )
+    if not DivisionRepository(db).is_known_code(division):
+        return ServiceResult.fail(
+            error=(
+                f"division '{division}' is not an active division. "
+                f"Pick one from GET /api/v3/master/divisions."
+            ),
+            error_type="validation_error",
+        )
     if division == DIVISION_OTHERS:
         if not division_other:
             return ServiceResult.fail(

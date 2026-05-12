@@ -41,12 +41,40 @@ def db_engine():
     """Create a fresh in-memory SQLite engine per test.
 
     Uses shared cache so all connections see the same database.
+
+    Doc 49: also seeds the three built-in divisions (tmd1/tmd2/others)
+    into the ``divisions`` master table. In production these rows are
+    created by ``init_db`` on first boot; tests bypass init_db (the
+    client fixture short-circuits it) so we seed them here instead.
+    Without this seed, every activity / project create using
+    ``ownerDivision="tmd1"`` would 422 against the new doc-49 catalog
+    check.
     """
     engine = create_engine(
         "sqlite:///file:test.db?mode=memory&cache=shared&uri=true",
         connect_args={"check_same_thread": False},
     )
     Base.metadata.create_all(bind=engine)
+
+    # Seed built-in divisions.
+    from app.infrastructure.db.models.division import DivisionModel
+    seed_session = sessionmaker(bind=engine)()
+    try:
+        for code, label, requires_other in (
+            ("tmd1", "TMD1", False),
+            ("tmd2", "TMD2", False),
+            ("others", "Others", True),
+        ):
+            if seed_session.query(DivisionModel).filter_by(code=code).first() is None:
+                seed_session.add(DivisionModel(
+                    code=code, label=label,
+                    is_builtin=True, requires_other=requires_other, active=True,
+                    email="tests@example.com", phone_number="+910000000000",
+                ))
+        seed_session.commit()
+    finally:
+        seed_session.close()
+
     yield engine
     Base.metadata.drop_all(bind=engine)
     engine.dispose()

@@ -163,6 +163,19 @@ def update_user(
     clear_division_other = False
 
     if division is not None:
+        # Doc 49: only allow values that map to an active row in the
+        # ``divisions`` master table.
+        from .....infrastructure.db.repositories.division_repository import (
+            DivisionRepository,
+        )
+        if not DivisionRepository(db).is_known_code(division):
+            return ServiceResult.fail(
+                error=(
+                    f"division '{division}' is not an active division. "
+                    f"Pick one from GET /api/v3/master/divisions."
+                ),
+                error_type="validation_error",
+            )
         if final_division != DIVISION_OTHERS and division_other is None:
             # Division is changing AWAY from 'others' and the caller
             # didn't supply a new label → clear the existing one.

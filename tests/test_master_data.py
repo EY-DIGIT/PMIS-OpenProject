@@ -46,17 +46,24 @@ def _iso(days: int) -> str:
 
 @pytest.fixture
 def seed_builtin_divisions(db_session):
-    """Seed the three built-in division rows the way init_db would."""
+    """Seed the three built-in division rows the way init_db would.
+
+    Doc 49: the conftest's ``db_engine`` fixture already seeds these
+    rows so the new master-table check on Activity.ownerDivision works.
+    Kept idempotent here (skip rows already present) so tests that
+    explicitly request this fixture still get a no-op success.
+    """
     for code, label, requires_other in (
         ("tmd1", "TMD1", False),
         ("tmd2", "TMD2", False),
         ("others", "Others", True),
     ):
-        db_session.add(DivisionModel(
-            code=code, label=label,
-            is_builtin=True, requires_other=requires_other, active=True,
-            email="ops@pmis.example", phone_number="+910000000000",
-        ))
+        if db_session.query(DivisionModel).filter_by(code=code).first() is None:
+            db_session.add(DivisionModel(
+                code=code, label=label,
+                is_builtin=True, requires_other=requires_other, active=True,
+                email="ops@pmis.example", phone_number="+910000000000",
+            ))
     db_session.commit()
 
 

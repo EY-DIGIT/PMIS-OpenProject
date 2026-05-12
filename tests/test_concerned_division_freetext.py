@@ -189,9 +189,11 @@ class TestConcernedFreeTextOnUpdate:
         assert r.status_code == 422
 
 
-class TestOwnerDivisionStaysStrict:
-    """Regression: only concernedDivision was relaxed; ownerDivision is
-    a single-value field and must still be a catalog code."""
+class TestOwnerDivisionMasterTable:
+    """Doc 49: ``ownerDivision`` is validated against the live
+    ``divisions`` master table (not a hardcoded set). Built-in codes
+    (tmd1 / tmd2 / others) pass because init_db seeds them; arbitrary
+    free-text values fail because they're not in the table."""
 
     def test_owner_freetext_rejected(self, client, admin_user, admin_headers):
         _pid, vid, m = _setup(client, admin_headers)
@@ -203,4 +205,9 @@ class TestOwnerDivisionStaysStrict:
             ),
         )
         assert r.status_code == 422
-        assert "tmd1" in r.text.lower() or "tmd2" in r.text.lower()
+        # New wording from doc 49 — error names the bad code and points
+        # to the master-data endpoint, not the hardcoded set.
+        body = r.text.lower()
+        assert "ownerdivision" in body
+        assert "custom division" in body
+        assert "/api/v3/master/divisions" in body
