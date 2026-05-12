@@ -96,20 +96,101 @@ class TestScheduleStatusHelper:
         s, d = _schedule_status(None, None, date(2026, 6, 5))
         assert s == "not_started" and d is None
 
-    def test_actual_dates_are_ignored(self):
-        """``actual_start_date`` / ``actual_end_date`` deliberately don't
-        feed into the status — the field answers 'is this on schedule?'
-        not 'is this done?'. An item past its expected end is delayed
-        even if it has no actual_end_date set."""
-        # The helper signature only takes expected dates — by-design.
-        # If a future caller adds actuals, the helper signature has to
-        # change first, which makes the contract explicit.
+    def test_no_actuals_falls_back_to_planned(self):
+        """When neither actual_start_date nor actual_end_date is set,
+        the calculation uses the planned dates — same as before doc 52."""
         s, d = _schedule_status(
             _ist_midnight(2026, 6, 1),
             _ist_midnight(2026, 6, 10),
             today=date(2026, 6, 11),
+            actual_start_date=None,
+            actual_end_date=None,
         )
         assert s == "delayed" and d == 1
+
+    # -----------------------------------------------------------------
+    # Doc 52 — actual-first / planned-fallback rules.
+    # -----------------------------------------------------------------
+
+    def test_actual_start_overrides_planned_when_work_starts_early(self):
+        """Planned start 2026-06-10. Work actually started 2026-06-05.
+        Today 2026-06-07 — should be in_progress (using the actual
+        start), not 'not_started' (which is what planned would say)."""
+        s, d = _schedule_status(
+            _ist_midnight(2026, 6, 10),
+            _ist_midnight(2026, 6, 20),
+            today=date(2026, 6, 7),
+            actual_start_date=_ist_midnight(2026, 6, 5),
+            actual_end_date=None,
+        )
+        assert s == "in_progress" and d is None
+
+    def test_actual_end_overrides_planned_when_finished_early(self):
+        """Planned end 2026-06-20. Work actually finished 2026-06-15.
+        Today 2026-06-17 — past the actual end → delayed by 2 days
+        (using actual_end_date as the deadline)."""
+        s, d = _schedule_status(
+            _ist_midnight(2026, 6, 1),
+            _ist_midnight(2026, 6, 20),
+            today=date(2026, 6, 17),
+            actual_start_date=None,
+            actual_end_date=_ist_midnight(2026, 6, 15),
+        )
+        assert s == "delayed" and d == 2
+
+    def test_actual_start_set_but_actual_end_null_uses_planned_end(self):
+        """Work started (actual_start set), not finished. Status should
+        compare today against planned end — actual_end is NULL so the
+        planned end is the deadline."""
+        s, d = _schedule_status(
+            _ist_midnight(2026, 6, 10),
+            _ist_midnight(2026, 6, 20),
+            today=date(2026, 6, 15),
+            actual_start_date=_ist_midnight(2026, 6, 8),
+            actual_end_date=None,
+        )
+        assert s == "in_progress" and d is None
+
+    def test_actual_end_set_but_actual_start_null_uses_planned_start(self):
+        """Work finished (actual_end set) but actual_start was never
+        recorded. Fall back to planned start."""
+        s, d = _schedule_status(
+            _ist_midnight(2026, 6, 1),
+            _ist_midnight(2026, 6, 20),
+            today=date(2026, 6, 25),
+            actual_start_date=None,
+            actual_end_date=_ist_midnight(2026, 6, 22),
+        )
+        # Effective end = actual_end_date = 22 Jun; today 25 Jun → delayed by 3.
+        assert s == "delayed" and d == 3
+
+    def test_both_actuals_set_completely_overrides_planned(self):
+        """When both actual dates are set, planned dates are
+        ignored entirely."""
+        s, d = _schedule_status(
+            _ist_midnight(2099, 1, 1),     # ridiculous planned dates
+            _ist_midnight(2099, 1, 10),
+            today=date(2026, 6, 11),
+            actual_start_date=_ist_midnight(2026, 6, 1),
+            actual_end_date=_ist_midnight(2026, 6, 10),
+        )
+        # today 6/11 > actual_end 6/10 → delayed by 1.
+        assert s == "delayed" and d == 1
+
+    def test_both_actuals_set_but_today_before_actual_start(self):
+        """Actuals shouldn't make the status go 'backwards' to
+        not_started if today happens to fall before actual_start —
+        but if today legitimately precedes actual_start, that's
+        not_started (e.g. data correction)."""
+        s, d = _schedule_status(
+            _ist_midnight(2026, 6, 1),
+            _ist_midnight(2026, 6, 10),
+            today=date(2026, 6, 4),
+            actual_start_date=_ist_midnight(2026, 6, 5),
+            actual_end_date=None,
+        )
+        # Effective start = 5 Jun; today 4 Jun < 5 Jun → not_started.
+        assert s == "not_started" and d is None
 
     def test_naive_utc_input_treated_as_utc_then_converted_to_ist(self):
         """Old fixtures may store naive UTC datetimes. The helper still
@@ -184,6 +265,42 @@ class TestScheduleStatusOnTreeEndpoint:
         assert act["scheduleStatus"] == "not_started"
         # daysDelayed MUST be omitted from non-delayed payloads.
         assert "daysDelayed" not in act
+
+    def test_tree_uses_actual_end_when_set_for_status(
+        self, client, admin_headers, sample_project, db_session,
+    ):
+        """Doc 52: planned end is the future (would normally render
+        'in_progress'); but actual_end_date sits in the past so the
+        node should report 'delayed'."""
+        from app.infrastructure.db.models.milestone import MilestoneModel
+        from uuid import uuid4
+
+        m = MilestoneModel(
+            id=str(uuid4()),
+            project_id=sample_project.id,
+            name="Actual-past Milestone",
+            start_date=_ist_midnight(2025, 1, 1),
+            end_date=_ist_midnight(2099, 1, 10),    # planned end far future
+            actual_start_date=_ist_midnight(2025, 1, 5),
+            actual_end_date=_ist_midnight(2025, 1, 20),  # actual end in the past
+            position=42,
+            status="completed",
+        )
+        db_session.add(m)
+        db_session.commit()
+
+        resp = client.get(
+            f"/api/v3/projects/{sample_project.id}/tree",
+            headers=admin_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        node = next(
+            x for x in resp.json()["data"]["milestones"] if x["id"] == m.id
+        )
+        assert node["scheduleStatus"] == "delayed", (
+            "actual_end_date is in the past, status must reflect that"
+        )
+        assert isinstance(node.get("daysDelayed"), int) and node["daysDelayed"] > 0
 
     def test_tree_response_omits_days_delayed_for_non_delayed_nodes(
         self, client, admin_headers, sample_project, db_session,
