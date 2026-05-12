@@ -7,6 +7,7 @@ controller resolves UUID -> internal id.
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, Query, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ....core.middleware.rbac import (
@@ -969,3 +970,50 @@ def list_project_discussion_feed(
         "pageSize": pageSize,
         "_embedded": {"elements": [_shape(c) for c in rows]},
     })
+
+
+# ---------------------------------------------------------------------------
+# Doc 44 round 12 — forwarding handlers for project-scoped role-assignment
+# writes. The logic (caller-vs-target grant gates, lockout checks, audit
+# emission) lives in PMIS-user-management. These handlers exist only so the
+# routes are reachable from monolith :8000; they read the body and forward
+# the request as-is to user-mgmt via ``proxy_or_503``. Listing
+# (``GET /role-assignments``) still has a native handler above — only the
+# writes are forwarded.
+# ---------------------------------------------------------------------------
+
+from ....shared.user_service_client import proxy_or_503  # noqa: E402
+
+
+@router.post(
+    "/{project_uuid}/role-assignments",
+    summary="Grant a project-scoped role to a user (forwards to user-mgmt)",
+    description=(
+        "Forwards to PMIS-user-management on the same path. Body, query, "
+        "and Authorization header are passed through; the upstream "
+        "response (including error envelopes) is returned unchanged."
+    ),
+)
+async def create_project_role_assignment(
+    project_uuid: str,
+    request: Request,
+) -> Response:
+    body_bytes = await request.body()
+    return proxy_or_503(request, body_bytes=body_bytes)
+
+
+@router.delete(
+    "/{project_uuid}/role-assignments/{assignment_id}",
+    summary="Revoke a project-scoped role assignment (forwards to user-mgmt)",
+    description=(
+        "Forwards to PMIS-user-management on the same path. The "
+        "upstream service runs the lockout check (last project_admin "
+        "guard) and emits the audit row."
+    ),
+)
+async def delete_project_role_assignment(
+    project_uuid: str,
+    assignment_id: int,
+    request: Request,
+) -> Response:
+    return proxy_or_503(request)

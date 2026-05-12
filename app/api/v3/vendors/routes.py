@@ -761,3 +761,31 @@ def list_vendor_projects(
         }),
         successor_path="/api/v3/master/vendors",
     )
+
+
+# ---------------------------------------------------------------------------
+# Doc 44 round 12 — forwarding handler for "users mapped to a vendor".
+# The query (joins user_role_assignments → users filtered by vendor's
+# org_id) lives in PMIS-user-management; this handler exists only so the
+# route is reachable from monolith :8000.
+# ---------------------------------------------------------------------------
+
+from fastapi.responses import Response  # noqa: E402
+from ....shared.user_service_client import proxy_or_503  # noqa: E402
+
+
+@router.get(
+    "/{vendor_id}/users",
+    summary="Users mapped to a vendor — employees of this organization "
+            "(forwards to user-mgmt)",
+    description=(
+        "Forwards to PMIS-user-management on the same path. Returns "
+        "the users currently assigned a role under this vendor's "
+        "organization scope, paged and sorted by the upstream service."
+    ),
+)
+async def list_vendor_users(
+    vendor_id: str,
+    request: Request,
+) -> Response:
+    return proxy_or_503(request)

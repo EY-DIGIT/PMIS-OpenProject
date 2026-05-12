@@ -191,6 +191,43 @@ def maybe_proxy_user_service(
     )
 
 
+def proxy_or_503(
+    request: Request,
+    *,
+    body_bytes: Optional[bytes] = None,
+) -> Response:
+    """For handlers that exist solely to forward — no local fallback.
+
+    Doc 44 round 12: a handful of user-mgmt-only routes
+    (``POST/DELETE /projects/{id}/role-assignments`` and
+    ``GET /vendors/{id}/users``) are surfaced on monolith :8000 so the
+    FE never needs a direct :8001 call. The monolith does not own the
+    write path — it just forwards. When ``USER_SERVICE_PROXY_ENABLED``
+    is off there's no local code to fall back to, so we 503 with a
+    clear envelope rather than silently 404.
+    """
+    response = maybe_proxy_user_service(request, body_bytes=body_bytes)
+    if response is not None:
+        return response
+    return JSONResponse(
+        status_code=503,
+        content={
+            "data": None,
+            "message": None,
+            "error": {
+                "_type": "Error",
+                "errorIdentifier": "user_service_proxy_disabled",
+                "message": (
+                    "This route forwards to user-management. Enable "
+                    "USER_SERVICE_PROXY_ENABLED on the monolith, or call "
+                    "user-management :8001 directly."
+                ),
+            },
+            "status": 503,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Middleware — global path-based proxy interception
 # ---------------------------------------------------------------------------
@@ -204,17 +241,23 @@ _PROXIED_PATH_PREFIXES = (
     "/api/v3/users",
     "/api/v3/master/roles",
     "/api/v3/master/permissions",
+    # Doc 44 round 9 — /role-grants is a standalone user-mgmt prefix
+    # (the static grant-matrix endpoint backing the FE create-user role
+    # dropdown). Adding it here makes ``GET /api/v3/role-grants/...``
+    # reachable through monolith :8000 so the FE never needs a direct
+    # :8001 call.
+    "/api/v3/role-grants",
 )
 
-# Doc 41 note: scoped role-assignment + project-mapping endpoints
-# (``/api/v3/projects/{id}/role-assignments``,
-#  ``/api/v3/vendors/{id}/projects``,
-#  ``/api/v3/users/{id}/role-assignments``) live in user-mgmt at
-# port 8001. The user-side variant is reachable through the proxy via
-# the existing ``/api/v3/users`` prefix. The project- and vendor-side
-# variants are intentionally NOT proxied through monolith — FE
-# integrates against :8001 directly. This keeps the new surface
-# decoupled from monolith and shrinks the proxy surface.
+# Doc 41 / 44 round 9 — the project- and vendor-side scoped
+# role-assignment routes (``POST/DELETE /projects/{id}/role-assignments``
+# and ``GET /vendors/{id}/users``) are NOT proxied. Their URL namespaces
+# (``/projects/*`` and ``/vendors/*``) are monolith-owned — blanket
+# prefixing would forward unrelated routes. Instead they live as
+# native handlers in ``projects/routes.py`` and ``vendors/routes.py``,
+# with shared schemas + services under ``role_assignments/``. The
+# ``/users/{id}/role-assignments`` variant remains reachable through
+# the ``/api/v3/users`` prefix above.
 
 
 def _should_proxy_path(path: str) -> bool:
