@@ -68,7 +68,7 @@ def _build_url(path: str) -> str:
     return f"{base}{path}"
 
 
-def _proxy_request_sync(
+async def _proxy_request_async(
     request: Request,
     *,
     method: str,
@@ -76,13 +76,12 @@ def _proxy_request_sync(
     body_bytes: Optional[bytes],
     json_body: Optional[Dict[str, Any]] = None,
 ) -> Response:
-    """Synchronous forward to user-service; returns a FastAPI Response.
+    """Async forward to user-service; returns a FastAPI Response.
 
-    Sync (not async) so it slots into existing sync FastAPI handlers
-    without forcing an async refactor of the whole users router.
-    Reads the incoming request body via ``request.scope["pmis_body_cache"]``
-    when populated by the helper below — FastAPI consumes the body
-    once and we cache it before delegating.
+    Uses ``httpx.AsyncClient`` so the upstream RTT yields the event
+    loop instead of blocking it. Without this, every proxied request
+    serializes on a single Uvicorn worker — a slow upstream cascades
+    into queueing for everyone, even on unrelated paths.
 
     Forwards: method, body, query string, Authorization header (if
     present), Content-Type / Accept / X-Request-Id headers. Strips
@@ -113,7 +112,7 @@ def _proxy_request_sync(
     )
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             kwargs: Dict[str, Any] = {
                 "headers": headers,
                 "params": query,
@@ -122,7 +121,7 @@ def _proxy_request_sync(
                 kwargs["json"] = json_body
             elif body_bytes:
                 kwargs["content"] = body_bytes
-            resp = client.request(method.upper(), url, **kwargs)
+            resp = await client.request(method.upper(), url, **kwargs)
     except httpx.HTTPError as e:
         logger.error(
             "User-service proxy failed for %s %s: %s",
@@ -159,14 +158,14 @@ def _proxy_request_sync(
     )
 
 
-def maybe_proxy_user_service(
+async def maybe_proxy_user_service(
     request: Request,
     *,
     target_path: Optional[str] = None,
     json_body: Optional[Dict[str, Any]] = None,
     body_bytes: Optional[bytes] = None,
 ) -> Optional[Response]:
-    """Sync helper for monolith route handlers (kept for direct use).
+    """Async helper for monolith route handlers (kept for direct use).
 
     Returns:
       - ``None`` when the proxy is off → caller continues with the
@@ -182,7 +181,7 @@ def maybe_proxy_user_service(
     if not _is_proxy_active():
         return None
     path = target_path if target_path is not None else request.url.path
-    return _proxy_request_sync(
+    return await _proxy_request_async(
         request,
         method=request.method,
         target_path=path,
@@ -191,7 +190,7 @@ def maybe_proxy_user_service(
     )
 
 
-def proxy_or_503(
+async def proxy_or_503(
     request: Request,
     *,
     body_bytes: Optional[bytes] = None,
@@ -206,7 +205,7 @@ def proxy_or_503(
     is off there's no local code to fall back to, so we 503 with a
     clear envelope rather than silently 404.
     """
-    response = maybe_proxy_user_service(request, body_bytes=body_bytes)
+    response = await maybe_proxy_user_service(request, body_bytes=body_bytes)
     if response is not None:
         return response
     return JSONResponse(
@@ -308,7 +307,7 @@ class UserServiceProxyMiddleware:
         # the body before the local handlers do.
         request = Request(scope, receive=receive)
         body_bytes = await request.body()
-        response = _proxy_request_sync(
+        response = await _proxy_request_async(
             request,
             method=request.method,
             target_path=path,

@@ -53,6 +53,18 @@ def stub_httpx(monkeypatch):
         "raise_on_request": None,
     }
 
+    def _record(method, url, *, headers=None, params=None,
+                content=None, json=None, **kw):
+        recorder["calls"].append({
+            "method": method, "url": url,
+            "headers": dict(headers or {}),
+            "params": dict(params or {}),
+            "content": content, "json": json,
+        })
+        if recorder["raise_on_request"] is not None:
+            raise recorder["raise_on_request"]
+        return recorder["next_response"]
+
     class _StubClient:
         def __init__(self, *a, **kw):
             self._timeout = kw.get("timeout")
@@ -63,21 +75,26 @@ def stub_httpx(monkeypatch):
         def __exit__(self, *a):
             return False
 
-        def request(self, method, url, *, headers=None, params=None,
-                    content=None, json=None, **kw):
-            recorder["calls"].append({
-                "method": method,
-                "url": url,
-                "headers": dict(headers or {}),
-                "params": dict(params or {}),
-                "content": content,
-                "json": json,
-            })
-            if recorder["raise_on_request"] is not None:
-                raise recorder["raise_on_request"]
-            return recorder["next_response"]
+        def request(self, method, url, **kw):
+            return _record(method, url, **kw)
+
+    class _StubAsyncClient:
+        """Mirror of ``_StubClient`` for ``httpx.AsyncClient`` — needed
+        after the doc-49 conversion of the proxy plumbing to async."""
+        def __init__(self, *a, **kw):
+            self._timeout = kw.get("timeout")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def request(self, method, url, **kw):
+            return _record(method, url, **kw)
 
     monkeypatch.setattr(httpx, "Client", _StubClient)
+    monkeypatch.setattr(httpx, "AsyncClient", _StubAsyncClient)
     return recorder
 
 

@@ -42,13 +42,16 @@ def _build_url(path: str) -> str:
     return f"{base}{path}"
 
 
-def _proxy_request_sync(
+async def _proxy_request_async(
     request: Request,
     *,
     method: str,
     target_path: str,
     body_bytes: Optional[bytes],
 ) -> Response:
+    """Async forward to notification-service. Mirrors the user-service
+    proxy: AsyncClient so the upstream RTT yields the event loop
+    instead of blocking it on the proxied path."""
     headers: Dict[str, str] = {}
     auth = request.headers.get("authorization")
     if auth:
@@ -77,11 +80,11 @@ def _proxy_request_sync(
     )
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             kwargs: Dict[str, Any] = {"headers": headers, "params": query}
             if body_bytes:
                 kwargs["content"] = body_bytes
-            resp = client.request(method.upper(), url, **kwargs)
+            resp = await client.request(method.upper(), url, **kwargs)
     except httpx.HTTPError as e:
         logger.error(
             "Notification-service proxy failed for %s %s: %s",
@@ -162,7 +165,7 @@ class NotificationServiceProxyMiddleware:
 
         request = Request(scope, receive=receive)
         body_bytes = await request.body()
-        response = _proxy_request_sync(
+        response = await _proxy_request_async(
             request,
             method=request.method,
             target_path=path,

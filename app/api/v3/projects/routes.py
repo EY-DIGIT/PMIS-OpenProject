@@ -999,7 +999,7 @@ async def create_project_role_assignment(
     request: Request,
 ) -> Response:
     body_bytes = await request.body()
-    return proxy_or_503(request, body_bytes=body_bytes)
+    return await proxy_or_503(request, body_bytes=body_bytes)
 
 
 @router.delete(
@@ -1016,4 +1016,4 @@ async def delete_project_role_assignment(
     assignment_id: int,
     request: Request,
 ) -> Response:
-    return proxy_or_503(request)
+    return await proxy_or_503(request)

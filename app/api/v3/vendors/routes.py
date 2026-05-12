@@ -788,4 +788,4 @@ async def list_vendor_users(
     vendor_id: str,
     request: Request,
 ) -> Response:
-    return proxy_or_503(request)
+    return await proxy_or_503(request)
