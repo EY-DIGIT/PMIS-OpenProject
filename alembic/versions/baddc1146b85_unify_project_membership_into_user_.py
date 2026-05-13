@@ -40,14 +40,60 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Backfill URA rows from project_members, then drop project_members."""
-    # Backfill: for each project_members row, write a URA row with role
-    # = project_member. Skip rows that would conflict with the URA
-    # UNIQUE constraint (user_id, role_id, organization_id, project_id).
-    #
-    # NOTE: organization_id is NULL on every backfilled row; URA's
-    # ck_ura_single_scope check constraint requires at most one of
-    # (organization_id, project_id) to be non-null, which holds here.
+    """Backfill URA rows from project_members, then drop project_members.
+
+    Pre-flight guards run before any destructive operation:
+
+      1. The ``project_member`` role row must exist. If it doesn't, we
+         abort — without that row the backfill silently writes zero
+         rows and the DROP would destroy the legacy data.
+
+      2. Every project_members row's ``user_id`` / ``project_id`` must
+         reference a live row. Stale FKs (orphaned rows pointing at
+         hard-deleted users/projects) would fail URA's FK constraints
+         mid-insert, leaving the migration half-applied. We report a
+         summary and skip them at SELECT time so the rest of the data
+         migrates cleanly.
+    """
+    bind = op.get_bind()
+
+    # Guard 1: project_member role must exist.
+    role_id_row = bind.execute(sa.text(
+        "SELECT id FROM roles WHERE name = 'project_member'"
+    )).fetchone()
+    if role_id_row is None:
+        raise RuntimeError(
+            "Migration aborted: the 'project_member' role is not seeded. "
+            "Apply this migration AFTER the app has booted at least once "
+            "(or after running RbacRepository.sync_builtin_permissions). "
+            "Without that role row the legacy project_members data would "
+            "be silently destroyed by the DROP TABLE step."
+        )
+
+    # Guard 2: surface stale FKs before we touch anything. These rows
+    # have user_id / project_id pointing at hard-deleted (no row at all)
+    # users or projects and would violate URA's FKs on insert.
+    stale = bind.execute(sa.text(
+        """
+        SELECT COUNT(*) FROM project_members pm
+        WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = pm.user_id)
+           OR NOT EXISTS (SELECT 1 FROM projects p WHERE p.id = pm.project_id)
+        """
+    )).scalar()
+    if stale and stale > 0:
+        # Print to stdout — alembic surfaces this in the deploy log. Skip
+        # them in the backfill below (via the EXISTS filter); they would
+        # otherwise crash mid-insert.
+        print(
+            f"[doc-54b migration] WARNING: {stale} project_members row(s) "
+            f"reference hard-deleted users or projects; these will not be "
+            f"backfilled into user_role_assignments and will be lost when "
+            f"project_members is dropped."
+        )
+
+    # Backfill: only rows whose FK targets exist on both sides. The
+    # NOT EXISTS guard on URA prevents duplicates if a URA row already
+    # covers the same (user, project_member, project) tuple.
     op.execute(
         """
         INSERT INTO user_role_assignments
@@ -61,6 +107,8 @@ def upgrade() -> None:
         FROM project_members pm
         CROSS JOIN roles r
         WHERE r.name = 'project_member'
+        AND EXISTS (SELECT 1 FROM users u WHERE u.id = pm.user_id)
+        AND EXISTS (SELECT 1 FROM projects p WHERE p.id = pm.project_id)
         AND NOT EXISTS (
             SELECT 1 FROM user_role_assignments ura
             WHERE ura.user_id = pm.user_id
@@ -71,19 +119,8 @@ def upgrade() -> None:
         """
     )
 
-    # Drop indexes first to play nicely with strict DBs that don't
-    # auto-cascade index drops on table drop.
-    with op.batch_alter_table("project_members") as batch:
-        for ix in (
-            "idx_project_members_project_id",
-            "idx_project_members_user_id",
-            "idx_project_members_created_at",
-        ):
-            try:
-                batch.drop_index(ix)
-            except Exception:  # noqa: BLE001
-                pass  # idempotent — index may not exist in some envs
-
+    # DROP TABLE cascades to attached indexes on both Postgres and
+    # SQLite, so no explicit DROP INDEX is needed.
     op.drop_table("project_members")
 
 
