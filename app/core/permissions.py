@@ -347,6 +347,14 @@ PROJECT_MEMBER_ROLE_PERMISSIONS: List[str] = [
     # on the projects assigned to them".
     PROJECTS_READ,
     PROJECT_MEMBERS_READ,
+    # USERS_READ_ALL: same justification as project_admin's round-8
+    # add. The FE's DataContext eagerly fetches GET /api/v3/users on
+    # app boot and the task assignTo picker reads from that global
+    # users state. Without this perm, project_member sees a 403 on
+    # boot and the assignTo dropdown is permanently empty. The
+    # endpoint already vendor-scopes + admin-tier-excludes non-admin
+    # callers, so no cross-vendor leak.
+    USERS_READ, USERS_READ_ALL,
     MILESTONES_READ,
     ACTIVITIES_READ,
     TASKS_CREATE, TASKS_READ, TASKS_UPDATE, TASKS_DELETE, TASKS_RESTORE,
