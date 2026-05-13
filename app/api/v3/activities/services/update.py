@@ -645,7 +645,11 @@ def update_activity(
 
     # Apply dependsOn replace AFTER the row update so cycle/state checks
     # used the pre-replace edge set (which we wanted).
+    deps_before: Optional[List[str]] = None
     if desired_deps is not None:
+        deps_before = DependencyRepository(db).list_activity_dependencies(
+            activity_id,
+        )
         DependencyRepository(db).set_activity_dependencies(
             activity_id, model.project_id, desired_deps,
             actor_id=current_user_id,
@@ -668,7 +672,7 @@ def update_activity(
             project_id=model.project_id,
             actor_id=current_user_id,
             action=ACTION_ACTIVITY_DEP_CHANGE,
-            before={"activity_id": activity_id},
+            before={"activity_id": activity_id, "depends_on": list(deps_before or [])},
             after={"activity_id": activity_id, "depends_on": list(desired_deps)},
         )
 

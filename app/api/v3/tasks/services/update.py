@@ -36,6 +36,11 @@ from .....shared.labels import (
     build_label_index_for_project,
     resolve_labels_to_ids,
 )
+from ...projects.services.audit import (
+    ACTION_TASK_DEP_CHANGE,
+    ACTION_TASK_UPDATE,
+    record_audit,
+)
 from .....domain.tasks.task import (
     Task,
     TASK_TYPE_RESOURCE,
@@ -46,6 +51,10 @@ from .....domain.tasks.task_resource import TaskResource
 
 from .create import _validate_task_deps_same_project
 from .....infrastructure.db.models.subtask import SubtaskModel
+
+
+def _iso(v):
+    return v.isoformat() if hasattr(v, "isoformat") else v
 
 
 _TASK_STATUS_COMPLETED = "completed"
@@ -409,6 +418,11 @@ def update_task(
         updates["resource_mode"] = final_mode
         updates["resource_count"] = final_count
 
+    before_snapshot = (
+        {k: _iso(getattr(model, k)) for k in updates.keys()}
+        if updates else {}
+    )
+
     if updates:
         repo.update(task_id, updates=updates, updated_by=current_user_id)
 
@@ -424,10 +438,32 @@ def update_task(
         repo.soft_delete_live_resource(task_id)
         resource_domain = None
 
+    deps_before: Optional[List[str]] = None
     if desired_deps is not None:
+        deps_before = DependencyRepository(db).list_task_dependencies(task_id)
         DependencyRepository(db).set_task_dependencies(
             task_id, model.project_id, desired_deps,
             actor_id=current_user_id,
+        )
+
+    if updates:
+        record_audit(
+            db,
+            project_id=model.project_id,
+            actor_id=current_user_id,
+            action=ACTION_TASK_UPDATE,
+            before={"task_id": task_id, **before_snapshot},
+            after={k: _iso(v) for k, v in updates.items()},
+        )
+
+    if desired_deps is not None:
+        record_audit(
+            db,
+            project_id=model.project_id,
+            actor_id=current_user_id,
+            action=ACTION_TASK_DEP_CHANGE,
+            before={"task_id": task_id, "depends_on": list(deps_before or [])},
+            after={"task_id": task_id, "depends_on": list(desired_deps)},
         )
 
     db.commit()
