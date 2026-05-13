@@ -23,7 +23,7 @@ set, so the table is safe to drop. The ``GET /projects/{id}/members``
 URL surface is preserved and now reads from URA.
 
 Revision ID: baddc1146b85
-Revises: f9b8dd81f7dd
+Revises: d4f9b2e8a317
 Create Date: 2026-05-13 09:55:00.000000
 
 """
@@ -34,7 +34,13 @@ import sqlalchemy as sa
 
 
 revision: str = "baddc1146b85"
-down_revision: Union[str, Sequence[str], None] = "f9b8dd81f7dd"
+# Re-parented from f9b8dd81f7dd to d4f9b2e8a317 to collapse a parallel
+# branch I'd accidentally created — f9b8dd81f7dd was a branch point
+# (eb3b19c7487c was already chained off it as the actual main-line
+# head's ancestor). Chaining off d4f9b2e8a317 (the real head) makes
+# this migration the single new head and lets ``alembic upgrade head``
+# succeed without a "Multiple head revisions" error.
+down_revision: Union[str, Sequence[str], None] = "d4f9b2e8a317"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
