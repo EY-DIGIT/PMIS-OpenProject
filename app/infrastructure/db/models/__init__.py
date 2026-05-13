@@ -2,7 +2,8 @@
 from .user import UserModel
 from .project import ProjectModel
 from .project_audit_log import ProjectAuditLogModel
-from .project_member import ProjectMemberModel
+# project_members table retired — unified into user_role_assignments
+# (project scope). See alembic migration baddc1146b85.
 from .project_vendor import ProjectVendorModel
 from .role import RoleModel
 from .permission import PermissionModel
@@ -56,7 +57,7 @@ from .priority import PriorityModel
 
 __all__ = [
     "UserModel", "ProjectModel", "ProjectAuditLogModel",
-    "ProjectMemberModel", "ProjectVendorModel",
+    "ProjectVendorModel",
     "RoleModel", "PermissionModel", "RolePermissionModel",
     "UserRoleModel", "UserPermissionModel",
     "UserRoleAssignmentModel",

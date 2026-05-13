@@ -211,8 +211,15 @@ def _ancestor_project_id(param_key: str, value: str) -> Optional[str]:
             ).first()
             return row[0] if row else None
         if base == "membership_id":
+            # Membership rows live in user_role_assignments post-
+            # unification. The membership_id path param is the URA row's
+            # primary key; filter to project-scoped rows so we don't
+            # accidentally surface org-scoped or global rows here.
             row = db.execute(
-                text("SELECT project_id FROM project_members WHERE id = :id"),
+                text(
+                    "SELECT project_id FROM user_role_assignments "
+                    "WHERE id = :id AND project_id IS NOT NULL"
+                ),
                 {"id": value},
             ).first()
             return row[0] if row else None

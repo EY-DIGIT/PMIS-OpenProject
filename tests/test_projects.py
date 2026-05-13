@@ -312,20 +312,23 @@ class TestListScopedToCaller:
         self, client, admin_user, admin_headers, member_user, member_headers,
         db_session,
     ):
-        """A non-admin caller with a project_members row for project A
-        but not for project B sees only A in the listing.
+        """A non-admin caller with a project-scoped role assignment on
+        project A but not on project B sees only A in the listing.
 
         Doc 44 round 8: non-admin tiers see only published projects, so
-        flip A and B to ``status='published'`` before the assertion —
-        otherwise the new pre-publish hide would suppress both."""
+        flip A and B to ``status='published'`` before the assertion."""
         from app.infrastructure.db.models.project import ProjectModel
-        from app.infrastructure.db.models.project_member import (
-            ProjectMemberModel,
+        from app.infrastructure.db.models.role import RoleModel
+        from app.infrastructure.db.models.user_role_assignment import (
+            UserRoleAssignmentModel,
         )
         a = _create_baseline(client, admin_headers, name="Scope-PM-A")
         b = _create_baseline(client, admin_headers, name="Scope-PM-B")
-        db_session.add(ProjectMemberModel(
-            project_id=a["id"], user_id=member_user.id, roles=[],
+        pm_role_id = db_session.query(RoleModel.id).filter(
+            RoleModel.name == "project_member"
+        ).scalar()
+        db_session.add(UserRoleAssignmentModel(
+            user_id=member_user.id, role_id=pm_role_id, project_id=a["id"],
         ))
         for pid in (a["id"], b["id"]):
             db_session.query(ProjectModel).filter(ProjectModel.id == pid).update(

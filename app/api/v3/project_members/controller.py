@@ -286,10 +286,11 @@ class ProjectMembersController:
         super_admin / admin / org_admin can still remove anyone
         (including a project_admin who's themselves).
         """
-        # Doc 44 round 7 self-unassign guard.
-        from ....infrastructure.db.models.project_member import (
-            ProjectMemberModel,
-        )
+        # Doc 44 round 7 self-unassign guard. The legacy
+        # ``project_members`` table was retired in favour of URA;
+        # the membership row referenced by ``membership_id`` is now
+        # a URA row (the repository surfaces its primary key as the
+        # legacy ``id`` to keep the URL surface unchanged).
         from ....infrastructure.db.models.role import RoleModel
         from ....infrastructure.db.models.user_role_assignment import (
             UserRoleAssignmentModel,
@@ -297,8 +298,9 @@ class ProjectMembersController:
         from ....core.dependencies import get_current_user_id
         caller_id = get_current_user_id(request)
         membership = (
-            db.query(ProjectMemberModel)
-            .filter(ProjectMemberModel.id == membership_id)
+            db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.id == membership_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
             .first()
         )
         if membership is not None and caller_id == membership.user_id:

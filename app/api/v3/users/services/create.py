@@ -20,7 +20,10 @@ from .....domain.resource_types.resource_type import (
 )
 from .....domain.users.user import User
 from .....infrastructure.db.models.project import ProjectModel
-from .....infrastructure.db.models.project_member import ProjectMemberModel
+from .....infrastructure.db.models.user_role_assignment import (
+    UserRoleAssignmentModel,
+)
+from .....infrastructure.db.models.role import RoleModel
 from .....infrastructure.db.models.vendor import VendorModel
 from .....infrastructure.db.repositories.user_repository import UserRepository
 from .....infrastructure.db.repositories.vendor_repository import VendorRepository
@@ -204,13 +207,26 @@ def create_user(
             phone_number=phone_number,
         )
 
-        # Wire up project_members rows.
-        for pid in project_ids:
-            db.add(ProjectMemberModel(
-                project_id=pid,
-                user_id=user.id,
-                roles=[],   # role per project — future feature
-            ))
+        # Wire up project membership via the scoped-RBAC table. Each
+        # project listed becomes a project_member role assignment on
+        # that project — same semantic the legacy project_members
+        # rows carried (roles was always []).
+        if project_ids:
+            pm_role_id = (
+                db.query(RoleModel.id)
+                .filter(RoleModel.name == "project_member")
+                .scalar()
+            )
+            if pm_role_id is None:
+                raise RuntimeError(
+                    "project_member role not seeded — RBAC sync did not run"
+                )
+            for pid in project_ids:
+                db.add(UserRoleAssignmentModel(
+                    user_id=user.id,
+                    role_id=pm_role_id,
+                    project_id=pid,
+                ))
         db.flush()
 
         # Hydrate the response with the just-mapped projects.

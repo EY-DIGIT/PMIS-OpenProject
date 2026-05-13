@@ -1,42 +1,79 @@
+"""Project Member repository — URA-backed compatibility layer.
+
+The legacy ``project_members`` table was retired in favour of the
+doc-41 scoped-RBAC ``user_role_assignments`` (URA) table. This
+repository keeps its existing API surface so the seven callers
+(meetings participants, work_packages, /api/v3/project_members/*
+endpoints) don't need to change — every method now reads or writes
+URA rows scoped to a project with the canonical ``project_member``
+role.
+
+The ``roles`` field on the domain ``Membership`` was always written
+as ``[]`` in code (verified pre-migration). It's preserved on the
+domain object for API back-compat but is no longer load-bearing.
 """
-Project Member repository for database operations.
-"""
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from ...db.models.project_member import ProjectMemberModel
+
+from ...db.models.role import RoleModel
+from ...db.models.user_role_assignment import UserRoleAssignmentModel
 from ....domain.project_members.membership import Membership
 
 
+_PROJECT_MEMBER_ROLE = "project_member"
+
+
 class ProjectMemberRepository:
-    """Repository for Project Member database operations."""
+    """URA-backed project membership repository.
+
+    Project membership is now represented as a ``user_role_assignments``
+    row with ``project_id = <project>`` and ``role = project_member``.
+    The ``Membership`` domain object the caller sees is hydrated from
+    the URA row; the legacy ``id`` field is the URA primary key.
+    """
 
     def __init__(self, db: Session):
-        """
-        Initialize repository.
-
-        Args:
-            db: Database session
-        """
         self.db = db
 
-    def _to_domain(self, model: ProjectMemberModel) -> Membership:
-        """
-        Convert database model to domain model.
+    def _role_id(self) -> int:
+        rid = (
+            self.db.query(RoleModel.id)
+            .filter(RoleModel.name == _PROJECT_MEMBER_ROLE)
+            .scalar()
+        )
+        if rid is None:
+            raise RuntimeError(
+                f"{_PROJECT_MEMBER_ROLE} role not seeded — RBAC sync did not run"
+            )
+        return rid
 
-        Args:
-            model: Database model
-
-        Returns:
-            Domain model
-        """
+    def _to_domain(self, ura: UserRoleAssignmentModel) -> Membership:
+        # ``roles`` and ``updated_at`` are kept on the domain shape for
+        # back-compat with old callers; the URA row doesn't carry an
+        # updated_at column so we surface created_at for both fields.
         return Membership(
-            id=model.id,
-            project_id=model.project_id,
-            user_id=model.user_id,
-            roles=model.roles or [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
+            id=ura.id,
+            project_id=ura.project_id,
+            user_id=ura.user_id,
+            roles=[],
+            created_at=ura.created_at,
+            updated_at=ura.created_at,
+        )
+
+    def _query_for_project(self, project_id: str):
+        return (
+            self.db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.project_id == project_id)
+            .filter(UserRoleAssignmentModel.role_id == self._role_id())
+        )
+
+    def _query_for_user(self, user_id: str):
+        return (
+            self.db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
+            .filter(UserRoleAssignmentModel.role_id == self._role_id())
         )
 
     def create(
@@ -45,81 +82,45 @@ class ProjectMemberRepository:
         user_id: str,
         roles: List[str],
     ) -> Membership:
-        """
-        Create a new project member.
-
-        Args:
-            project_id: Project ID
-            user_id: User ID
-            roles: List of role names
-
-        Returns:
-            Created membership domain model
-        """
-        member_model = ProjectMemberModel(
-            project_id=project_id,
+        # ``roles`` arg ignored (always [] in legacy callers).
+        ura = UserRoleAssignmentModel(
             user_id=user_id,
-            roles=roles or [],
+            role_id=self._role_id(),
+            project_id=project_id,
         )
-
-        self.db.add(member_model)
+        self.db.add(ura)
         self.db.commit()
-        self.db.refresh(member_model)
-
-        return self._to_domain(member_model)
+        self.db.refresh(ura)
+        return self._to_domain(ura)
 
     def get_by_id(self, membership_id: int) -> Optional[Membership]:
-        """
-        Get membership by ID.
-
-        Args:
-            membership_id: Membership ID
-
-        Returns:
-            Membership if found, None otherwise
-        """
-        model = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.id == membership_id
-        ).first()
-        return self._to_domain(model) if model else None
-
-    def get_by_project_and_user(self, project_id: str, user_id: str) -> Optional[Membership]:
-        """
-        Get membership by project and user.
-
-        Args:
-            project_id: Project ID
-            user_id: User ID
-
-        Returns:
-            Membership if found, None otherwise
-        """
-        model = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.project_id == project_id,
-            ProjectMemberModel.user_id == user_id,
-        ).first()
-        return self._to_domain(model) if model else None
-
-    def exists_by_project_and_user(self, project_id: str, user_id: str) -> bool:
-        """
-        Check if a project member exists for given project and user.
-
-        Args:
-            project_id: Project ID
-            user_id: User ID
-
-        Returns:
-            True if a ProjectMemberModel exists matching project_id and user_id
-        """
-        return (
-            self.db.query(ProjectMemberModel)
-            .filter(
-                ProjectMemberModel.project_id == project_id,
-                ProjectMemberModel.user_id == user_id,
-            )
+        # Any project-scoped URA row counts as a membership lookup
+        # by id (project_admin / project_member / division_member). The
+        # role-restricted variants live in ``list_by_project`` /
+        # ``list_by_user`` where the caller's intent is "list
+        # memberships at the project_member tier".
+        ura = (
+            self.db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.id == membership_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
             .first()
-            is not None
         )
+        return self._to_domain(ura) if ura else None
+
+    def get_by_project_and_user(
+        self, project_id: str, user_id: str,
+    ) -> Optional[Membership]:
+        ura = (
+            self._query_for_project(project_id)
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .first()
+        )
+        return self._to_domain(ura) if ura else None
+
+    def exists_by_project_and_user(
+        self, project_id: str, user_id: str,
+    ) -> bool:
+        return self.get_by_project_and_user(project_id, user_id) is not None
 
     def list_by_project(
         self,
@@ -127,29 +128,11 @@ class ProjectMemberRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> Tuple[List[Membership], int]:
-        """
-        List memberships for a project with pagination.
-
-        Args:
-            project_id: Project ID
-            page: Page number (1-indexed)
-            page_size: Number of items per page
-
-        Returns:
-            Tuple of (memberships, total count)
-        """
-        query = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.project_id == project_id
-        )
-
-        total = query.count()
-
+        q = self._query_for_project(project_id)
+        total = q.count()
         offset = (page - 1) * page_size
-        models = query.offset(offset).limit(page_size).all()
-
-        memberships = [self._to_domain(model) for model in models]
-
-        return memberships, total
+        models = q.offset(offset).limit(page_size).all()
+        return [self._to_domain(m) for m in models], total
 
     def list_by_user(
         self,
@@ -157,130 +140,61 @@ class ProjectMemberRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> Tuple[List[Membership], int]:
-        """
-        List memberships for a user with pagination.
-
-        Args:
-            user_id: User ID
-            page: Page number (1-indexed)
-            page_size: Number of items per page
-
-        Returns:
-            Tuple of (memberships, total count)
-        """
-        query = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.user_id == user_id
-        )
-
-        total = query.count()
-
+        q = self._query_for_user(user_id)
+        total = q.count()
         offset = (page - 1) * page_size
-        models = query.offset(offset).limit(page_size).all()
-
-        memberships = [self._to_domain(model) for model in models]
-
-        return memberships, total
+        models = q.offset(offset).limit(page_size).all()
+        return [self._to_domain(m) for m in models], total
 
     def update(
         self,
         membership_id: int,
         roles: List[str],
     ) -> Optional[Membership]:
-        """
-        Update a membership's roles.
-
-        Args:
-            membership_id: Membership ID
-            roles: New list of role names
-
-        Returns:
-            Updated membership if found, None otherwise
-        """
-        model = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.id == membership_id
-        ).first()
-
-        if not model:
+        # ``roles`` ignored — URA membership rows carry a single role
+        # (project_member) and changing it is out of scope for the
+        # legacy update flow.
+        ura = (
+            self.db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.id == membership_id)
+            .first()
+        )
+        if not ura:
             return None
-
-        model.roles = roles or []
-        self.db.commit()
-        self.db.refresh(model)
-
-        return self._to_domain(model)
+        return self._to_domain(ura)
 
     def delete(self, membership_id: int) -> bool:
-        """
-        Delete a membership.
-
-        Args:
-            membership_id: Membership ID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        model = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.id == membership_id
-        ).first()
-
-        if not model:
+        # Symmetric with ``get_by_id``: delete any project-scoped URA
+        # row by id. Global / org-scoped rows are never reachable
+        # through this URL (project_id IS NULL guards them).
+        ura = (
+            self.db.query(UserRoleAssignmentModel)
+            .filter(UserRoleAssignmentModel.id == membership_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
+            .first()
+        )
+        if not ura:
             return False
-
-        self.db.delete(model)
+        self.db.delete(ura)
         self.db.commit()
-
         return True
 
-    def delete_by_project_and_user(self, project_id: str, user_id: str) -> bool:
-        """
-        Delete a membership by project and user.
-
-        Args:
-            project_id: Project ID
-            user_id: User ID
-
-        Returns:
-            True if deleted, False if not found
-        """
-        model = self.db.query(ProjectMemberModel).filter(
-            ProjectMemberModel.project_id == project_id,
-            ProjectMemberModel.user_id == user_id,
-        ).first()
-
-        if not model:
+    def delete_by_project_and_user(
+        self, project_id: str, user_id: str,
+    ) -> bool:
+        ura = (
+            self._query_for_project(project_id)
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .first()
+        )
+        if not ura:
             return False
-
-        self.db.delete(model)
+        self.db.delete(ura)
         self.db.commit()
-
         return True
 
     def exists(self, project_id: str, user_id: str) -> bool:
-        """
-        Check if a membership exists.
+        return self.exists_by_project_and_user(project_id, user_id)
 
-        Args:
-            project_id: Project ID
-            user_id: User ID
-
-        Returns:
-            True if membership exists
-        """
-        return self.db.query(
-            self.db.query(ProjectMemberModel).filter(
-                ProjectMemberModel.project_id == project_id,
-                ProjectMemberModel.user_id == user_id,
-            ).exists()
-        ).scalar()
     def is_member(self, project_id: str, user_id: str) -> bool:
-        """
-        Check if a user is a member of a project.
-
-        Args:
-            project_id: Project ID
-            user_id: User ID
-
-        Returns:
-            True if user is a member of the project
-        """
         return self.exists(project_id, user_id)

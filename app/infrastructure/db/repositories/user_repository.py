@@ -22,7 +22,6 @@ from ....shared.code_generators import (
     looks_like_user_code,
 )
 from ...db.models.project import ProjectModel
-from ...db.models.project_member import ProjectMemberModel
 from ...db.models.role import RoleModel
 from ...db.models.user import UserModel
 from ...db.models.user_role import UserRoleModel
@@ -100,9 +99,16 @@ class UserRepository:
     def _load_projects_for_user(self, user_id: str) -> List[dict]:
         """Return slim project dicts for embedding in user responses.
 
-        Joins project_members → projects, filters out hidden statuses
-        (closed) and soft-deleted projects. Ordered newest first.
+        Reads project-scoped rows from ``user_role_assignments`` (the
+        unified membership table after the project_members migration).
+        Filters out hidden statuses (closed) and soft-deleted projects.
+        Distinct on project id so a user holding multiple project-tier
+        roles on the same project still surfaces only once. Ordered
+        newest first.
         """
+        from ...db.models.user_role_assignment import (
+            UserRoleAssignmentModel,
+        )
         rows = (
             self.db.query(
                 ProjectModel.id,
@@ -111,12 +117,14 @@ class UserRepository:
                 ProjectModel.status,
             )
             .join(
-                ProjectMemberModel,
-                ProjectMemberModel.project_id == ProjectModel.id,
+                UserRoleAssignmentModel,
+                UserRoleAssignmentModel.project_id == ProjectModel.id,
             )
-            .filter(ProjectMemberModel.user_id == user_id)
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
             .filter(ProjectModel.deleted_at.is_(None))
             .filter(~ProjectModel.status.in_(_HIDDEN_PROJECT_STATUSES))
+            .distinct()
             .order_by(desc(ProjectModel.created_at), desc(ProjectModel.id))
             .all()
         )

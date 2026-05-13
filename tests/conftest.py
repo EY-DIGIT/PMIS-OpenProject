@@ -21,7 +21,6 @@ from app.infrastructure.db.models import (  # noqa: F401
     UserModel,
     RoleModel,
     ProjectModel,
-    ProjectMemberModel,
     WorkPackageTypeModel,
 )
 from app.infrastructure.db.models.work_package import WorkPackageModel  # noqa: F401

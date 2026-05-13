@@ -5,7 +5,6 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, union
 from .....infrastructure.db.models.project import ProjectModel
-from .....infrastructure.db.models.project_member import ProjectMemberModel
 from .....infrastructure.db.models.project_vendor import ProjectVendorModel
 from .....infrastructure.db.models.user_role_assignment import (
     UserRoleAssignmentModel,
@@ -77,15 +76,18 @@ def list_projects(
         # id was passed (legacy code path) OR when the caller holds the
         # admin / super_admin global tier (full access).
         if caller_id is not None and not RbacRepository(db).user_has_admin_role(caller_id):
+            # Visibility sources:
+            #   (a) project-scoped URA rows on this caller
+            #   (b) org-scoped URA rows whose vendor owns at least one
+            #       project via project_vendors
+            # The legacy project_members arm was retired after the
+            # unification migration; existing rows were backfilled
+            # into (a) so this UNION still surfaces them.
             visible_pids = (
-                db.query(ProjectMemberModel.project_id)
-                .filter(ProjectMemberModel.user_id == caller_id)
-                .union(
-                    db.query(UserRoleAssignmentModel.project_id)
-                    .filter(
-                        UserRoleAssignmentModel.user_id == caller_id,
-                        UserRoleAssignmentModel.project_id.isnot(None),
-                    )
+                db.query(UserRoleAssignmentModel.project_id)
+                .filter(
+                    UserRoleAssignmentModel.user_id == caller_id,
+                    UserRoleAssignmentModel.project_id.isnot(None),
                 )
                 .union(
                     db.query(ProjectVendorModel.project_id)

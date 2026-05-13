@@ -160,7 +160,7 @@ def init_db() -> None:
     # Import models here to avoid circular imports
     # This ensures models are registered with Base before table creation
     from .models import (  # noqa: F401
-        UserModel, ProjectModel, ProjectAuditLogModel, RoleModel, ProjectMemberModel,
+        UserModel, ProjectModel, ProjectAuditLogModel, RoleModel,
         ProjectVendorModel, MilestoneVendorModel, VendorModel, ResourceTypeModel,
         RevokedTokenModel,
         WorkPackageModel, WorkPackageTypeModel, MeetingModel, MeetingParticipantModel,

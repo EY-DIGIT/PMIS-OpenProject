@@ -17,7 +17,6 @@ from uuid import uuid4
 
 from app.core.security import create_access_token, hash_password
 from app.infrastructure.db.models.project import ProjectModel
-from app.infrastructure.db.models.project_member import ProjectMemberModel
 from app.infrastructure.db.models.role import RoleModel
 from app.infrastructure.db.models.user import UserModel
 from app.infrastructure.db.models.user_role_assignment import (
@@ -105,18 +104,15 @@ class TestProjectAdminCannotSelfUnassignFromMembers:
             db_session.query(RoleModel).filter(RoleModel.name == "project_admin")
             .one().id
         )
-        db_session.add(UserRoleAssignmentModel(
+        ura = UserRoleAssignmentModel(
             user_id=pa.id, role_id=pa_role_id, project_id=proj.id,
-        ))
-        membership = ProjectMemberModel(
-            project_id=proj.id, user_id=pa.id, roles=[],
         )
-        db_session.add(membership)
+        db_session.add(ura)
         db_session.commit()
-        db_session.refresh(membership)
+        db_session.refresh(ura)
 
         resp = client.delete(
-            f"/api/v3/memberships/{membership.id}",
+            f"/api/v3/memberships/{ura.id}",
             headers=_headers(pa),
         )
         assert resp.status_code == 403, resp.text
@@ -134,18 +130,15 @@ class TestProjectAdminCannotSelfUnassignFromMembers:
             db_session.query(RoleModel).filter(RoleModel.name == "project_admin")
             .one().id
         )
-        db_session.add(UserRoleAssignmentModel(
+        ura = UserRoleAssignmentModel(
             user_id=pa.id, role_id=pa_role_id, project_id=proj.id,
-        ))
-        membership = ProjectMemberModel(
-            project_id=proj.id, user_id=pa.id, roles=[],
         )
-        db_session.add(membership)
+        db_session.add(ura)
         db_session.commit()
-        db_session.refresh(membership)
+        db_session.refresh(ura)
 
         resp = client.delete(
-            f"/api/v3/memberships/{membership.id}",
+            f"/api/v3/memberships/{ura.id}",
             headers=admin_headers,
         )
         assert resp.status_code == 204, resp.text
