@@ -101,13 +101,29 @@ class UserRepository:
 
         Reads project-scoped rows from ``user_role_assignments`` (the
         unified membership table after the project_members migration).
+        A user holding multiple project-tier roles on the same project
+        surfaces only once because we dedupe on ``project_id`` in a
+        subquery, then join to ``projects`` for the wire shape.
         Filters out hidden statuses (closed) and soft-deleted projects.
-        Distinct on project id so a user holding multiple project-tier
-        roles on the same project still surfaces only once. Ordered
-        newest first.
+        Ordered newest first.
+
+        Why the subquery instead of ``SELECT DISTINCT … ORDER BY
+        projects.created_at``: Postgres rejects ``SELECT DISTINCT a,
+        b, c, d … ORDER BY e`` when ``e`` is not in the SELECT list
+        ("for SELECT DISTINCT, ORDER BY expressions must appear in
+        select list"). SQLite is permissive — the legacy variant
+        looked fine in tests but blew up in prod. Pre-deduping the
+        project_id set sidesteps the rule and lets the outer query
+        order by anything it wants.
         """
         from ...db.models.user_role_assignment import (
             UserRoleAssignmentModel,
+        )
+        visible_pids = (
+            self.db.query(UserRoleAssignmentModel.project_id)
+            .filter(UserRoleAssignmentModel.user_id == user_id)
+            .filter(UserRoleAssignmentModel.project_id.isnot(None))
+            .distinct()
         )
         rows = (
             self.db.query(
@@ -116,15 +132,9 @@ class UserRepository:
                 ProjectModel.name,
                 ProjectModel.status,
             )
-            .join(
-                UserRoleAssignmentModel,
-                UserRoleAssignmentModel.project_id == ProjectModel.id,
-            )
-            .filter(UserRoleAssignmentModel.user_id == user_id)
-            .filter(UserRoleAssignmentModel.project_id.isnot(None))
+            .filter(ProjectModel.id.in_(visible_pids))
             .filter(ProjectModel.deleted_at.is_(None))
             .filter(~ProjectModel.status.in_(_HIDDEN_PROJECT_STATUSES))
-            .distinct()
             .order_by(desc(ProjectModel.created_at), desc(ProjectModel.id))
             .all()
         )
