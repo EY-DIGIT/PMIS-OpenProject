@@ -67,8 +67,7 @@ def _user_body(*, vendor_ref, project_ids, login=None,
         "login": login or f"user-{suffix}",
         "email": email or f"u{suffix}@example.com",
         "password": "password123",
-        "firstName": "Doc",
-        "lastName": "Twentyfive",
+        "fullName": "Doc Twentyfive",
         "admin": False,
         "vendorId": vendor_ref,
         "division": division,
@@ -256,9 +255,8 @@ class TestUserCodeOnCreate:
         body = _user_body(
             vendor_ref=v["id"], project_ids=[p.id], login="adminlike",
         )
-        # Strip the default firstName / lastName so the fallback fires.
-        body["firstName"] = None
-        body["lastName"] = None
+        # Strip the default fullName so the slug fallback fires.
+        body["fullName"] = None
         resp = client.post(
             "/api/v3/users/create", json=body, headers=admin_headers,
         )
@@ -309,11 +307,12 @@ class TestUserLookupByCode:
         u = self._create_user(client, admin_headers, db_session)
         resp = client.patch(
             f"/api/v3/users/{u['userCode']}",
-            json={"firstName": "Patched"},
+            json={"fullName": "Patched Person"},
             headers=admin_headers,
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["data"]["firstName"] == "Patched"
+        assert resp.json()["data"]["lastName"] == "Person"
 
     def test_delete_then_restore_by_user_code(
         self, client, admin_user, admin_headers, db_session,
